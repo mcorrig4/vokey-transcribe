@@ -12,7 +12,10 @@
 				"esbenp.prettier-vscode",
 				"anthropic.claude-code",
 				"johnpapa.vscode-peacock"
-			]
+			],
+			"settings": {
+				"npm.packageManager": "pnpm"
+			}
 		}
 	}
 }
