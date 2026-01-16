@@ -1,0 +1,18 @@
+{
+	"image": "mcr.microsoft.com/devcontainers/universal:2",
+	"features": {
+		"ghcr.io/devcontainer-config/features/dot-config:3": {}
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"openai.chatgpt",
+				"streetsidesoftware.code-spell-checker",
+				"yo1dog.cursor-align",
+				"esbenp.prettier-vscode",
+				"anthropic.claude-code",
+				"johnpapa.vscode-peacock"
+			]
+		}
+	}
+}
