@@ -1,0 +1,20 @@
+
+
+[mcp_servers]
+
+# [mcp_servers.browser-mcp]
+# command = "npx"
+# args = ["-y", "@browsermcp/mcp@latest"]
+
+# [mcp_servers.context7]
+# type = "sse"
+# url = "https://mcp.context7.com/sse"
+
+# [mcp_servers.playwright]
+# command = "npx"
+# args = [
+#     "-y", "@playwright/mcp@latest",
+#     "--allowed-origins", "http://localhost:3000,http://localhost:3001,http://localhost:3002",
+#     # "--caps", "",
+#     "--extension"
+# ]
