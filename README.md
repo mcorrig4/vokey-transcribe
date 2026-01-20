@@ -211,3 +211,38 @@ Windows support can be added later with:
 Linux/Wayland remains the reference implementation.
 
 ---
+
+## Project Tracking & Documentation
+
+### Documentation Structure
+| Document | Purpose |
+|----------|---------|
+| `README.md` | Project overview, architecture, setup |
+| `docs/WORKLOG.md` | Work log, progress tracking, decisions, session notes |
+| `docs/ISSUES-v1.0.0.md` | Sprint definitions with acceptance criteria |
+| `docs/tauri-gotchas.md` | Technical gotchas and state machine design |
+| `docs/notes.md` | Setup instructions and troubleshooting |
+
+### Issue Tracking
+- GitHub Issues track each sprint (created via `./scripts/create-github-issues.sh`)
+- Labels: `sprint`, `mvp`, `phase2`
+- Each issue includes: scope, acceptance criteria, demo script
+
+### Architecture Decisions
+Architecture decisions are documented in `docs/WORKLOG.md` with:
+- Decision ID (AD-xxx)
+- Date, decision, rationale, trade-offs
+
+### Code Standards
+- **Rust:** Use `cargo clippy` and `cargo fmt`
+- **TypeScript:** Use ESLint + Prettier
+- **Commits:** Conventional commits (`feat:`, `fix:`, `docs:`, `chore:`)
+- **Branches:** Feature branches off main, PR for merge
+
+### Development Workflow
+1. Check `docs/WORKLOG.md` for current task context
+2. Work on active sprint (one at a time)
+3. Update WORKLOG with progress and decisions
+4. Mark sprint complete when all acceptance criteria pass
+
+---
