@@ -222,6 +222,438 @@ enum Effect {
 
 Every handler checks the `id` matches the current state's `recording_id`. If not, drop the event.
 
+---
+
+## Full Reducer Implementation
+
+This is a complete, copy-paste-ready reducer with pattern matching and stale event handling.
+
+```rust
+use std::{path::PathBuf, time::{Duration, Instant}};
+use uuid::Uuid;
+
+/// Reducer function: (state, event) -> (next_state, effects)
+///
+/// Key rules:
+/// - Never mutate state directly
+/// - Ignore events with stale recording IDs
+/// - Always emit EmitUi after state changes
+pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
+    use Effect::*;
+    use Event::*;
+    use State::*;
+
+    // Helper: extract current recording_id (if any)
+    let current_id: Option<Uuid> = match state {
+        Idle => None,
+        Arming { recording_id } => Some(*recording_id),
+        Recording { recording_id, .. } => Some(*recording_id),
+        Stopping { recording_id, .. } => Some(*recording_id),
+        Transcribing { recording_id, .. } => Some(*recording_id),
+        Done { recording_id, .. } => Some(*recording_id),
+        Error { .. } => None,
+    };
+
+    // Helper: check if event's ID is stale (doesn't match current workflow)
+    let is_stale = |eid: Uuid| current_id.is_some() && Some(eid) != current_id;
+
+    match (state, event) {
+        // -----------------
+        // Idle
+        // -----------------
+        (Idle, HotkeyToggle) => {
+            let id = Uuid::new_v4();
+            (Arming { recording_id: id }, vec![StartAudio { id }, EmitUi])
+        }
+        (Idle, Cancel) => (Idle.clone(), vec![]),
+        (Idle, Exit) => (Idle.clone(), vec![]),
+
+        // -----------------
+        // Arming
+        // -----------------
+        (Arming { recording_id }, AudioStartOk { id, wav_path }) if *recording_id == id => {
+            (
+                Recording {
+                    recording_id: *recording_id,
+                    wav_path,
+                    started_at: Instant::now(),
+                },
+                vec![EmitUi],
+            )
+        }
+        (Arming { recording_id }, AudioStartFail { id, err }) if *recording_id == id => {
+            (
+                Error { message: err, last_good_text: None },
+                vec![Cleanup { id: *recording_id, wav_path: None }, EmitUi],
+            )
+        }
+        (Arming { recording_id }, Cancel) => {
+            (Idle, vec![Cleanup { id: *recording_id, wav_path: None }, EmitUi])
+        }
+
+        // -----------------
+        // Recording
+        // -----------------
+        (Recording { recording_id, wav_path, .. }, HotkeyToggle) => {
+            (
+                Stopping { recording_id: *recording_id, wav_path: wav_path.clone() },
+                vec![StopAudio { id: *recording_id }, EmitUi],
+            )
+        }
+        (Recording { recording_id, wav_path, .. }, Cancel) => {
+            (
+                Stopping { recording_id: *recording_id, wav_path: wav_path.clone() },
+                vec![StopAudio { id: *recording_id }, EmitUi],
+            )
+        }
+
+        // -----------------
+        // Stopping
+        // -----------------
+        (Stopping { recording_id, wav_path }, AudioStopOk { id }) if *recording_id == id => {
+            (
+                Transcribing { recording_id: *recording_id, wav_path: wav_path.clone() },
+                vec![StartTranscription { id: *recording_id, wav_path: wav_path.clone() }, EmitUi],
+            )
+        }
+        (Stopping { recording_id, wav_path }, AudioStopFail { id, err }) if *recording_id == id => {
+            (
+                Error { message: err, last_good_text: None },
+                vec![Cleanup { id: *recording_id, wav_path: Some(wav_path.clone()) }, EmitUi],
+            )
+        }
+
+        // -----------------
+        // Transcribing
+        // -----------------
+        (Transcribing { recording_id, wav_path }, TranscribeOk { id, text }) if *recording_id == id => {
+            (
+                Done { recording_id: *recording_id, text: text.clone() },
+                vec![
+                    CopyToClipboard { id: *recording_id, text },
+                    StartDoneTimeout { id: *recording_id, duration: Duration::from_secs(3) },
+                    EmitUi,
+                ],
+            )
+        }
+        (Transcribing { recording_id, wav_path }, TranscribeFail { id, err }) if *recording_id == id => {
+            (
+                Error { message: err, last_good_text: None },
+                vec![Cleanup { id: *recording_id, wav_path: Some(wav_path.clone()) }, EmitUi],
+            )
+        }
+        (Transcribing { recording_id, wav_path }, Cancel) => {
+            (
+                Idle,
+                vec![Cleanup { id: *recording_id, wav_path: Some(wav_path.clone()) }, EmitUi],
+            )
+        }
+
+        // -----------------
+        // Done
+        // -----------------
+        (Done { recording_id, .. }, DoneTimeout) => {
+            (Idle, vec![Cleanup { id: *recording_id, wav_path: None }, EmitUi])
+        }
+        (Done { .. }, HotkeyToggle) => {
+            // Start new recording immediately
+            let id = Uuid::new_v4();
+            (Arming { recording_id: id }, vec![StartAudio { id }, EmitUi])
+        }
+
+        // -----------------
+        // Error
+        // -----------------
+        (Error { .. }, HotkeyToggle) => {
+            let id = Uuid::new_v4();
+            (Arming { recording_id: id }, vec![StartAudio { id }, EmitUi])
+        }
+        (Error { .. }, Cancel) => (Idle, vec![EmitUi]),
+
+        // -----------------
+        // Stale events (drop silently)
+        // -----------------
+        (_, AudioStartOk { id, .. }) if is_stale(id) => (state.clone(), vec![]),
+        (_, AudioStartFail { id, .. }) if is_stale(id) => (state.clone(), vec![]),
+        (_, AudioStopOk { id }) if is_stale(id) => (state.clone(), vec![]),
+        (_, AudioStopFail { id, .. }) if is_stale(id) => (state.clone(), vec![]),
+        (_, TranscribeOk { id, .. }) if is_stale(id) => (state.clone(), vec![]),
+        (_, TranscribeFail { id, .. }) if is_stale(id) => (state.clone(), vec![]),
+
+        // -----------------
+        // Unhandled: no transition
+        // -----------------
+        _ => (state.clone(), vec![]),
+    }
+}
+```
+
+---
+
+## Single-Writer Event Loop
+
+This is the main loop that owns state and processes events sequentially.
+
+```rust
+use tokio::sync::mpsc;
+use tracing::{info, debug};
+
+pub async fn run_state_loop(
+    mut state: State,
+    mut rx: mpsc::Receiver<Event>,
+    tx: mpsc::Sender<Event>,
+    effects: EffectRunner,
+    ui: UiEmitter,
+) {
+    // Emit initial UI state
+    ui.emit(&state);
+
+    while let Some(event) = rx.recv().await {
+        debug!(?event, "received event");
+
+        // Handle Exit at the edge
+        if matches!(event, Event::Exit) {
+            info!("exit requested, shutting down state loop");
+            break;
+        }
+
+        let old_state = std::mem::discriminant(&state);
+        let (next, effs) = reduce(&state, event);
+        let new_state = std::mem::discriminant(&next);
+
+        // Log state transitions
+        if old_state != new_state {
+            info!(?state, ?next, "state transition");
+        }
+
+        state = next;
+
+        // Execute effects
+        for eff in effs {
+            match eff {
+                Effect::EmitUi => ui.emit(&state),
+                other => effects.spawn(other, tx.clone()),
+            }
+        }
+    }
+}
+```
+
+---
+
+## Effect Runner
+
+The effect runner spawns async work and posts completion events back to the queue.
+
+### Responsibilities
+
+1. **Spawn async work** for StartAudio, StopAudio, StartTranscription, CopyToClipboard, etc.
+2. **Post completion Events** back to the mpsc queue (with the correct `recording_id`)
+3. **Never mutate State directly** — only the reducer does that
+4. **Handle errors gracefully** — convert to `*Fail` events, don't panic
+5. **Throttle UI updates** if needed (especially for Phase 2 partial deltas)
+
+### Trait Definition
+
+```rust
+use tokio::sync::mpsc;
+
+pub trait EffectRunner: Send + Sync + 'static {
+    /// Spawn an effect asynchronously. Completion events are sent via `tx`.
+    fn spawn(&self, effect: Effect, tx: mpsc::Sender<Event>);
+}
+```
+
+### Stub Implementation
+
+```rust
+use std::sync::Arc;
+use tokio::sync::mpsc;
+
+pub struct AppEffectRunner {
+    pub audio_service: Arc<dyn AudioService>,
+    pub transcription_service: Arc<dyn TranscriptionService>,
+    pub clipboard_service: Arc<dyn ClipboardService>,
+}
+
+impl EffectRunner for AppEffectRunner {
+    fn spawn(&self, effect: Effect, tx: mpsc::Sender<Event>) {
+        match effect {
+            Effect::StartAudio { id } => {
+                let audio = self.audio_service.clone();
+                tokio::spawn(async move {
+                    match audio.start_recording(id).await {
+                        Ok(wav_path) => {
+                            let _ = tx.send(Event::AudioStartOk { id, wav_path }).await;
+                        }
+                        Err(e) => {
+                            let _ = tx.send(Event::AudioStartFail { id, err: e.to_string() }).await;
+                        }
+                    }
+                });
+            }
+
+            Effect::StopAudio { id } => {
+                let audio = self.audio_service.clone();
+                tokio::spawn(async move {
+                    match audio.stop_recording(id).await {
+                        Ok(()) => {
+                            let _ = tx.send(Event::AudioStopOk { id }).await;
+                        }
+                        Err(e) => {
+                            let _ = tx.send(Event::AudioStopFail { id, err: e.to_string() }).await;
+                        }
+                    }
+                });
+            }
+
+            Effect::StartTranscription { id, wav_path } => {
+                let transcription = self.transcription_service.clone();
+                tokio::spawn(async move {
+                    match transcription.transcribe(&wav_path).await {
+                        Ok(text) => {
+                            let _ = tx.send(Event::TranscribeOk { id, text }).await;
+                        }
+                        Err(e) => {
+                            let _ = tx.send(Event::TranscribeFail { id, err: e.to_string() }).await;
+                        }
+                    }
+                });
+            }
+
+            Effect::CopyToClipboard { id, text } => {
+                let clipboard = self.clipboard_service.clone();
+                tokio::spawn(async move {
+                    // Clipboard operations are typically infallible for MVP
+                    // Log errors but don't fail the workflow
+                    if let Err(e) = clipboard.set_text(&text) {
+                        tracing::warn!(?e, "clipboard copy failed");
+                    }
+                });
+            }
+
+            Effect::StartDoneTimeout { id, duration } => {
+                tokio::spawn(async move {
+                    tokio::time::sleep(duration).await;
+                    let _ = tx.send(Event::DoneTimeout).await;
+                });
+            }
+
+            Effect::Cleanup { id, wav_path } => {
+                tokio::spawn(async move {
+                    if let Some(path) = wav_path {
+                        if let Err(e) = tokio::fs::remove_file(&path).await {
+                            tracing::debug!(?e, ?path, "cleanup: failed to remove wav");
+                        }
+                    }
+                });
+            }
+
+            Effect::EmitUi => {
+                // Handled in the main loop, not here
+                unreachable!("EmitUi should be handled in run_state_loop");
+            }
+        }
+    }
+}
+```
+
+---
+
+## UI Emitter
+
+Converts `State` to a compact snapshot and emits to React via Tauri events.
+
+```rust
+use serde::Serialize;
+use tauri::Window;
+
+#[derive(Clone, Serialize)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum UiState {
+    Idle,
+    Arming,
+    Recording { elapsed_secs: u64 },
+    Stopping,
+    Transcribing,
+    Done { text: String },
+    Error { message: String, last_text: Option<String> },
+}
+
+pub struct UiEmitter {
+    window: Window,
+}
+
+impl UiEmitter {
+    pub fn new(window: Window) -> Self {
+        Self { window }
+    }
+
+    pub fn emit(&self, state: &State) {
+        let ui_state = match state {
+            State::Idle => UiState::Idle,
+            State::Arming { .. } => UiState::Arming,
+            State::Recording { started_at, .. } => UiState::Recording {
+                elapsed_secs: started_at.elapsed().as_secs(),
+            },
+            State::Stopping { .. } => UiState::Stopping,
+            State::Transcribing { .. } => UiState::Transcribing,
+            State::Done { text, .. } => UiState::Done { text: text.clone() },
+            State::Error { message, last_good_text } => UiState::Error {
+                message: message.clone(),
+                last_text: last_good_text.clone(),
+            },
+        };
+
+        if let Err(e) = self.window.emit("state-update", &ui_state) {
+            tracing::warn!(?e, "failed to emit state to UI");
+        }
+    }
+}
+```
+
+---
+
+## Phase 2 Extensions
+
+When adding streaming transcription or post-processing, extend the enums:
+
+### Additional States (Phase 2)
+
+```rust
+// Add to State enum:
+PostProcessing { recording_id: Uuid, wav_path: PathBuf, raw_text: String },
+```
+
+### Additional Events (Phase 2)
+
+```rust
+// Add to Event enum:
+PartialDelta { id: Uuid, delta: String },      // Streaming partial transcript
+RealtimeError { id: Uuid, err: String },       // WebSocket error (non-fatal)
+PostProcessOk { id: Uuid, text: String },      // LLM cleanup complete
+PostProcessFail { id: Uuid, err: String },     // LLM cleanup failed
+```
+
+### Additional Effects (Phase 2)
+
+```rust
+// Add to Effect enum:
+StartRealtime { id: Uuid },                    // Open WebSocket to OpenAI
+StopRealtime { id: Uuid },                     // Close WebSocket
+StartPostProcess { id: Uuid, text: String },   // Send to LLM for cleanup
+```
+
+### Additional Dependencies (Phase 2)
+
+```toml
+# Add to Cargo.toml for streaming:
+tokio-tungstenite = "0.21"
+futures-util = "0.3"
+```
+
+---
+
 ## How this runs inside Tauri
 
 * A single Rust task owns the `State` and an `mpsc::Receiver<Event>`:

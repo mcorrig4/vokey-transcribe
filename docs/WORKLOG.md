@@ -108,6 +108,16 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Session Notes
 
+### Session 2025-01-21
+- Incorporated pre-pivot Windows planning into Linux architecture docs
+- Added full reducer implementation with pattern matching to tauri-gotchas.md
+- Added single-writer event loop skeleton
+- Added EffectRunner trait and stub implementation
+- Added UiEmitter for Tauri-to-React state updates
+- Added Phase 2 extension points (streaming, post-processing)
+- Added `anyhow` and `thiserror` crates for error handling
+- Documented Phase 2 dependencies (tokio-tungstenite, futures-util)
+
 ### Session 2025-01-20
 - Pivoted from Windows-first to Linux-first (Kubuntu/KDE Plasma 6.4/Wayland)
 - Simplified MVP approach: clipboard-only instead of auto-injection
@@ -152,6 +162,10 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 tracing-appender = "0.2"
 
+# Error handling
+anyhow = "1"
+thiserror = "1"
+
 # Audio
 cpal = "0.15"
 hound = "3.5"
@@ -167,6 +181,10 @@ reqwest = { version = "0.11", features = ["json", "multipart"] }
 
 # Paths
 dirs = "5"
+
+# Phase 2: Streaming transcription (add when needed)
+# tokio-tungstenite = "0.21"
+# futures-util = "0.3"
 ```
 
 ### Frontend (package.json)
