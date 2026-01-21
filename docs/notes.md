@@ -10,11 +10,18 @@ Kubuntu with KDE Plasma 6.4 on Wayland
 ### 1. Install system dependencies
 ```bash
 # Tauri dependencies
-sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget \
-  libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+sudo apt install -y \
+  libwebkit2gtk-4.0-dev \
+  libgtk-3-dev \
+  libayatana-appindicator3-dev \
+  librsvg2-dev \
+  patchelf
+
+# Build tools (if not already installed)
+sudo apt install -y build-essential curl wget libssl-dev
 
 # Audio dependencies (usually pre-installed)
-sudo apt install libasound2-dev
+sudo apt install -y libasound2-dev
 
 # ydotool for global hotkeys (optional, for evdev we just need input group)
 sudo apt install ydotool
