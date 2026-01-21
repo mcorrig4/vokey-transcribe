@@ -1,9 +1,6 @@
 {
   "env": {
-    // when claude uses `gh` cli to post on
-    // issues/PRs it will identify as another user
-    // Need classic PAT in settings.local.json
-    // "GH_TOKEN": "ghp_xABCD,
+    "addintolocalGH_TOKEN": "ghp_xABCD",
     "GH_USERNAME": "CodespaceAgent:Claude-Do",
     "GH_EMAIL": "claude@claude.do"
   },
