@@ -140,9 +140,21 @@ cd src-tauri && cargo clippy
 
 ## Codespace / Remote Development
 
-For GitHub Codespace setup, port forwarding may be needed for OAuth callbacks:
-```bash
-gh codespace ssh -c <codespace-name> -- -L 1455:localhost:1455
-```
+**Important:** Codespaces are headless (no display). Tauri GUI apps cannot run in Codespaces.
 
-Note: Audio capture won't work in a headless environment. Use Codespace for code editing only; test locally on Kubuntu.
+### What works in Codespace:
+- ✅ Code editing
+- ✅ `cargo check`, `cargo clippy`, `cargo test`
+- ✅ `pnpm build` (frontend compilation)
+- ✅ `pnpm exec tsc --noEmit` (TypeScript checking)
+
+### What requires local machine (with display):
+- ❌ `pnpm tauri dev` — needs GTK/display
+- ❌ GUI testing — needs Wayland/X11
+- ❌ Audio capture — needs microphone
+
+### Recommended workflow:
+1. **Codespace:** Write code, run checks, commit/push
+2. **Local Kubuntu:** Pull changes, run `pnpm tauri dev`, test GUI
+
+Note: If you see `Failed to initialize GTK`, you're trying to run the GUI in a headless environment.
