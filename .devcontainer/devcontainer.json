@@ -13,7 +13,8 @@
 				"yo1dog.cursor-align",
 				"esbenp.prettier-vscode",
 				"anthropic.claude-code",
-				"johnpapa.vscode-peacock"
+				"johnpapa.vscode-peacock",
+				"zhuangtongfa.material-theme"
 			],
 			"settings": {
 				"npm.packageManager": "pnpm"
