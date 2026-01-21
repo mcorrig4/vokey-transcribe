@@ -1,16 +1,27 @@
+use serde::Serialize;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager,
 };
 
-/// Emit a state update to the frontend
-fn emit_state(app: &tauri::AppHandle, state: &str, message: Option<&str>) {
-    let payload = serde_json::json!({
-        "state": state,
-        "message": message
-    });
-    let _ = app.emit("state-update", payload);
+/// UI state sent to the frontend via Tauri events.
+/// Uses tagged union format: { "status": "idle" } or { "status": "recording", "elapsedSecs": 5 }
+#[derive(Clone, Serialize)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum UiState {
+    Idle,
+    Arming,
+    Recording { elapsed_secs: u64 },
+    Stopping,
+    Transcribing,
+    Done { text: String },
+    Error { message: String, last_text: Option<String> },
+}
+
+/// Emit a UI state update to the frontend
+fn emit_ui_state(app: &tauri::AppHandle, state: &UiState) {
+    let _ = app.emit("state-update", state);
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -64,7 +75,7 @@ pub fn run() {
                 .build(app)?;
 
             // Emit initial state
-            emit_state(app.handle(), "Idle", None);
+            emit_ui_state(app.handle(), &UiState::Idle);
 
             log::info!("VoKey Transcribe started");
             Ok(())

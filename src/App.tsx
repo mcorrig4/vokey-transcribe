@@ -2,23 +2,26 @@ import { useState, useEffect } from 'react'
 import { listen } from '@tauri-apps/api/event'
 import './styles/hud.css'
 
-// App state types matching Rust backend
-type AppState = 'Idle' | 'Recording' | 'Transcribing' | 'Done' | 'Error'
+// UI state types matching Rust backend (tagged union with camelCase)
+// Matches: #[serde(tag = "status", rename_all = "camelCase")]
+type UiState =
+  | { status: 'idle' }
+  | { status: 'arming' }
+  | { status: 'recording'; elapsedSecs: number }
+  | { status: 'stopping' }
+  | { status: 'transcribing' }
+  | { status: 'done'; text: string }
+  | { status: 'error'; message: string; lastText: string | null }
 
-interface StatePayload {
-  state: AppState
-  message?: string
-}
+type Status = UiState['status']
 
 function App() {
-  const [appState, setAppState] = useState<AppState>('Idle')
-  const [message, setMessage] = useState<string>('')
+  const [uiState, setUiState] = useState<UiState>({ status: 'idle' })
 
   useEffect(() => {
     // Listen for state updates from Rust backend
-    const unlisten = listen<StatePayload>('state-update', (event) => {
-      setAppState(event.payload.state)
-      setMessage(event.payload.message ?? '')
+    const unlisten = listen<UiState>('state-update', (event) => {
+      setUiState(event.payload)
     })
 
     return () => {
@@ -26,35 +29,60 @@ function App() {
     }
   }, [])
 
-  const stateColors: Record<AppState, string> = {
-    Idle: '#4a5568',      // gray
-    Recording: '#e53e3e', // red
-    Transcribing: '#d69e2e', // yellow/amber
-    Done: '#38a169',      // green
-    Error: '#e53e3e',     // red
+  const stateColors: Record<Status, string> = {
+    idle: '#4a5568',        // gray
+    arming: '#d69e2e',      // amber (preparing)
+    recording: '#e53e3e',   // red
+    stopping: '#d69e2e',    // amber (processing)
+    transcribing: '#3182ce', // blue
+    done: '#38a169',        // green
+    error: '#e53e3e',       // red
   }
 
-  const stateLabels: Record<AppState, string> = {
-    Idle: 'Ready',
-    Recording: '● Recording',
-    Transcribing: 'Transcribing...',
-    Done: 'Copied — paste now',
-    Error: 'Error',
+  const getLabel = (state: UiState): string => {
+    switch (state.status) {
+      case 'idle':
+        return 'Ready'
+      case 'arming':
+        return 'Starting...'
+      case 'recording':
+        return `● Recording ${formatTime(state.elapsedSecs)}`
+      case 'stopping':
+        return 'Stopping...'
+      case 'transcribing':
+        return 'Transcribing...'
+      case 'done':
+        return 'Copied — paste now'
+      case 'error':
+        return 'Error'
+    }
   }
+
+  const getMessage = (state: UiState): string | null => {
+    if (state.status === 'error') {
+      return state.message
+    }
+    return null
+  }
+
+  const message = getMessage(uiState)
 
   return (
     <div
       className="hud-container"
-      style={{ backgroundColor: stateColors[appState] }}
+      style={{ backgroundColor: stateColors[uiState.status] }}
     >
-      <span className="hud-text">
-        {stateLabels[appState]}
-      </span>
-      {message && appState === 'Error' && (
-        <span className="hud-message">{message}</span>
-      )}
+      <span className="hud-text">{getLabel(uiState)}</span>
+      {message && <span className="hud-message">{message}</span>}
     </div>
   )
+}
+
+/** Format seconds as MM:SS */
+function formatTime(secs: number): string {
+  const mins = Math.floor(secs / 60)
+  const s = secs % 60
+  return `${mins}:${s.toString().padStart(2, '0')}`
 }
 
 export default App
