@@ -193,6 +193,18 @@ pnpm tauri build
 
 ---
 
+## LXD Container Development
+
+For developing in an LXD container, use `lxd-gui-setup.sh` to configure GUI app requirements (GPU, D-Bus, Wayland passthrough, AppArmor):
+
+```bash
+./lxd-gui-setup.sh <container> all on   # Enable all GUI features
+lxc restart <container>                  # Apply changes
+./lxd-gui-setup.sh <container> info     # Check current status
+```
+
+---
+
 ## Behavior and UX expectations
 - HUD never steals focus
 - Transcript is copied to clipboard automatically
@@ -247,4 +259,8 @@ Architecture decisions are documented in `docs/WORKLOG.md` with:
 
 ---
 
+To test:        
+```sh
+WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/$(id -u) pnpm tauri dev
+```
 Codespace port forwarding `gh codespace ports forward 1455:1455`

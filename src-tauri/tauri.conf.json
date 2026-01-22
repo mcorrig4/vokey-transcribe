@@ -25,12 +25,23 @@
         "transparent": true,
         "skipTaskbar": true,
         "visible": true
+      },
+      {
+        "label": "debug",
+        "title": "VoKey Debug",
+        "url": "index.html?window=debug",
+        "width": 300,
+        "height": 250,
+        "resizable": true,
+        "decorations": true,
+        "alwaysOnTop": false,
+        "visible": false
       }
     ],
     "trayIcon": {
       "id": "main",
-      "iconPath": "icons/32x32.png",
-      "iconAsTemplate": true
+      "iconPath": "icons/tray-test.png",
+      "iconAsTemplate": false
     },
     "security": {
       "csp": null

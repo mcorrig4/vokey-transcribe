@@ -1,9 +1,17 @@
+mod effects;
+mod state_machine;
+
 use serde::Serialize;
+use std::sync::Arc;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Emitter, Manager,
+    AppHandle, Emitter, Manager, WindowEvent,
 };
+use tokio::sync::mpsc;
+
+use effects::{EffectRunner, StubEffectRunner};
+use state_machine::{reduce, Effect, Event, State};
 
 /// UI state sent to the frontend via Tauri events.
 /// Uses tagged union format: { "status": "idle" } or { "status": "recording", "elapsedSecs": 5 }
@@ -19,10 +27,138 @@ pub enum UiState {
     Error { message: String, last_text: Option<String> },
 }
 
-/// Emit a UI state update to the frontend
-fn emit_ui_state(app: &tauri::AppHandle, state: &UiState) {
-    let _ = app.emit("state-update", state);
+/// Convert internal State to UiState for frontend
+fn state_to_ui(state: &State) -> UiState {
+    match state {
+        State::Idle => UiState::Idle,
+        State::Arming { .. } => UiState::Arming,
+        State::Recording { started_at, .. } => UiState::Recording {
+            elapsed_secs: started_at.elapsed().as_secs(),
+        },
+        State::Stopping { .. } => UiState::Stopping,
+        State::Transcribing { .. } => UiState::Transcribing,
+        State::Done { text, .. } => UiState::Done { text: text.clone() },
+        State::Error {
+            message,
+            last_good_text,
+        } => UiState::Error {
+            message: message.clone(),
+            last_text: last_good_text.clone(),
+        },
+    }
 }
+
+/// Emit a UI state update to the frontend
+fn emit_ui_state(app: &AppHandle, state: &State) {
+    let ui_state = state_to_ui(state);
+    if let Err(e) = app.emit("state-update", &ui_state) {
+        log::warn!("Failed to emit state to UI: {:?}", e);
+    }
+}
+
+/// State loop manager - holds the event sender for dispatching events
+pub struct StateLoopHandle {
+    tx: mpsc::Sender<Event>,
+}
+
+impl StateLoopHandle {
+    /// Send an event to the state machine
+    pub async fn send(&self, event: Event) -> Result<(), mpsc::error::SendError<Event>> {
+        self.tx.send(event).await
+    }
+}
+
+/// Run the main state loop
+async fn run_state_loop(
+    app: AppHandle,
+    mut rx: mpsc::Receiver<Event>,
+    tx: mpsc::Sender<Event>,
+    effect_runner: Arc<dyn EffectRunner>,
+) {
+    let mut state = State::default();
+
+    // Emit initial state
+    emit_ui_state(&app, &state);
+    log::info!("State loop started");
+
+    while let Some(event) = rx.recv().await {
+        log::debug!("Received event: {:?}", event);
+
+        // Handle Exit at the edge
+        if matches!(event, Event::Exit) {
+            log::info!("Exit requested, shutting down state loop");
+            break;
+        }
+
+        let old_discriminant = std::mem::discriminant(&state);
+        let (next, effects) = reduce(&state, event);
+        let new_discriminant = std::mem::discriminant(&next);
+
+        // Log state transitions
+        if old_discriminant != new_discriminant {
+            log::info!("State transition: {:?} -> {:?}", state, next);
+        }
+
+        state = next;
+
+        // Execute effects
+        for eff in effects {
+            match eff {
+                Effect::EmitUi => emit_ui_state(&app, &state),
+                other => effect_runner.spawn(other, tx.clone()),
+            }
+        }
+    }
+
+    log::info!("State loop ended");
+}
+
+// ============================================================================
+// Tauri Commands for simulation/testing
+// ============================================================================
+
+#[tauri::command]
+async fn simulate_record_start(state: tauri::State<'_, StateLoopHandle>) -> Result<(), String> {
+    log::info!("Simulate: record start");
+    state
+        .send(Event::HotkeyToggle)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn simulate_record_stop(state: tauri::State<'_, StateLoopHandle>) -> Result<(), String> {
+    log::info!("Simulate: record stop");
+    state
+        .send(Event::HotkeyToggle)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn simulate_cancel(state: tauri::State<'_, StateLoopHandle>) -> Result<(), String> {
+    log::info!("Simulate: cancel");
+    state
+        .send(Event::Cancel)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn simulate_error(state: tauri::State<'_, StateLoopHandle>) -> Result<(), String> {
+    log::info!("Simulate: error");
+    // Force transition to Error state (works from any state)
+    state
+        .send(Event::ForceError {
+            message: "Simulated error for testing".to_string(),
+        })
+        .await
+        .map_err(|e| e.to_string())
+}
+
+// ============================================================================
+// Application entry point
+// ============================================================================
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -32,7 +168,7 @@ pub fn run() {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
+                        .level(log::LevelFilter::Debug)
                         .build(),
                 )?;
             }
@@ -49,8 +185,12 @@ pub fn run() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "settings" => {
-                        log::info!("Settings clicked");
-                        // TODO: Open settings window
+                        log::info!("Settings/Debug clicked");
+                        // Open or focus the debug window
+                        if let Some(window) = app.get_webview_window("debug") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
                     }
                     "quit" => {
                         log::info!("Quit clicked");
@@ -74,11 +214,41 @@ pub fn run() {
                 })
                 .build(app)?;
 
-            // Emit initial state
-            emit_ui_state(app.handle(), &UiState::Idle);
+            // Create event channel for state machine
+            let (tx, rx) = mpsc::channel::<Event>(32);
+
+            // Store the sender so Tauri commands can dispatch events
+            let state_handle = StateLoopHandle { tx: tx.clone() };
+            app.manage(state_handle);
+
+            // Create effect runner (stub for Sprint 1)
+            let effect_runner = StubEffectRunner::new();
+
+            // Spawn the state loop
+            let app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                run_state_loop(app_handle, rx, tx, effect_runner).await;
+            });
 
             log::info!("VoKey Transcribe started");
             Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            simulate_record_start,
+            simulate_record_stop,
+            simulate_cancel,
+            simulate_error,
+        ])
+        .on_window_event(|window, event| {
+            // Hide windows instead of closing them (except for quit)
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                let label = window.label();
+                if label == "debug" || label == "hud" {
+                    log::info!("Hiding window: {}", label);
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
