@@ -55,8 +55,8 @@ pub enum Event {
     Cancel,
     /// Application exit requested
     Exit,
-    /// Done state auto-dismiss timeout
-    DoneTimeout,
+    /// Done state auto-dismiss timeout (includes id to prevent stale timeouts)
+    DoneTimeout { id: Uuid },
 
     // Audio events
     AudioStartOk { id: Uuid, wav_path: PathBuf },
@@ -154,6 +154,8 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
         (Arming { recording_id }, Cancel) => (
             Idle,
             vec![
+                // Stop audio in case it started between cancel and AudioStartOk
+                StopAudio { id: *recording_id },
                 Cleanup {
                     id: *recording_id,
                     wav_path: None,
@@ -172,12 +174,17 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             },
             vec![StopAudio { id: *recording_id }, EmitUi],
         ),
+        // Cancel during recording aborts without transcription
         (Recording { recording_id, wav_path, .. }, Cancel) => (
-            Stopping {
-                recording_id: *recording_id,
-                wav_path: wav_path.clone(),
-            },
-            vec![StopAudio { id: *recording_id }, EmitUi],
+            Idle,
+            vec![
+                StopAudio { id: *recording_id },
+                Cleanup {
+                    id: *recording_id,
+                    wav_path: Some(wav_path.clone()),
+                },
+                EmitUi,
+            ],
         ),
 
         // -----------------
@@ -261,7 +268,8 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
         // -----------------
         // Done
         // -----------------
-        (Done { recording_id, .. }, DoneTimeout) => (
+        // Only handle DoneTimeout if id matches current recording (prevents stale timeouts)
+        (Done { recording_id, .. }, DoneTimeout { id }) if *recording_id == id => (
             Idle,
             vec![
                 Cleanup {
@@ -271,6 +279,8 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
                 EmitUi,
             ],
         ),
+        // Stale DoneTimeout (id doesn't match) - ignore
+        (Done { .. }, DoneTimeout { .. }) => (state.clone(), vec![]),
         (Done { .. }, HotkeyToggle) => {
             // Start new recording immediately
             let id = Uuid::new_v4();
@@ -355,6 +365,101 @@ mod tests {
         };
         let (next, effects) = reduce(&state, Event::HotkeyToggle);
         assert!(matches!(next, State::Arming { .. }));
+        assert!(effects.iter().any(|e| matches!(e, Effect::StartAudio { .. })));
+    }
+
+    // =========================================================================
+    // Cancel semantics tests
+    // =========================================================================
+
+    #[test]
+    fn cancel_during_arming_stops_audio_and_returns_to_idle() {
+        let id = Uuid::new_v4();
+        let state = State::Arming { recording_id: id };
+        let (next, effects) = reduce(&state, Event::Cancel);
+
+        assert!(matches!(next, State::Idle));
+        // Should issue StopAudio in case audio started late
+        assert!(effects.iter().any(|e| matches!(e, Effect::StopAudio { .. })));
+        assert!(effects.iter().any(|e| matches!(e, Effect::Cleanup { .. })));
+        assert!(effects.iter().any(|e| matches!(e, Effect::EmitUi)));
+    }
+
+    #[test]
+    fn cancel_during_recording_aborts_without_transcription() {
+        let id = Uuid::new_v4();
+        let state = State::Recording {
+            recording_id: id,
+            wav_path: PathBuf::from("/tmp/test.wav"),
+            started_at: std::time::Instant::now(),
+        };
+        let (next, effects) = reduce(&state, Event::Cancel);
+
+        // Should go directly to Idle, NOT to Stopping->Transcribing
+        assert!(matches!(next, State::Idle));
+        assert!(effects.iter().any(|e| matches!(e, Effect::StopAudio { .. })));
+        assert!(effects.iter().any(|e| matches!(e, Effect::Cleanup { .. })));
+        // Should NOT start transcription
+        assert!(!effects.iter().any(|e| matches!(e, Effect::StartTranscription { .. })));
+    }
+
+    #[test]
+    fn cancel_during_transcribing_aborts_and_returns_to_idle() {
+        let id = Uuid::new_v4();
+        let state = State::Transcribing {
+            recording_id: id,
+            wav_path: PathBuf::from("/tmp/test.wav"),
+        };
+        let (next, effects) = reduce(&state, Event::Cancel);
+
+        assert!(matches!(next, State::Idle));
+        assert!(effects.iter().any(|e| matches!(e, Effect::Cleanup { .. })));
+    }
+
+    // =========================================================================
+    // DoneTimeout with recording_id tests
+    // =========================================================================
+
+    #[test]
+    fn done_timeout_with_matching_id_returns_to_idle() {
+        let id = Uuid::new_v4();
+        let state = State::Done {
+            recording_id: id,
+            text: "test".to_string(),
+        };
+        let (next, effects) = reduce(&state, Event::DoneTimeout { id });
+
+        assert!(matches!(next, State::Idle));
+        assert!(effects.iter().any(|e| matches!(e, Effect::Cleanup { .. })));
+        assert!(effects.iter().any(|e| matches!(e, Effect::EmitUi)));
+    }
+
+    #[test]
+    fn done_timeout_with_stale_id_is_ignored() {
+        let current_id = Uuid::new_v4();
+        let stale_id = Uuid::new_v4();
+        let state = State::Done {
+            recording_id: current_id,
+            text: "test".to_string(),
+        };
+        let (next, effects) = reduce(&state, Event::DoneTimeout { id: stale_id });
+
+        // Should stay in Done, no effects (stale timeout ignored)
+        assert!(matches!(next, State::Done { .. }));
+        assert!(effects.is_empty());
+    }
+
+    #[test]
+    fn hotkey_during_done_starts_new_recording_ignoring_pending_timeout() {
+        let old_id = Uuid::new_v4();
+        let state = State::Done {
+            recording_id: old_id,
+            text: "old text".to_string(),
+        };
+        let (next, effects) = reduce(&state, Event::HotkeyToggle);
+
+        // Should start new recording with new id
+        assert!(matches!(next, State::Arming { recording_id } if recording_id != old_id));
         assert!(effects.iter().any(|e| matches!(e, Effect::StartAudio { .. })));
     }
 }

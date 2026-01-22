@@ -62,11 +62,11 @@ impl EffectRunner for StubEffectRunner {
                 log::info!("Stub: would copy to clipboard: {}", text);
             }
 
-            Effect::StartDoneTimeout { id: _, duration } => {
+            Effect::StartDoneTimeout { id, duration } => {
                 tokio::spawn(async move {
                     tokio::time::sleep(duration).await;
-                    log::debug!("Done timeout elapsed");
-                    let _ = tx.send(Event::DoneTimeout).await;
+                    log::debug!("Done timeout elapsed for id={}", id);
+                    let _ = tx.send(Event::DoneTimeout { id }).await;
                 });
             }
 
