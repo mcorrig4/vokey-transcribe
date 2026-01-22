@@ -1,4 +1,5 @@
 mod effects;
+mod hotkey;
 mod state_machine;
 
 use serde::Serialize;
@@ -11,6 +12,7 @@ use tauri::{
 use tokio::sync::mpsc;
 
 use effects::{EffectRunner, StubEffectRunner};
+use hotkey::{Hotkey, HotkeyManager, HotkeyStatus};
 use state_machine::{reduce, Effect, Event, State};
 
 /// UI state sent to the frontend via Tauri events.
@@ -59,6 +61,11 @@ fn emit_ui_state(app: &AppHandle, state: &State) {
 /// State loop manager - holds the event sender for dispatching events
 pub struct StateLoopHandle {
     tx: mpsc::Sender<Event>,
+}
+
+/// Holds the hotkey status for display in the UI
+pub struct HotkeyStatusHolder {
+    status: HotkeyStatus,
 }
 
 impl StateLoopHandle {
@@ -156,6 +163,25 @@ async fn simulate_error(state: tauri::State<'_, StateLoopHandle>) -> Result<(), 
         .map_err(|e| e.to_string())
 }
 
+/// Get the current hotkey status for display in the debug panel
+#[derive(Clone, serde::Serialize)]
+pub struct HotkeyStatusResponse {
+    active: bool,
+    device_count: usize,
+    hotkey: String,
+    error: Option<String>,
+}
+
+#[tauri::command]
+fn get_hotkey_status(holder: tauri::State<'_, HotkeyStatusHolder>) -> HotkeyStatusResponse {
+    HotkeyStatusResponse {
+        active: holder.status.active,
+        device_count: holder.status.device_count,
+        hotkey: holder.status.hotkey.clone(),
+        error: holder.status.error.clone(),
+    }
+}
+
 // ============================================================================
 // Application entry point
 // ============================================================================
@@ -226,8 +252,28 @@ pub fn run() {
 
             // Spawn the state loop
             let app_handle = app.handle().clone();
+            let tx_for_loop = tx.clone();
             tauri::async_runtime::spawn(async move {
-                run_state_loop(app_handle, rx, tx, effect_runner).await;
+                run_state_loop(app_handle, rx, tx_for_loop, effect_runner).await;
+            });
+
+            // Start hotkey monitoring (Sprint 2)
+            let hotkey_status = match HotkeyManager::start(tx, vec![Hotkey::default_toggle()]) {
+                Ok(manager) => {
+                    log::info!("Hotkey manager started successfully");
+                    let status = manager.status().clone();
+                    // Keep manager alive by storing it
+                    app.manage(manager);
+                    status
+                }
+                Err(e) => {
+                    log::error!("Failed to start hotkey manager: {}", e);
+                    // App continues without hotkey - user can still use debug panel
+                    hotkey::manager::failed_status(e)
+                }
+            };
+            app.manage(HotkeyStatusHolder {
+                status: hotkey_status,
             });
 
             log::info!("VoKey Transcribe started");
@@ -238,6 +284,7 @@ pub fn run() {
             simulate_record_stop,
             simulate_cancel,
             simulate_error,
+            get_hotkey_status,
         ])
         .on_window_event(|window, event| {
             // Hide windows instead of closing them (except for quit)

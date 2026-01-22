@@ -14,11 +14,54 @@
   color: #fff;
 }
 
+.debug-section {
+  background: #16213e;
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+}
+
 .debug-status {
   background: #16213e;
   padding: 8px 12px;
   border-radius: 4px;
   margin-bottom: 12px;
+}
+
+/* Hotkey status styles */
+.hotkey-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.status-badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.status-badge.active {
+  background: #48bb78;
+  color: #1a202c;
+}
+
+.status-badge.inactive {
+  background: #e53e3e;
+  color: white;
+}
+
+.device-count {
+  color: #a0aec0;
+  font-size: 11px;
+}
+
+.error-text {
+  color: #fc8181;
+  font-size: 11px;
 }
 
 .debug-buttons {
