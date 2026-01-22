@@ -80,7 +80,19 @@ impl EffectRunner for AudioEffectRunner {
                         }
                     }
 
-                    let rec = recorder_guard.as_ref().unwrap();
+                    let rec = match recorder_guard.as_ref() {
+                        Some(r) => r,
+                        None => {
+                            log::error!("Audio recorder is unavailable after retry");
+                            let _ = tx
+                                .send(Event::AudioStartFail {
+                                    id,
+                                    err: "Audio recorder unavailable".to_string(),
+                                })
+                                .await;
+                            return;
+                        }
+                    };
 
                     // Start recording
                     match rec.start(id) {

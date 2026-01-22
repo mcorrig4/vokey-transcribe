@@ -30,14 +30,14 @@ pub fn create_temp_audio_dir() -> std::io::Result<PathBuf> {
 /// Format: <timestamp>_<uuid>.wav
 pub fn generate_wav_path(recording_id: Uuid) -> std::io::Result<PathBuf> {
     let dir = create_temp_audio_dir()?;
-    let timestamp = chrono_lite_timestamp();
+    let timestamp = get_current_unix_timestamp_string();
     let filename = format!("{}_{}.wav", timestamp, recording_id);
     Ok(dir.join(filename))
 }
 
-/// Simple timestamp without chrono dependency.
+/// Generate a Unix timestamp string for unique filenames.
 /// Format: <seconds since UNIX epoch>
-fn chrono_lite_timestamp() -> String {
+fn get_current_unix_timestamp_string() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let duration = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -77,9 +77,14 @@ pub fn cleanup_old_recordings() -> std::io::Result<usize> {
     let mut deleted = 0;
 
     for entry in entries.into_iter().take(to_delete) {
-        if fs::remove_file(entry.path()).is_ok() {
-            log::debug!("Cleaned up old recording: {:?}", entry.path());
-            deleted += 1;
+        match fs::remove_file(entry.path()) {
+            Ok(_) => {
+                log::debug!("Cleaned up old recording: {:?}", entry.path());
+                deleted += 1;
+            }
+            Err(e) => {
+                log::warn!("Failed to delete old recording {:?}: {}", entry.path(), e);
+            }
         }
     }
 

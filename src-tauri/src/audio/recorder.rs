@@ -186,7 +186,9 @@ fn audio_thread_main(
             }) => {
                 // Stop any existing recording first
                 if let Some(stream) = active_stream.take() {
-                    let _ = finalize_recording(stream);
+                    if let Err(e) = finalize_recording(stream) {
+                        log::error!("Failed to finalize previous recording: {}", e);
+                    }
                 }
 
                 // Start new recording

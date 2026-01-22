@@ -134,6 +134,25 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Session Notes
 
+### Session 2026-01-22 (PR #22 Code Review Fixes)
+**Addressed code review feedback from PR #22 (gemini-code-assist[bot]):**
+
+**Fixed (4 items):**
+1. `src-tauri/src/effects.rs:83` - Replaced `unwrap()` with explicit `match` to handle `None` case safely, sends `AudioStartFail` event if recorder unavailable after retry
+2. `src-tauri/src/audio/paths.rs:40` - Renamed `chrono_lite_timestamp()` to `get_current_unix_timestamp_string()` for clarity
+3. `src-tauri/src/audio/paths.rs:80-82` - Added error logging when file deletion fails during cleanup
+4. `src-tauri/src/audio/recorder.rs:188-190` - Added error logging when `finalize_recording()` fails
+
+**Deferred (3 issues created):**
+- #23: feat(audio): make MAX_RECORDINGS configurable
+- #24: fix(audio): improve metadata error handling in cleanup_old_recordings
+- #25: perf(audio): optimize get_audio_status to avoid creating AudioRecorder on every call
+
+**Files modified:**
+- `src-tauri/src/effects.rs` - Safer unwrap handling
+- `src-tauri/src/audio/paths.rs` - Renamed function, added error logging
+- `src-tauri/src/audio/recorder.rs` - Added error logging for finalize
+
 ### Session 2026-01-22 (Documentation Updates)
 **Updated documentation to reflect Sprint 3 implementation:**
 
