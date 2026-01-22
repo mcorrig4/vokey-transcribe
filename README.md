@@ -246,3 +246,5 @@ Architecture decisions are documented in `docs/WORKLOG.md` with:
 4. Mark sprint complete when all acceptance criteria pass
 
 ---
+
+Codespace port forwarding `gh codespace ports forward 1455:1455`
