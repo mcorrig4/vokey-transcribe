@@ -134,6 +134,20 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Session Notes
 
+### Session 2026-01-22 (Documentation Updates)
+**Updated documentation to reflect Sprint 3 implementation:**
+
+- **docs/tauri-gotchas.md**: Added new section "7) CPAL Audio Thread Architecture"
+  - Documents dedicated audio thread pattern for CPAL thread safety
+  - Explains std::sync::mpsc command channel usage (not tokio)
+  - Shows poisoned mutex handling pattern for audio callbacks
+
+- **README.md**: Updated "Repo layout" section
+  - Changed from planned structure to actual implementation
+  - Reflects audio/, hotkey/, state_machine.rs organization
+  - Removed files that don't exist yet (ModeSelector, Diagnostics, etc.)
+  - Added docs/ and scripts/ sections
+
 ### Session 2026-01-22 (Sprint 3 Implementation)
 **Implemented audio capture with CPAL and hound:**
 - Added `cpal`, `hound`, and `dirs` crate dependencies
