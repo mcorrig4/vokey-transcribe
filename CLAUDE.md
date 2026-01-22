@@ -59,3 +59,8 @@ sudo apt-get update
 ```
 
 Then install Tauri prerequisites: `sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev`
+
+# Check & Address PR Code Review Comments
+When asked to review a Pull Request: use gh cli to read code review comments on the specified PR #.
+- install the gh cli if it is not installed
+- when reviewer(s) has left comments, summarize them; state whether you believe each one requires addressing now, should be delayed (create a new gh issue) or ignored/not a problem/false positve. present summary and recommend what you think should be done next. wait for user direction to continue fixing (unless otherwise directed to immediately start fixes)
