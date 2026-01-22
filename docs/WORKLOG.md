@@ -6,10 +6,10 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Current Status
 
-**Phase:** Sprint 0 COMPLETE — Ready for Sprint 1
+**Phase:** Sprint 1 IN PROGRESS — State machine + UI wiring
 **Target:** Kubuntu with KDE Plasma 6.4 on Wayland
 **Branch:** `claude/review-docs-planning-qguM0`
-**Last Updated:** 2025-01-21
+**Last Updated:** 2025-01-22
 
 ---
 
@@ -35,7 +35,7 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 | Sprint | Status | Notes |
 |--------|--------|-------|
 | 0 - Project skeleton + HUD + tray | ✅ COMPLETE | HUD shows "Ready", tray icon works, Quit exits cleanly |
-| 1 - State machine + UI wiring | **NEXT** | Full reducer documented in tauri-gotchas.md |
+| 1 - State machine + UI wiring | 🔄 IN PROGRESS | Full reducer documented in tauri-gotchas.md |
 | 2 - Global hotkey (evdev) | Not started | |
 | 3 - Audio capture (CPAL + Hound) | Not started | |
 | 4 - OpenAI transcription + clipboard | Not started | |
