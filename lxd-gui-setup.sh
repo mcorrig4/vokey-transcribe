@@ -17,7 +17,9 @@ set -Eeuo pipefail
 #   dbus off         Disable D-Bus forwarding
 #   wayland on       Enable Wayland display passthrough + GPU
 #   wayland off      Disable Wayland passthrough
-#   all on           Enable all features (apparmor unconfined + gpu + dbus + wayland)
+#   audio on         Enable audio passthrough (PipeWire + PulseAudio)
+#   audio off        Disable audio passthrough
+#   all on           Enable all features (apparmor unconfined + gpu + dbus + wayland + audio)
 #   all off          Disable all features
 #   info             Show current configuration status
 #
@@ -30,6 +32,13 @@ set -Eeuo pipefail
 #             The socket is mounted directly at /run/user/$UID/bus (not symlinked)
 #             to satisfy the host's AppArmor profile for notify-send.
 #             Test: lxc exec <container> -- su - <user> -c 'notify-send Test Hello'
+#
+#   Wayland:  The socket is mounted directly at /run/user/$UID/wayland-0 (not symlinked).
+#             This satisfies the host's AppArmor profile which only allows access to
+#             @{run}/user/*/wayland-[0-9]*, blocking symlinks from /mnt.
+#
+#   Audio:    PipeWire and PulseAudio sockets are mounted directly at their
+#             expected paths for AppArmor compatibility.
 #
 #   GPU:      Required for WebKit hardware acceleration in Tauri apps.
 #
@@ -383,6 +392,65 @@ SVCEOF
     esac
     ;;
 
+  audio)
+    AUDIO_MODE="${1:-}"
+    [[ -n "$AUDIO_MODE" ]] || die "Usage: $0 $CONTAINER audio <on|off>"
+
+    HOST_UID=$(id -u)
+    CONTAINER_UID=$(lxc exec "$CONTAINER" -- id -u "$CONTAINER_USER")
+
+    case "$AUDIO_MODE" in
+      on)
+        log "Enabling audio passthrough for '$CONTAINER'"
+
+        # PipeWire socket - mount directly at expected path for AppArmor
+        if [[ -S "/run/user/${HOST_UID}/pipewire-0" ]]; then
+          lxc config device add "$CONTAINER" pipewire proxy \
+            connect="unix:/run/user/${HOST_UID}/pipewire-0" \
+            listen="unix:/run/user/${CONTAINER_UID}/pipewire-0" \
+            bind=container \
+            uid="$CONTAINER_UID" gid="$CONTAINER_UID" \
+            security.uid="$CONTAINER_UID" security.gid="$CONTAINER_UID" \
+            mode=0777 2>/dev/null || true
+          log "Added PipeWire socket proxy"
+        else
+          log "Warning: PipeWire socket not found at /run/user/${HOST_UID}/pipewire-0"
+        fi
+
+        # PulseAudio socket - mount directly at expected path for AppArmor
+        if [[ -S "/run/user/${HOST_UID}/pulse/native" ]]; then
+          # Create pulse directory in container if needed
+          lxc exec "$CONTAINER" -- mkdir -p "/run/user/${CONTAINER_UID}/pulse"
+          lxc exec "$CONTAINER" -- chown "${CONTAINER_UID}:${CONTAINER_UID}" "/run/user/${CONTAINER_UID}/pulse"
+
+          lxc config device add "$CONTAINER" pulseaudio proxy \
+            connect="unix:/run/user/${HOST_UID}/pulse/native" \
+            listen="unix:/run/user/${CONTAINER_UID}/pulse/native" \
+            bind=container \
+            uid="$CONTAINER_UID" gid="$CONTAINER_UID" \
+            security.uid="$CONTAINER_UID" security.gid="$CONTAINER_UID" \
+            mode=0777 2>/dev/null || true
+          log "Added PulseAudio socket proxy"
+        else
+          log "Warning: PulseAudio socket not found at /run/user/${HOST_UID}/pulse/native"
+        fi
+
+        log "Done. Restart container to apply: lxc restart $CONTAINER"
+        ;;
+
+      off)
+        log "Disabling audio passthrough for '$CONTAINER'"
+        lxc config device remove "$CONTAINER" pipewire 2>/dev/null || true
+        lxc config device remove "$CONTAINER" pulseaudio 2>/dev/null || true
+        log "Done. Audio passthrough disabled."
+        ;;
+
+      *)
+        die "Unknown audio mode: $AUDIO_MODE (use: on, off)"
+        ;;
+    esac
+    ;;
+
   all)
     ALL_MODE="${1:-}"
     [[ -n "$ALL_MODE" ]] || die "Usage: $0 $CONTAINER all <on|off>"
@@ -401,6 +469,8 @@ SVCEOF
         echo ""
         "$0" "$CONTAINER" wayland on
         echo ""
+        "$0" "$CONTAINER" audio on
+        echo ""
 
         log "All GUI features enabled. Restart container: lxc restart $CONTAINER"
         ;;
@@ -410,6 +480,8 @@ SVCEOF
         echo ""
 
         # Call each command in sequence
+        "$0" "$CONTAINER" audio off
+        echo ""
         "$0" "$CONTAINER" wayland off
         echo ""
         "$0" "$CONTAINER" dbus off
@@ -454,14 +526,37 @@ SVCEOF
     # Check Wayland passthrough status
     if lxc config device show "$CONTAINER" 2>/dev/null | grep -q "wayland:"; then
       echo "Wayland:   enabled (host passthrough)"
-      # Check if symlink exists
-      if lxc exec "$CONTAINER" -- test -L "/run/user/${CONTAINER_UID}/wayland-0" 2>/dev/null; then
-        echo "           socket symlink: OK"
+      # Check if socket exists (directly mounted, not symlinked)
+      if lxc exec "$CONTAINER" -- test -S "/run/user/${CONTAINER_UID}/wayland-0" 2>/dev/null; then
+        echo "           socket: OK"
       else
-        echo "           socket symlink: MISSING (restart container or run: lxc exec $CONTAINER -- su - $CONTAINER_USER -c 'systemctl --user start wayland-socket.service')"
+        echo "           socket: MISSING (restart container)"
       fi
     else
-      echo "Wayland:   disabled"
+      echo "PulseAudio: disabled"
+    fi
+
+    # Check audio passthrough status
+    if lxc config device show "$CONTAINER" 2>/dev/null | grep -q "pipewire:"; then
+      echo "PipeWire:  enabled"
+      if lxc exec "$CONTAINER" -- test -S "/run/user/${CONTAINER_UID}/pipewire-0" 2>/dev/null; then
+        echo "           socket: OK"
+      else
+        echo "           socket: MISSING (restart container)"
+      fi
+    else
+      echo "PipeWire:  disabled"
+    fi
+
+    if lxc config device show "$CONTAINER" 2>/dev/null | grep -q "pulseaudio:"; then
+      echo "PulseAudio: enabled"
+      if lxc exec "$CONTAINER" -- test -S "/run/user/${CONTAINER_UID}/pulse/native" 2>/dev/null; then
+        echo "           socket: OK"
+      else
+        echo "           socket: MISSING (restart container)"
+      fi
+    else
+      echo "PulseAudio: disabled"
     fi
 
     # Check D-Bus forwarding status
