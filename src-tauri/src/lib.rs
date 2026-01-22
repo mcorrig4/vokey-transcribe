@@ -1,3 +1,4 @@
+mod audio;
 mod effects;
 mod hotkey;
 mod state_machine;
@@ -11,7 +12,7 @@ use tauri::{
 };
 use tokio::sync::mpsc;
 
-use effects::{EffectRunner, StubEffectRunner};
+use effects::{AudioEffectRunner, EffectRunner};
 use hotkey::{Hotkey, HotkeyManager, HotkeyStatus};
 use state_machine::{reduce, Effect, Event, State};
 
@@ -22,11 +23,18 @@ use state_machine::{reduce, Effect, Event, State};
 pub enum UiState {
     Idle,
     Arming,
-    Recording { elapsed_secs: u64 },
+    Recording {
+        elapsed_secs: u64,
+    },
     Stopping,
     Transcribing,
-    Done { text: String },
-    Error { message: String, last_text: Option<String> },
+    Done {
+        text: String,
+    },
+    Error {
+        message: String,
+        last_text: Option<String>,
+    },
 }
 
 /// Convert internal State to UiState for frontend
@@ -145,10 +153,7 @@ async fn simulate_record_stop(state: tauri::State<'_, StateLoopHandle>) -> Resul
 #[tauri::command]
 async fn simulate_cancel(state: tauri::State<'_, StateLoopHandle>) -> Result<(), String> {
     log::info!("Simulate: cancel");
-    state
-        .send(Event::Cancel)
-        .await
-        .map_err(|e| e.to_string())
+    state.send(Event::Cancel).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -179,6 +184,41 @@ fn get_hotkey_status(holder: tauri::State<'_, HotkeyStatusHolder>) -> HotkeyStat
         device_count: holder.status.device_count,
         hotkey: holder.status.hotkey.clone(),
         error: holder.status.error.clone(),
+    }
+}
+
+/// Audio status for debug panel
+#[derive(Clone, serde::Serialize)]
+pub struct AudioStatusResponse {
+    available: bool,
+    temp_dir: String,
+    error: Option<String>,
+}
+
+#[tauri::command]
+fn get_audio_status() -> AudioStatusResponse {
+    // Check if we can initialize an audio recorder
+    match audio::AudioRecorder::new() {
+        Ok(recorder) => {
+            // Get the temp directory path
+            let temp_dir = audio::create_temp_audio_dir()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|_| "unknown".to_string());
+
+            // Log device info
+            log::info!("Audio available, temp dir: {}", temp_dir);
+
+            AudioStatusResponse {
+                available: true,
+                temp_dir,
+                error: None,
+            }
+        }
+        Err(e) => AudioStatusResponse {
+            available: false,
+            temp_dir: "N/A".to_string(),
+            error: Some(e.to_string()),
+        },
     }
 }
 
@@ -247,8 +287,8 @@ pub fn run() {
             let state_handle = StateLoopHandle { tx: tx.clone() };
             app.manage(state_handle);
 
-            // Create effect runner (stub for Sprint 1)
-            let effect_runner = StubEffectRunner::new();
+            // Create effect runner (real audio capture as of Sprint 3)
+            let effect_runner = AudioEffectRunner::new();
 
             // Spawn the state loop
             let app_handle = app.handle().clone();
@@ -285,6 +325,7 @@ pub fn run() {
             simulate_cancel,
             simulate_error,
             get_hotkey_status,
+            get_audio_status,
         ])
         .on_window_event(|window, event| {
             // Hide windows instead of closing them (except for quit)

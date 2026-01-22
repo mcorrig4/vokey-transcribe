@@ -21,10 +21,18 @@ type HotkeyStatus = {
   error: string | null
 }
 
+// Audio status type matching Rust backend
+type AudioStatus = {
+  available: boolean
+  temp_dir: string
+  error: string | null
+}
+
 function Debug() {
   const [uiState, setUiState] = useState<UiState>({ status: 'idle' })
   const [log, setLog] = useState<string[]>([])
   const [hotkeyStatus, setHotkeyStatus] = useState<HotkeyStatus | null>(null)
+  const [audioStatus, setAudioStatus] = useState<AudioStatus | null>(null)
 
   useEffect(() => {
     const unlisten = listen<UiState>('state-update', (event) => {
@@ -51,6 +59,19 @@ function Debug() {
       }
     }
     loadHotkeyStatus()
+  }, [])
+
+  // Load audio status on mount
+  useEffect(() => {
+    const loadAudioStatus = async () => {
+      try {
+        const status = await invoke<AudioStatus>('get_audio_status')
+        setAudioStatus(status)
+      } catch (e) {
+        console.error('Failed to get audio status:', e)
+      }
+    }
+    loadAudioStatus()
   }, [])
 
   const simulateRecordStart = async () => {
@@ -103,6 +124,29 @@ function Debug() {
               <>
                 <span className="status-badge inactive">Inactive</span>
                 <span className="error-text">{hotkeyStatus.error || 'Unknown error'}</span>
+              </>
+            )}
+          </div>
+        ) : (
+          <span>Loading...</span>
+        )}
+      </div>
+
+      <div className="debug-section">
+        <strong>Audio Status:</strong>
+        {audioStatus ? (
+          <div className={`audio-status ${audioStatus.available ? 'active' : 'inactive'}`}>
+            {audioStatus.available ? (
+              <>
+                <span className="status-badge active">Available</span>
+                <span className="temp-dir" title={audioStatus.temp_dir}>
+                  Recordings: {audioStatus.temp_dir.split('/').slice(-3).join('/')}
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="status-badge inactive">Unavailable</span>
+                <span className="error-text">{audioStatus.error || 'No audio device'}</span>
               </>
             )}
           </div>

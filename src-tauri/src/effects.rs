@@ -1,12 +1,14 @@
 //! Effect runner for VoKey Transcribe
 //!
 //! This module handles executing effects produced by the state machine.
-//! For Sprint 1, this is a stub implementation that simulates async operations.
+//! Sprint 3: Real audio capture with CPAL, transcription still stubbed.
 
-use std::path::PathBuf;
+use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
+use uuid::Uuid;
 
+use crate::audio::{cleanup_old_recordings, AudioError, AudioRecorder};
 use crate::state_machine::{Effect, Event};
 
 /// Trait for running effects asynchronously.
@@ -15,10 +17,199 @@ pub trait EffectRunner: Send + Sync + 'static {
     fn spawn(&self, effect: Effect, tx: mpsc::Sender<Event>);
 }
 
-/// Stub effect runner for Sprint 1.
-/// Simulates async operations with short delays.
+/// Active recording handle wrapper (Send + Sync safe)
+struct ActiveRecording {
+    handle: Option<crate::audio::recorder::RecordingHandle>,
+}
+
+// Safety: RecordingHandle contains Stream which isn't Send, but we only access it
+// from the same thread context via Mutex
+unsafe impl Send for ActiveRecording {}
+unsafe impl Sync for ActiveRecording {}
+
+/// Real effect runner with CPAL audio capture.
+/// Transcription is still stubbed (Sprint 4).
+pub struct AudioEffectRunner {
+    recorder: Arc<Mutex<Option<AudioRecorder>>>,
+    active_recordings: Arc<Mutex<HashMap<Uuid, ActiveRecording>>>,
+}
+
+impl AudioEffectRunner {
+    /// Create a new AudioEffectRunner.
+    /// Returns Ok even if audio device isn't available - errors happen at record time.
+    pub fn new() -> Arc<Self> {
+        // Try to create the recorder now, but don't fail if we can't
+        let recorder = match AudioRecorder::new() {
+            Ok(r) => {
+                log::info!("AudioRecorder initialized successfully");
+                Some(r)
+            }
+            Err(e) => {
+                log::warn!("AudioRecorder init failed (will retry on record): {}", e);
+                None
+            }
+        };
+
+        Arc::new(Self {
+            recorder: Arc::new(Mutex::new(recorder)),
+            active_recordings: Arc::new(Mutex::new(HashMap::new())),
+        })
+    }
+}
+
+impl EffectRunner for AudioEffectRunner {
+    fn spawn(&self, effect: Effect, tx: mpsc::Sender<Event>) {
+        match effect {
+            Effect::StartAudio { id } => {
+                let recorder = self.recorder.clone();
+                let active = self.active_recordings.clone();
+
+                tokio::spawn(async move {
+                    // Try to get or create recorder
+                    let mut recorder_guard = recorder.lock().await;
+                    if recorder_guard.is_none() {
+                        // Retry creating recorder
+                        match AudioRecorder::new() {
+                            Ok(r) => *recorder_guard = Some(r),
+                            Err(e) => {
+                                log::error!("Failed to initialize audio recorder: {}", e);
+                                let _ = tx
+                                    .send(Event::AudioStartFail {
+                                        id,
+                                        err: e.to_string(),
+                                    })
+                                    .await;
+                                return;
+                            }
+                        }
+                    }
+
+                    let rec = recorder_guard.as_ref().unwrap();
+
+                    // Start recording
+                    match rec.start(id) {
+                        Ok((handle, wav_path)) => {
+                            log::info!("Audio recording started: {:?}", wav_path);
+
+                            // Store handle for later stop
+                            let mut active_guard = active.lock().await;
+                            active_guard.insert(
+                                id,
+                                ActiveRecording {
+                                    handle: Some(handle),
+                                },
+                            );
+
+                            let _ = tx.send(Event::AudioStartOk { id, wav_path }).await;
+                        }
+                        Err(e) => {
+                            log::error!("Failed to start audio recording: {}", e);
+                            let _ = tx
+                                .send(Event::AudioStartFail {
+                                    id,
+                                    err: e.to_string(),
+                                })
+                                .await;
+                        }
+                    }
+                });
+            }
+
+            Effect::StopAudio { id } => {
+                let active = self.active_recordings.clone();
+
+                tokio::spawn(async move {
+                    let mut active_guard = active.lock().await;
+
+                    if let Some(mut recording) = active_guard.remove(&id) {
+                        if let Some(handle) = recording.handle.take() {
+                            match handle.stop() {
+                                Ok(path) => {
+                                    log::info!("Audio recording stopped: {:?}", path);
+                                    let _ = tx.send(Event::AudioStopOk { id }).await;
+                                }
+                                Err(e) => {
+                                    log::error!("Failed to stop audio recording: {}", e);
+                                    let _ = tx
+                                        .send(Event::AudioStopFail {
+                                            id,
+                                            err: e.to_string(),
+                                        })
+                                        .await;
+                                }
+                            }
+                        } else {
+                            log::warn!("StopAudio: no active handle for id={}", id);
+                            let _ = tx.send(Event::AudioStopOk { id }).await;
+                        }
+                    } else {
+                        log::warn!("StopAudio: no recording found for id={}", id);
+                        // Still send OK to allow state machine to proceed
+                        let _ = tx.send(Event::AudioStopOk { id }).await;
+                    }
+                });
+            }
+
+            Effect::StartTranscription { id, wav_path } => {
+                // Still stubbed for Sprint 3 (Sprint 4 will implement real transcription)
+                tokio::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    let text = format!(
+                        "[Transcription placeholder - Sprint 4]\nFile: {}",
+                        wav_path.display()
+                    );
+                    log::info!("Stub: transcription complete for {:?}", wav_path);
+                    let _ = tx.send(Event::TranscribeOk { id, text }).await;
+                });
+            }
+
+            Effect::CopyToClipboard { text, .. } => {
+                // Still stubbed for Sprint 3 (Sprint 4 will implement clipboard)
+                log::info!("Stub: would copy to clipboard ({} chars)", text.len());
+            }
+
+            Effect::StartDoneTimeout { id, duration } => {
+                tokio::spawn(async move {
+                    tokio::time::sleep(duration).await;
+                    log::debug!("Done timeout elapsed for id={}", id);
+                    let _ = tx.send(Event::DoneTimeout { id }).await;
+                });
+            }
+
+            Effect::Cleanup { wav_path, .. } => {
+                tokio::spawn(async move {
+                    // Cleanup old recordings (keep last N)
+                    match cleanup_old_recordings() {
+                        Ok(count) if count > 0 => {
+                            log::info!("Cleaned up {} old recordings", count);
+                        }
+                        Ok(_) => {}
+                        Err(e) => {
+                            log::warn!("Failed to cleanup old recordings: {}", e);
+                        }
+                    }
+
+                    // For now, we don't delete the specific wav_path on success
+                    // (keeping for debugging, cleanup_old_recordings handles limits)
+                    if let Some(path) = wav_path {
+                        log::debug!("Recording file retained: {:?}", path);
+                    }
+                });
+            }
+
+            Effect::EmitUi => {
+                // Handled in the main loop, not here
+                unreachable!("EmitUi should be handled in run_state_loop");
+            }
+        }
+    }
+}
+
+/// Stub effect runner for testing (kept for reference/testing).
+#[allow(dead_code)]
 pub struct StubEffectRunner;
 
+#[allow(dead_code)]
 impl StubEffectRunner {
     pub fn new() -> Arc<Self> {
         Arc::new(Self)
@@ -30,9 +221,8 @@ impl EffectRunner for StubEffectRunner {
         match effect {
             Effect::StartAudio { id } => {
                 tokio::spawn(async move {
-                    // Simulate audio setup delay
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                    let wav_path = PathBuf::from(format!("/tmp/vokey_{}.wav", id));
+                    let wav_path = std::path::PathBuf::from(format!("/tmp/vokey_{}.wav", id));
                     log::info!("Stub: audio started, wav_path={}", wav_path.display());
                     let _ = tx.send(Event::AudioStartOk { id, wav_path }).await;
                 });
@@ -40,7 +230,6 @@ impl EffectRunner for StubEffectRunner {
 
             Effect::StopAudio { id } => {
                 tokio::spawn(async move {
-                    // Simulate audio finalization delay
                     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
                     log::info!("Stub: audio stopped");
                     let _ = tx.send(Event::AudioStopOk { id }).await;
@@ -49,7 +238,6 @@ impl EffectRunner for StubEffectRunner {
 
             Effect::StartTranscription { id, wav_path } => {
                 tokio::spawn(async move {
-                    // Simulate transcription delay
                     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                     let text = format!("[Simulated transcription from {}]", wav_path.display());
                     log::info!("Stub: transcription complete");
@@ -58,7 +246,6 @@ impl EffectRunner for StubEffectRunner {
             }
 
             Effect::CopyToClipboard { text, .. } => {
-                // For Sprint 1, just log it
                 log::info!("Stub: would copy to clipboard: {}", text);
             }
 
@@ -77,7 +264,6 @@ impl EffectRunner for StubEffectRunner {
             }
 
             Effect::EmitUi => {
-                // Handled in the main loop, not here
                 unreachable!("EmitUi should be handled in run_state_loop");
             }
         }
