@@ -1,200 +1,682 @@
-## The big Windows/Tauri HUD gotchas (and how to avoid them)
+## The big Wayland/KDE/Tauri HUD gotchas (and how to avoid them)
 
-### 1) The overlay steals focus (kills your “type into the current app” UX)
+### 1) Global hotkeys don't exist in Wayland (by design)
 
-On Windows, any time you **show**, **raise**, or sometimes even **interact with** a window (especially a WebView) it may become the active foreground window. If your overlay steals focus right before you paste, you’ll paste into the overlay instead of VS Code/Word.
+Wayland's security model intentionally prevents applications from capturing global keyboard input. This is a feature, not a bug—it prevents keyloggers.
 
-**Recommended design**
+**Recommended approach for KDE Plasma 6**
 
-* Keep the overlay window **always visible** (never “show/hide” it for state changes).
-* Update UI by sending state events to React; don’t bring the window forward.
-* Use a Windows style that prevents activation:
+* Use the `evdev` crate to read directly from `/dev/input/event*` devices
+* This bypasses Wayland entirely and reads at the kernel level
+* Requires user to be in the `input` group (one-time setup)
 
-  * `WS_EX_NOACTIVATE` (do not activate on show/click)
-  * plus `SW_SHOWNOACTIVATE` / `SetWindowPos(..., SWP_NOACTIVATE)` when adjusting position/topmost
-* Make it **tool window** so it won’t appear in Alt-Tab:
+```rust
+// Pseudocode for evdev hotkey detection
+use evdev::{Device, InputEventKind, Key};
 
-  * `WS_EX_TOOLWINDOW`
+fn find_keyboards() -> Vec<Device> {
+    evdev::enumerate()
+        .filter_map(|(_, device)| {
+            if device.supported_keys().map_or(false, |keys| keys.contains(Key::KEY_SPACE)) {
+                Some(device)
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+```
 
-**Practical Tauri approach**
+**Alternative approaches (documented for future)**
 
-* Create a dedicated overlay window with Tauri config: `alwaysOnTop`, `decorations: false`, `transparent: true`, `skipTaskbar: true`, `resizable: false`.
-* After creation, use the Rust `windows` crate to tweak the HWND extended styles (Tauri doesn’t expose all Win32 flags directly).
+* **XDG Desktop Portal GlobalShortcuts:** KDE 6 supports this, but requires user consent dialog
+* **KGlobalAccel via D-Bus:** KDE-specific, tighter integration
+* **Tray menu only:** No hotkey, user clicks tray to start/stop
 
-### 2) Click-through overlays are trickier than they look
+### 2) The overlay might steal focus on Wayland (compositor-dependent)
 
-If you want the HUD to not interfere with clicks, you need click-through behavior.
+Unlike Windows where you can set `WS_EX_NOACTIVATE`, Wayland compositors have their own focus policies. KWin (KDE's compositor) generally handles this well, but behavior can vary.
 
-**Recommended**
+**Recommended approach**
 
-* Apply `WS_EX_TRANSPARENT` (mouse events pass through) and `WS_EX_LAYERED` for transparency behavior.
-* Alternative: keep overlay clickable, but only in a tiny area (usually not worth it).
+* Create the overlay window with Tauri config: `alwaysOnTop: true`, `decorations: false`, `transparent: true`, `skipTaskbar: true`, `resizable: false`
+* Test focus behavior explicitly on KDE Plasma 6
+* If focus issues occur, investigate KWin window rules
 
-Most people end up doing:
+**KWin window rules (if needed)**
 
-* **Overlay window = click-through always**
-* **Settings window = normal** (opened from tray menu)
+You can create a KWin rule to prevent focus:
+1. Right-click title bar → More Actions → Configure Special Window Settings
+2. Add rule: "Do not accept focus" = Force Yes
 
-### 3) Topmost “fighting” and z-order weirdness
+Or programmatically via `kwriteconfig5`:
+```bash
+kwriteconfig5 --file kwinrulesrc --group 1 --key Description "VoKey No Focus"
+kwriteconfig5 --file kwinrulesrc --group 1 --key wmclass "vokey-transcribe"
+kwriteconfig5 --file kwinrulesrc --group 1 --key acceptfocus "true"
+kwriteconfig5 --file kwinrulesrc --group 1 --key acceptfocusrule "2"  # Force
+```
 
-Some apps set themselves topmost, or Windows may reorder z-order when focus changes.
+### 3) Click-through overlays are compositor-dependent
 
-**Recommended**
+Wayland doesn't have a universal "click-through" window style like Windows' `WS_EX_TRANSPARENT`.
 
-* Set topmost once and then only reassert with `SetWindowPos(HWND_TOPMOST, … SWP_NOACTIVATE)` if you detect it’s fallen behind.
-* Don’t call “focus” or “bring to front” APIs.
+**Recommended approach**
 
-### 4) WebView2 (the React UI) can be heavy if you update too often
+* For MVP: keep overlay small and positioned in a corner (doesn't interfere with clicks)
+* Accept that the overlay is clickable but make it small enough to not matter
+* If needed: investigate `wlr-layer-shell` protocol (wlroots-specific, not standard on KDE)
 
-If you stream partial transcription and push updates every few milliseconds, your overlay can stutter.
+**Practical compromise**
 
-**Recommended**
+The overlay only shows state (a small indicator). Users won't be clicking near it during normal use. Don't over-engineer this for MVP.
 
-* Throttle partial transcript updates to UI (e.g., 8–12 updates/sec).
-* Keep the overlay rendering simple: a dot + short line (or last ~120 chars).
+### 4) No SendInput equivalent on Wayland
 
-### 5) Pasting into the right target window reliably
+Wayland isolates applications from each other—there's no way to inject keystrokes into another window like Windows' `SendInput`.
 
-Even if your overlay never takes focus, Windows sometimes refuses synthetic input unless the target is foreground.
+**MVP approach: Clipboard-only**
 
-**Recommended**
+* Copy transcript to clipboard
+* Show "Copied — paste now" on HUD
+* User presses Ctrl+V manually
 
-* Use **clipboard + Ctrl+V** (not character typing).
-* Right before injection, optionally capture the current foreground HWND (at stop time) and confirm it didn’t change.
-* If it did change, fall back to “clipboard only” and show a small “Copied—paste now” HUD state.
+This is:
+- Simpler to implement
+- More reliable across all apps
+- No permission issues
+
+**Future approach: ydotool**
+
+If auto-injection is desired later:
+```bash
+# ydotool can simulate keyboard input at the uinput level
+ydotool key ctrl+v
+```
+
+Requires:
+- ydotoold daemon running
+- User in `input` group
+- May have timing/focus issues
+
+### 5) Clipboard behavior differs on Wayland
+
+Wayland has two clipboards:
+- **Regular clipboard:** Ctrl+C/Ctrl+V (what we use)
+- **Primary selection:** Middle-click paste (X11 legacy)
+
+**Recommended approach**
+
+* Use `arboard` crate—it handles Wayland clipboard correctly
+* Test clipboard operations with both Wayland-native apps (Dolphin, Kate) and XWayland apps (some Electron apps)
+
+```rust
+use arboard::Clipboard;
+
+fn set_clipboard(text: &str) -> Result<(), arboard::Error> {
+    let mut clipboard = Clipboard::new()?;
+    clipboard.set_text(text)?;
+    Ok(())
+}
+```
+
+**Known quirk:** On Wayland, clipboard contents may be lost when the setting application closes. Keep the app running (which we do anyway).
 
 ---
 
-# Rust state machine (Windows-only MVP) mapped cleanly
+# Rust state machine (Linux MVP) mapped cleanly
 
-This is the same conceptual machine as before, but shaped for a Rust/Tauri architecture: **single-writer event loop + async effects**.
+This is the same conceptual machine as the Windows version, adapted for clipboard-only injection.
 
 ## State enum
 
 ```rust
 enum State {
-  Idle,
-  Arming { recording_id: Uuid },
-  Recording { recording_id: Uuid, wav_path: PathBuf, started_at: Instant, partial: String },
-  Stopping { recording_id: Uuid, wav_path: PathBuf },
-  Transcribing { recording_id: Uuid, wav_path: PathBuf },
-  Injecting { recording_id: Uuid, text: String },
-  Error { message: String, last_good_text: Option<String> },
+    Idle,
+    Arming { recording_id: Uuid },
+    Recording { recording_id: Uuid, wav_path: PathBuf, started_at: Instant },
+    Stopping { recording_id: Uuid, wav_path: PathBuf },
+    Transcribing { recording_id: Uuid, wav_path: PathBuf },
+    Done { recording_id: Uuid, text: String },  // Shows "Copied — paste now"
+    Error { message: String, last_good_text: Option<String> },
 }
 ```
 
 Notes:
 
-* Keep `partial` in state even if you don’t implement streaming yet (UI can ignore it).
-* Everything is keyed by `recording_id` so stale async completions can be ignored safely.
+* `Done` state replaces `Injecting` since we don't auto-inject
+* `Done` auto-transitions to `Idle` after a timeout (3 seconds)
+* Everything is keyed by `recording_id` so stale async completions can be ignored
 
 ## Event enum
 
 ```rust
 enum Event {
-  HotkeyToggle,            // MVP toggle start/stop
-  Cancel,
-  Exit,
+    HotkeyToggle,            // MVP toggle start/stop
+    Cancel,
+    Exit,
+    DoneTimeout,             // Auto-dismiss Done state
 
-  AudioStartOk { id: Uuid, wav_path: PathBuf },
-  AudioStartFail { id: Uuid, err: String },
+    AudioStartOk { id: Uuid, wav_path: PathBuf },
+    AudioStartFail { id: Uuid, err: String },
 
-  AudioStopOk { id: Uuid },
-  AudioStopFail { id: Uuid, err: String },
+    AudioStopOk { id: Uuid },
+    AudioStopFail { id: Uuid, err: String },
 
-  PartialDelta { id: Uuid, delta: String }, // Phase 2 optional
+    TranscribeOk { id: Uuid, text: String },
+    TranscribeFail { id: Uuid, err: String },
 
-  TranscribeOk { id: Uuid, text: String },
-  TranscribeFail { id: Uuid, err: String },
-
-  PostProcessOk { id: Uuid, text: String }, // Phase 2 optional
-  PostProcessFail { id: Uuid, err: String },
-
-  InjectOk { id: Uuid },
-  InjectFail { id: Uuid, err: String },
+    // Phase 2 (optional)
+    PartialDelta { id: Uuid, delta: String },
+    PostProcessOk { id: Uuid, text: String },
+    PostProcessFail { id: Uuid, err: String },
 }
 ```
 
-## Reducer: state transitions + effects
-
-The reducer returns:
-
-* `next_state`
-* a list of `Effect` commands (async work to start/stop audio, call OpenAI, inject)
+## Effect enum
 
 ```rust
 enum Effect {
-  StartAudio { id: Uuid },
-  StopAudio { id: Uuid },
-  StartTranscription { id: Uuid, wav_path: PathBuf },
-  StartPostProcess { id: Uuid, text: String }, // optional
-  InjectText { id: Uuid, text: String },
-  Cleanup { id: Uuid, wav_path: Option<PathBuf> },
-  EmitUi, // push state snapshot to React overlay
+    StartAudio { id: Uuid },
+    StopAudio { id: Uuid },
+    StartTranscription { id: Uuid, wav_path: PathBuf },
+    CopyToClipboard { id: Uuid, text: String },
+    StartDoneTimeout { id: Uuid, duration: Duration },
+    Cleanup { id: Uuid, wav_path: Option<PathBuf> },
+    EmitUi,  // push state snapshot to React overlay
 }
 ```
 
-### Transition map (MVP toggle)
+## Transition map (MVP)
 
 **Idle**
-
 * `HotkeyToggle` → `Arming{id}` + `StartAudio{id}` + `EmitUi`
 
 **Arming{id}**
-
 * `AudioStartOk{id,wav}` → `Recording{id,wav,...}` + `EmitUi`
 * `AudioStartFail{id,err}` → `Error{...}` + `EmitUi` + `Cleanup`
 * `Cancel` → `Idle` + `Cleanup` + `EmitUi`
 
 **Recording{id,wav}**
-
 * `HotkeyToggle` → `Stopping{id,wav}` + `StopAudio{id}` + `EmitUi`
-* `PartialDelta{id,delta}` → stay `Recording` (append delta; throttled `EmitUi`)
 * `Cancel` → `Stopping{id,wav}` + `StopAudio{id}` + `EmitUi`
 
 **Stopping{id,wav}**
-
 * `AudioStopOk{id}` → `Transcribing{id,wav}` + `StartTranscription{id,wav}` + `EmitUi`
 * `AudioStopFail{id,err}` → `Error{...}` + `EmitUi` + `Cleanup`
 
 **Transcribing{id,wav}**
-
-* `TranscribeOk{id,text}` → `Injecting{id,text}` + `InjectText{id,text}` + `EmitUi`
-
-  * (Phase 2: optionally insert `StartPostProcess` between these)
+* `TranscribeOk{id,text}` → `Done{id,text}` + `CopyToClipboard{id,text}` + `StartDoneTimeout{3s}` + `EmitUi`
 * `TranscribeFail{id,err}` → `Error{...}` + `EmitUi` + `Cleanup`
 * `Cancel` → `Idle` + `Cleanup` + `EmitUi`
 
-**Injecting{id,text}**
-
-* `InjectOk{id}` → `Idle` + `Cleanup{wav}` + `EmitUi`
-* `InjectFail{id,err}` → `Error{ last_good_text: Some(text) }` + `EmitUi` + `Cleanup`
+**Done{id,text}**
+* `DoneTimeout` → `Idle` + `Cleanup{wav}` + `EmitUi`
+* `HotkeyToggle` → `Arming{new_id}` + `StartAudio{new_id}` + `EmitUi`  (start new recording immediately)
 
 **Error**
-
 * `HotkeyToggle` → `Arming{id}` + `StartAudio{id}` + `EmitUi`
 * `Cancel` → `Idle` + `EmitUi`
 
 ### Critical rule: ignore stale completions
 
-Every handler checks the `id` matches the current state’s `recording_id`. If not, drop the event.
-
-## How this runs inside Tauri (recommended wiring)
-
-* A single Rust task owns the `State` and an `mpsc::Receiver<Event>`:
-
-  * `state_loop` pulls events, runs reducer, updates state, spawns effects.
-* Each effect runs async and posts completion events back into the same queue.
-* After any state change, emit a compact “state snapshot” to React:
-
-  * `{ status: "recording", seconds: 12, partial: "...", error: null }`
-
-## Where the Windows HUD gotchas plug in
-
-* The overlay window is created once, never focused, never brought forward.
-* All “HUD updates” are just event emissions + React rerenders.
-* The injector captures foreground window info (optional) *before* any UI work, and never relies on overlay focus.
+Every handler checks the `id` matches the current state's `recording_id`. If not, drop the event.
 
 ---
 
-If you want, I can also sketch the **exact threading model** for Windows hotkeys in Rust (RegisterHotKey requires a message loop) and how it feeds into the `mpsc` event queue without touching the Tauri UI thread.
+## Full Reducer Implementation
+
+This is a complete, copy-paste-ready reducer with pattern matching and stale event handling.
+
+```rust
+use std::{path::PathBuf, time::{Duration, Instant}};
+use uuid::Uuid;
+
+/// Reducer function: (state, event) -> (next_state, effects)
+///
+/// Key rules:
+/// - Never mutate state directly
+/// - Ignore events with stale recording IDs
+/// - Always emit EmitUi after state changes
+pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
+    use Effect::*;
+    use Event::*;
+    use State::*;
+
+    // Helper: extract current recording_id (if any)
+    let current_id: Option<Uuid> = match state {
+        Idle => None,
+        Arming { recording_id } => Some(*recording_id),
+        Recording { recording_id, .. } => Some(*recording_id),
+        Stopping { recording_id, .. } => Some(*recording_id),
+        Transcribing { recording_id, .. } => Some(*recording_id),
+        Done { recording_id, .. } => Some(*recording_id),
+        Error { .. } => None,
+    };
+
+    // Helper: check if event's ID is stale (doesn't match current workflow)
+    let is_stale = |eid: Uuid| current_id.is_some() && Some(eid) != current_id;
+
+    match (state, event) {
+        // -----------------
+        // Idle
+        // -----------------
+        (Idle, HotkeyToggle) => {
+            let id = Uuid::new_v4();
+            (Arming { recording_id: id }, vec![StartAudio { id }, EmitUi])
+        }
+        (Idle, Cancel) => (Idle.clone(), vec![]),
+        (Idle, Exit) => (Idle.clone(), vec![]),
+
+        // -----------------
+        // Arming
+        // -----------------
+        (Arming { recording_id }, AudioStartOk { id, wav_path }) if *recording_id == id => {
+            (
+                Recording {
+                    recording_id: *recording_id,
+                    wav_path,
+                    started_at: Instant::now(),
+                },
+                vec![EmitUi],
+            )
+        }
+        (Arming { recording_id }, AudioStartFail { id, err }) if *recording_id == id => {
+            (
+                Error { message: err, last_good_text: None },
+                vec![Cleanup { id: *recording_id, wav_path: None }, EmitUi],
+            )
+        }
+        (Arming { recording_id }, Cancel) => {
+            (Idle, vec![Cleanup { id: *recording_id, wav_path: None }, EmitUi])
+        }
+
+        // -----------------
+        // Recording
+        // -----------------
+        (Recording { recording_id, wav_path, .. }, HotkeyToggle) => {
+            (
+                Stopping { recording_id: *recording_id, wav_path: wav_path.clone() },
+                vec![StopAudio { id: *recording_id }, EmitUi],
+            )
+        }
+        (Recording { recording_id, wav_path, .. }, Cancel) => {
+            (
+                Stopping { recording_id: *recording_id, wav_path: wav_path.clone() },
+                vec![StopAudio { id: *recording_id }, EmitUi],
+            )
+        }
+
+        // -----------------
+        // Stopping
+        // -----------------
+        (Stopping { recording_id, wav_path }, AudioStopOk { id }) if *recording_id == id => {
+            (
+                Transcribing { recording_id: *recording_id, wav_path: wav_path.clone() },
+                vec![StartTranscription { id: *recording_id, wav_path: wav_path.clone() }, EmitUi],
+            )
+        }
+        (Stopping { recording_id, wav_path }, AudioStopFail { id, err }) if *recording_id == id => {
+            (
+                Error { message: err, last_good_text: None },
+                vec![Cleanup { id: *recording_id, wav_path: Some(wav_path.clone()) }, EmitUi],
+            )
+        }
+
+        // -----------------
+        // Transcribing
+        // -----------------
+        (Transcribing { recording_id, wav_path }, TranscribeOk { id, text }) if *recording_id == id => {
+            (
+                Done { recording_id: *recording_id, text: text.clone() },
+                vec![
+                    CopyToClipboard { id: *recording_id, text },
+                    StartDoneTimeout { id: *recording_id, duration: Duration::from_secs(3) },
+                    EmitUi,
+                ],
+            )
+        }
+        (Transcribing { recording_id, wav_path }, TranscribeFail { id, err }) if *recording_id == id => {
+            (
+                Error { message: err, last_good_text: None },
+                vec![Cleanup { id: *recording_id, wav_path: Some(wav_path.clone()) }, EmitUi],
+            )
+        }
+        (Transcribing { recording_id, wav_path }, Cancel) => {
+            (
+                Idle,
+                vec![Cleanup { id: *recording_id, wav_path: Some(wav_path.clone()) }, EmitUi],
+            )
+        }
+
+        // -----------------
+        // Done
+        // -----------------
+        (Done { recording_id, .. }, DoneTimeout) => {
+            (Idle, vec![Cleanup { id: *recording_id, wav_path: None }, EmitUi])
+        }
+        (Done { .. }, HotkeyToggle) => {
+            // Start new recording immediately
+            let id = Uuid::new_v4();
+            (Arming { recording_id: id }, vec![StartAudio { id }, EmitUi])
+        }
+
+        // -----------------
+        // Error
+        // -----------------
+        (Error { .. }, HotkeyToggle) => {
+            let id = Uuid::new_v4();
+            (Arming { recording_id: id }, vec![StartAudio { id }, EmitUi])
+        }
+        (Error { .. }, Cancel) => (Idle, vec![EmitUi]),
+
+        // -----------------
+        // Stale events (drop silently)
+        // -----------------
+        (_, AudioStartOk { id, .. }) if is_stale(id) => (state.clone(), vec![]),
+        (_, AudioStartFail { id, .. }) if is_stale(id) => (state.clone(), vec![]),
+        (_, AudioStopOk { id }) if is_stale(id) => (state.clone(), vec![]),
+        (_, AudioStopFail { id, .. }) if is_stale(id) => (state.clone(), vec![]),
+        (_, TranscribeOk { id, .. }) if is_stale(id) => (state.clone(), vec![]),
+        (_, TranscribeFail { id, .. }) if is_stale(id) => (state.clone(), vec![]),
+
+        // -----------------
+        // Unhandled: no transition
+        // -----------------
+        _ => (state.clone(), vec![]),
+    }
+}
+```
+
+---
+
+## Single-Writer Event Loop
+
+This is the main loop that owns state and processes events sequentially.
+
+```rust
+use tokio::sync::mpsc;
+use tracing::{info, debug};
+
+pub async fn run_state_loop(
+    mut state: State,
+    mut rx: mpsc::Receiver<Event>,
+    tx: mpsc::Sender<Event>,
+    effects: EffectRunner,
+    ui: UiEmitter,
+) {
+    // Emit initial UI state
+    ui.emit(&state);
+
+    while let Some(event) = rx.recv().await {
+        debug!(?event, "received event");
+
+        // Handle Exit at the edge
+        if matches!(event, Event::Exit) {
+            info!("exit requested, shutting down state loop");
+            break;
+        }
+
+        let old_state = std::mem::discriminant(&state);
+        let (next, effs) = reduce(&state, event);
+        let new_state = std::mem::discriminant(&next);
+
+        // Log state transitions
+        if old_state != new_state {
+            info!(?state, ?next, "state transition");
+        }
+
+        state = next;
+
+        // Execute effects
+        for eff in effs {
+            match eff {
+                Effect::EmitUi => ui.emit(&state),
+                other => effects.spawn(other, tx.clone()),
+            }
+        }
+    }
+}
+```
+
+---
+
+## Effect Runner
+
+The effect runner spawns async work and posts completion events back to the queue.
+
+### Responsibilities
+
+1. **Spawn async work** for StartAudio, StopAudio, StartTranscription, CopyToClipboard, etc.
+2. **Post completion Events** back to the mpsc queue (with the correct `recording_id`)
+3. **Never mutate State directly** — only the reducer does that
+4. **Handle errors gracefully** — convert to `*Fail` events, don't panic
+5. **Throttle UI updates** if needed (especially for Phase 2 partial deltas)
+
+### Trait Definition
+
+```rust
+use tokio::sync::mpsc;
+
+pub trait EffectRunner: Send + Sync + 'static {
+    /// Spawn an effect asynchronously. Completion events are sent via `tx`.
+    fn spawn(&self, effect: Effect, tx: mpsc::Sender<Event>);
+}
+```
+
+### Stub Implementation
+
+```rust
+use std::sync::Arc;
+use tokio::sync::mpsc;
+
+pub struct AppEffectRunner {
+    pub audio_service: Arc<dyn AudioService>,
+    pub transcription_service: Arc<dyn TranscriptionService>,
+    pub clipboard_service: Arc<dyn ClipboardService>,
+}
+
+impl EffectRunner for AppEffectRunner {
+    fn spawn(&self, effect: Effect, tx: mpsc::Sender<Event>) {
+        match effect {
+            Effect::StartAudio { id } => {
+                let audio = self.audio_service.clone();
+                tokio::spawn(async move {
+                    match audio.start_recording(id).await {
+                        Ok(wav_path) => {
+                            let _ = tx.send(Event::AudioStartOk { id, wav_path }).await;
+                        }
+                        Err(e) => {
+                            let _ = tx.send(Event::AudioStartFail { id, err: e.to_string() }).await;
+                        }
+                    }
+                });
+            }
+
+            Effect::StopAudio { id } => {
+                let audio = self.audio_service.clone();
+                tokio::spawn(async move {
+                    match audio.stop_recording(id).await {
+                        Ok(()) => {
+                            let _ = tx.send(Event::AudioStopOk { id }).await;
+                        }
+                        Err(e) => {
+                            let _ = tx.send(Event::AudioStopFail { id, err: e.to_string() }).await;
+                        }
+                    }
+                });
+            }
+
+            Effect::StartTranscription { id, wav_path } => {
+                let transcription = self.transcription_service.clone();
+                tokio::spawn(async move {
+                    match transcription.transcribe(&wav_path).await {
+                        Ok(text) => {
+                            let _ = tx.send(Event::TranscribeOk { id, text }).await;
+                        }
+                        Err(e) => {
+                            let _ = tx.send(Event::TranscribeFail { id, err: e.to_string() }).await;
+                        }
+                    }
+                });
+            }
+
+            Effect::CopyToClipboard { id, text } => {
+                let clipboard = self.clipboard_service.clone();
+                tokio::spawn(async move {
+                    // Clipboard operations are typically infallible for MVP
+                    // Log errors but don't fail the workflow
+                    if let Err(e) = clipboard.set_text(&text) {
+                        tracing::warn!(?e, "clipboard copy failed");
+                    }
+                });
+            }
+
+            Effect::StartDoneTimeout { id, duration } => {
+                tokio::spawn(async move {
+                    tokio::time::sleep(duration).await;
+                    let _ = tx.send(Event::DoneTimeout).await;
+                });
+            }
+
+            Effect::Cleanup { id, wav_path } => {
+                tokio::spawn(async move {
+                    if let Some(path) = wav_path {
+                        if let Err(e) = tokio::fs::remove_file(&path).await {
+                            tracing::debug!(?e, ?path, "cleanup: failed to remove wav");
+                        }
+                    }
+                });
+            }
+
+            Effect::EmitUi => {
+                // Handled in the main loop, not here
+                unreachable!("EmitUi should be handled in run_state_loop");
+            }
+        }
+    }
+}
+```
+
+---
+
+## UI Emitter
+
+Converts `State` to a compact snapshot and emits to React via Tauri events.
+
+```rust
+use serde::Serialize;
+use tauri::Window;
+
+#[derive(Clone, Serialize)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum UiState {
+    Idle,
+    Arming,
+    Recording { elapsed_secs: u64 },
+    Stopping,
+    Transcribing,
+    Done { text: String },
+    Error { message: String, last_text: Option<String> },
+}
+
+pub struct UiEmitter {
+    window: Window,
+}
+
+impl UiEmitter {
+    pub fn new(window: Window) -> Self {
+        Self { window }
+    }
+
+    pub fn emit(&self, state: &State) {
+        let ui_state = match state {
+            State::Idle => UiState::Idle,
+            State::Arming { .. } => UiState::Arming,
+            State::Recording { started_at, .. } => UiState::Recording {
+                elapsed_secs: started_at.elapsed().as_secs(),
+            },
+            State::Stopping { .. } => UiState::Stopping,
+            State::Transcribing { .. } => UiState::Transcribing,
+            State::Done { text, .. } => UiState::Done { text: text.clone() },
+            State::Error { message, last_good_text } => UiState::Error {
+                message: message.clone(),
+                last_text: last_good_text.clone(),
+            },
+        };
+
+        if let Err(e) = self.window.emit("state-update", &ui_state) {
+            tracing::warn!(?e, "failed to emit state to UI");
+        }
+    }
+}
+```
+
+---
+
+## Phase 2 Extensions
+
+When adding streaming transcription or post-processing, extend the enums:
+
+### Additional States (Phase 2)
+
+```rust
+// Add to State enum:
+PostProcessing { recording_id: Uuid, wav_path: PathBuf, raw_text: String },
+```
+
+### Additional Events (Phase 2)
+
+```rust
+// Add to Event enum:
+PartialDelta { id: Uuid, delta: String },      // Streaming partial transcript
+RealtimeError { id: Uuid, err: String },       // WebSocket error (non-fatal)
+PostProcessOk { id: Uuid, text: String },      // LLM cleanup complete
+PostProcessFail { id: Uuid, err: String },     // LLM cleanup failed
+```
+
+### Additional Effects (Phase 2)
+
+```rust
+// Add to Effect enum:
+StartRealtime { id: Uuid },                    // Open WebSocket to OpenAI
+StopRealtime { id: Uuid },                     // Close WebSocket
+StartPostProcess { id: Uuid, text: String },   // Send to LLM for cleanup
+```
+
+### Additional Dependencies (Phase 2)
+
+```toml
+# Add to Cargo.toml for streaming:
+tokio-tungstenite = "0.21"
+futures-util = "0.3"
+```
+
+---
+
+## How this runs inside Tauri
+
+* A single Rust task owns the `State` and an `mpsc::Receiver<Event>`:
+  * `state_loop` pulls events, runs reducer, updates state, spawns effects
+* Each effect runs async and posts completion events back into the same queue
+* After any state change, emit a compact "state snapshot" to React:
+  * `{ status: "done", text: "...", error: null }`
+
+## Where the Wayland gotchas plug in
+
+* Global hotkey runs in a dedicated thread reading from evdev (bypasses Wayland)
+* Clipboard-only injection—no focus tracking needed
+* HUD overlay is always visible, just updates content via React
+
+---
+
+## Windows notes (for future reference)
+
+If Windows support is added later, these are the key differences:
+
+* **Global hotkey:** Use `RegisterHotKey` with dedicated message loop thread
+* **Text injection:** Save clipboard → set transcript → `SendInput` Ctrl+V → restore clipboard
+* **Focus management:** Use `WS_EX_NOACTIVATE`, `WS_EX_TOOLWINDOW`, `WS_EX_TRANSPARENT`
+* **Paths:** `%LocalAppData%\VoiceHotkeyTranscribe\...`
+
+The state machine remains largely the same, just add an `Injecting` state between `Transcribing` and `Done`.

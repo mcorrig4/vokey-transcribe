@@ -1,0 +1,42 @@
+.hud-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  padding: 8px 16px;
+  border-radius: 8px;
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  transition: background-color 0.2s ease;
+  /* Allow dragging the window */
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.hud-text {
+  white-space: nowrap;
+}
+
+.hud-message {
+  font-size: 11px;
+  font-weight: 400;
+  margin-top: 4px;
+  opacity: 0.9;
+}
+
+/* Pulse animation for recording state */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.hud-container:has(.hud-text:first-child:contains("Recording")) {
+  animation: pulse 1.5s ease-in-out infinite;
+}

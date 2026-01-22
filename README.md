@@ -1,32 +1,31 @@
 # **VoKey Transcribe**
 
 
-## Voice Hotkey Transcribe (Windows-first, React + Rust)
+## Voice Hotkey Transcribe (Linux-first, React + Rust)
 
 A lightweight desktop tool that:
 - Uses a global hotkey to start/stop microphone recording
 - Sends the audio to OpenAI Speech-to-Text (cloud) for transcription
-- Pastes the transcript into the currently focused app (cursor position)
-- Also copies the transcript to the clipboard
-- Shows a minimal always-on-top HUD (recording / transcribing / error)
-- Phase 2: optional streaming partial transcript + post-processing for “coding mode”
+- Copies the transcript to the clipboard (user pastes manually)
+- Shows a minimal always-on-top HUD (Idle / Recording / Transcribing / Done)
+- Phase 2: optional streaming partial transcript + post-processing for "coding mode"
 
-**Hackathon focus:** Windows first. Linux later (best-effort; Wayland restrictions may require fallbacks like clipboard-only or VS Code extension insertion).
+**Target platform:** Kubuntu with KDE Plasma 6.4 on Wayland. Windows support is future/best-effort.
 
 ---
 
 ## Architecture overview
 
-### High-level flow (Windows MVP)
+### High-level flow (Linux MVP)
 1. App runs in the background with:
    - A tiny always-on-top overlay HUD (React)
    - A tray icon menu (Settings/Quit)
-   - A Rust backend (Tauri) that owns hotkeys, audio capture, OpenAI calls, and injection
+   - A Rust backend (Tauri) that owns hotkeys, audio capture, OpenAI calls, and clipboard
 
 2. Hotkey press triggers:
    - State machine event -> `Idle → Arming → Recording`
    - Audio capture starts immediately and writes to a WAV file in:
-     `%LocalAppData%\VoiceHotkeyTranscribe\temp\audio\<recordingId>.wav`
+     `~/.local/share/vokey-transcribe/temp/audio/<recordingId>.wav`
 
 3. Hotkey press again (toggle mode) triggers:
    - `Recording → Stopping → Transcribing`
@@ -34,10 +33,9 @@ A lightweight desktop tool that:
 
 4. When transcript arrives:
    - (MVP) No post-processing (pass-through)
-   - Clipboard is saved, replaced with transcript
-   - Ctrl+V is injected into the focused app
-   - Clipboard is restored
-   - State goes `Transcribing → Injecting → Idle`
+   - Transcript is copied to clipboard
+   - HUD shows "Copied — paste now" indicator
+   - State goes `Transcribing → Done → Idle`
 
 5. UI updates:
    - Rust emits state snapshots to React over Tauri events
@@ -46,11 +44,38 @@ A lightweight desktop tool that:
 
 ---
 
+## Linux/Wayland approach
+
+### Global hotkey
+- **Primary:** ydotool daemon monitors for hotkey via evdev/uinput
+- **Fallback:** Tray menu click to start/stop recording (no keyboard shortcut)
+- Requires user to be in `input` group (handled by setup script)
+
+### Text "injection"
+- **MVP:** Clipboard-only mode
+  - Transcript copied to clipboard
+  - HUD shows "Copied — paste now"
+  - User presses Ctrl+V manually
+- **Future:** ydotool can simulate Ctrl+V if needed
+
+### Why clipboard-only for MVP?
+Wayland's security model isolates applications—there's no universal `SendInput` equivalent. Clipboard-only is:
+- Simpler to implement
+- More reliable across all apps (VS Code, Chrome, native Qt apps)
+- No permission/focus issues
+
+### Alternative approaches (documented for future)
+- **XDG Portal GlobalShortcuts:** KDE 6 supports this, but requires user consent dialogs
+- **KGlobalAccel via D-Bus:** KDE-specific native integration
+- **wtype:** Wayland typing tool (wlroots-based, may not work on KWin)
+- **X11 via XWayland:** Works but defeats Wayland security benefits
+
+---
+
 ## Repo layout
 
 ```
-
-voice-hotkey-transcribe/
+vokey-transcribe/
 README.md                             # This file
 LICENSE
 .gitignore
@@ -61,107 +86,163 @@ tsconfig.json
 vite.config.ts
 
 src/                                  # React UI (TSX)
-main.tsx                            # Boot React app
-App.tsx                             # Layout + routes (Overlay / Settings)
-styles/
-overlay.css                       # HUD styling
-theme.css                         # Color tokens for states
-components/
-OverlayHUD.tsx                    # Floating indicator + optional partial line
-SettingsPanel.tsx                 # API key, hotkey display, mode toggles
-ModeSelector.tsx                  # Normal / Coding / Markdown / Prompt
-Diagnostics.tsx                   # Optional: last events/log tail view
-lib/
-ipc.ts                            # Typed wrapper for Tauri invoke + event listeners
-state.ts                          # UI-side state shape + helpers
-throttle.ts                       # Throttle UI updates (partial transcript)
+  main.tsx                            # Boot React app
+  App.tsx                             # Layout + routes (Overlay / Settings)
+  styles/
+    overlay.css                       # HUD styling
+    theme.css                         # Color tokens for states
+  components/
+    OverlayHUD.tsx                    # Floating indicator + optional partial line
+    SettingsPanel.tsx                 # API key, hotkey display, mode toggles
+    ModeSelector.tsx                  # Normal / Coding / Markdown / Prompt
+    Diagnostics.tsx                   # Optional: last events/log tail view
+  lib/
+    ipc.ts                            # Typed wrapper for Tauri invoke + event listeners
+    state.ts                          # UI-side state shape + helpers
+    throttle.ts                       # Throttle UI updates (partial transcript)
 
 src-tauri/                            # Rust backend (Tauri host)
-tauri.conf.json                     # Window/tray config
-Cargo.toml
-icons/                              # App/tray icons
+  tauri.conf.json                     # Window/tray config
+  Cargo.toml
+  icons/                              # App/tray icons
+  src/
+    main.rs                           # Tauri init: windows, tray, IPC, start state loop
 
-```
-src/
-  main.rs                           # Tauri init: windows, tray, IPC, start state loop
+    app/
+      mod.rs                          # App wiring (build services, spawn loops)
+      paths.rs                        # App dirs: temp audio, logs, settings (XDG)
+      config.rs                       # Load/save settings defaults + migrations
+      state_machine.rs                # Single-writer reducer + effect dispatcher
+      events.rs                       # Internal events (hotkey/audio/transcribe)
+      models.rs                       # Settings + IPC payload types
 
-  app/
-    mod.rs                          # App wiring (build services, spawn loops)
-    paths.rs                        # App dirs: temp audio, logs, settings
-    config.rs                       # Load/save settings defaults + migrations
-    state_machine.rs                # Single-writer reducer + effect dispatcher
-    events.rs                       # Internal events (hotkey/audio/transcribe/inject)
-    models.rs                       # Settings + IPC payload types
+    services/
+      hotkey/
+        mod.rs
+        ydotool.rs                    # ydotool/evdev hotkey detection
+      audio/
+        mod.rs
+        capture_cpal.rs               # CPAL mic capture -> PCM frames
+        wav_writer.rs                 # Hound WAV writer + finalize
+        device.rs                     # Choose mic, sample rate/channel config
+      openai/
+        mod.rs
+        client.rs                     # reqwest + auth + base URL
+        transcribe.rs                 # Batch transcription endpoint
+        realtime.rs                   # Phase 2: streaming transcription (optional)
+        postprocess.rs                # Phase 2: text-model cleanup/format (optional)
+      clipboard/
+        mod.rs
+        clipboard.rs                  # Clipboard operations (arboard)
+      logging/
+        mod.rs
+        logger.rs                     # tracing + rolling file logs
 
-  services/
-    hotkey/
+    ipc/
       mod.rs
-      register_hotkey.rs            # Windows RegisterHotKey + message loop thread
-    audio/
-      mod.rs
-      capture_cpal.rs               # CPAL mic capture -> PCM frames
-      wav_writer.rs                 # Hound WAV writer + finalize
-      device.rs                     # Choose mic, sample rate/channel config
-    openai/
-      mod.rs
-      client.rs                     # reqwest + auth + base URL
-      transcribe.rs                 # Batch transcription endpoint
-      realtime.rs                   # Phase 2: streaming transcription (optional)
-      postprocess.rs                # Phase 2: text-model cleanup/format (optional)
-    injection/
-      mod.rs
-      clipboard.rs                  # Clipboard set/restore (arboard)
-      sendinput.rs                  # SendInput Ctrl+V (Windows)
-      focused_app.rs                # (optional) foreground app name / hwnd tracking
-    logging/
-      mod.rs
-      logger.rs                     # tracing + rolling file logs
+      commands.rs                     # tauri::command: start/stop/status/settings
+      events.rs                       # emit state snapshots to UI
 
-  ipc/
-    mod.rs
-    commands.rs                     # tauri::command: start/stop/status/settings
-    events.rs                       # emit state snapshots to UI
-```
-
-tools/
-dev.ps1                             # Run dev quickly
-publish.ps1                         # Build release bundle
-
+scripts/
+  setup.sh                            # One-time setup: input group, ydotool, etc.
+  dev.sh                              # Run dev quickly
+  build.sh                            # Build release bundle
 ```
 
 ---
 
 ## Prerequisites
 
-### Windows
+### Linux (Kubuntu / KDE Plasma 6.4 / Wayland)
 - Rust toolchain (stable)
-- pnpm + Node.js (for Vite/React dev + build)
-- Visual Studio Build Tools (common for Rust crates needing C/C++ tooling)
+- pnpm + Node.js v22 (for Vite/React dev + build)
+- System dependencies for Tauri:
+  ```bash
+  sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget \
+    libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+  ```
+- ydotool (for global hotkey):
+  ```bash
+  sudo apt install ydotool
+  ```
+- User must be in `input` group (for ydotool/evdev access):
+  ```bash
+  sudo usermod -aG input $USER
+  # Log out and back in for group change to take effect
+  ```
 
 ---
 
 ## Development
 
+### Setup (one-time)
+```bash
+./scripts/setup.sh
+```
+
 ### Run (dev)
-- `pnpm install`
-- `pnpm tauri dev`
+```bash
+pnpm install
+pnpm tauri dev
+```
 
 ### Build (release)
-- `pnpm tauri build`
+```bash
+pnpm tauri build
+```
 
 ---
 
 ## Behavior and UX expectations
 - HUD never steals focus
-- Injection is done via clipboard + Ctrl+V
-- If focus changed between stop and injection, we can fall back to clipboard-only (and show a “Copied—paste now” indicator)
+- Transcript is copied to clipboard automatically
+- HUD shows "Copied — paste now" indicator
+- User presses Ctrl+V to paste into their target app
+- If transcription fails, error is shown and user can retry
 
 ---
 
-## Linux notes (future)
-We can support Linux in stages:
-- X11: likely can do hotkeys + injection
-- Wayland: may require fallbacks (clipboard-only) or app-specific integration (VS Code extension insertion)
-Windows remains the reference implementation.
+## Windows notes (future)
+Windows support can be added later with:
+- `RegisterHotKey` for global hotkeys
+- `SendInput` for Ctrl+V injection (auto-paste)
+- Windows-specific focus management (`WS_EX_NOACTIVATE`, etc.)
+
+Linux/Wayland remains the reference implementation.
+
+---
+
+## Project Tracking & Documentation
+
+### Documentation Structure
+| Document | Purpose |
+|----------|---------|
+| `README.md` | Project overview, architecture, setup |
+| `docs/WORKLOG.md` | Work log, progress tracking, decisions, session notes |
+| `docs/ISSUES-v1.0.0.md` | Sprint definitions with acceptance criteria |
+| `docs/tauri-gotchas.md` | Technical gotchas and state machine design |
+| `docs/notes.md` | Setup instructions and troubleshooting |
+
+### Issue Tracking
+- GitHub Issues track each sprint (created via `./scripts/create-github-issues.sh`)
+- Labels: `sprint`, `mvp`, `phase2`
+- Each issue includes: scope, acceptance criteria, demo script
+
+### Architecture Decisions
+Architecture decisions are documented in `docs/WORKLOG.md` with:
+- Decision ID (AD-xxx)
+- Date, decision, rationale, trade-offs
+
+### Code Standards
+- **Rust:** Use `cargo clippy` and `cargo fmt`
+- **TypeScript:** Use ESLint + Prettier
+- **Commits:** Conventional commits (`feat:`, `fix:`, `docs:`, `chore:`)
+- **Branches:** Feature branches off main, PR for merge
+
+### Development Workflow
+1. Check `docs/WORKLOG.md` for current task context
+2. Work on active sprint (one at a time)
+3. Update WORKLOG with progress and decisions
+4. Mark sprint complete when all acceptance criteria pass
 
 ---
