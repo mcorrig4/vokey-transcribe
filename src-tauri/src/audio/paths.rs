@@ -77,13 +77,14 @@ pub fn cleanup_old_recordings() -> std::io::Result<usize> {
     let mut deleted = 0;
 
     for entry in entries.into_iter().take(to_delete) {
-        match fs::remove_file(entry.path()) {
+        let path = entry.path();
+        match fs::remove_file(&path) {
             Ok(_) => {
-                log::debug!("Cleaned up old recording: {:?}", entry.path());
+                log::debug!("Cleaned up old recording: {:?}", path);
                 deleted += 1;
             }
             Err(e) => {
-                log::warn!("Failed to delete old recording {:?}: {}", entry.path(), e);
+                log::warn!("Failed to delete old recording {:?}: {}", path, e);
             }
         }
     }

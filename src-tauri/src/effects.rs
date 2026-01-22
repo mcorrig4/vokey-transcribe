@@ -61,41 +61,37 @@ impl EffectRunner for AudioEffectRunner {
                 let active = self.active_recordings.clone();
 
                 tokio::spawn(async move {
-                    // Try to get or create recorder
-                    let mut recorder_guard = recorder.lock().await;
-                    if recorder_guard.is_none() {
-                        // Retry creating recorder
-                        match AudioRecorder::new() {
-                            Ok(r) => *recorder_guard = Some(r),
-                            Err(e) => {
-                                log::error!("Failed to initialize audio recorder: {}", e);
-                                let _ = tx
-                                    .send(Event::AudioStartFail {
-                                        id,
-                                        err: e.to_string(),
-                                    })
-                                    .await;
-                                return;
+                    // Try to get or create recorder, then start recording while holding lock
+                    // We capture the result and drop the lock before any awaits to avoid
+                    // holding the mutex across await points (can cause contention/deadlocks)
+                    let start_result = {
+                        let mut recorder_guard = recorder.lock().await;
+                        if recorder_guard.is_none() {
+                            // Retry creating recorder
+                            match AudioRecorder::new() {
+                                Ok(r) => *recorder_guard = Some(r),
+                                Err(e) => {
+                                    log::error!("Failed to initialize audio recorder: {}", e);
+                                    // Return error to be handled after lock is dropped
+                                    Err(e.to_string())
+                                }
                             }
+                        } else {
+                            Ok(())
                         }
-                    }
+                        .and_then(|_| {
+                            match recorder_guard.as_ref() {
+                                Some(rec) => rec.start(id).map_err(|e| e.to_string()),
+                                None => {
+                                    log::error!("Audio recorder is unavailable after retry");
+                                    Err("Audio recorder unavailable".to_string())
+                                }
+                            }
+                        })
+                    }; // recorder_guard dropped here
 
-                    let rec = match recorder_guard.as_ref() {
-                        Some(r) => r,
-                        None => {
-                            log::error!("Audio recorder is unavailable after retry");
-                            let _ = tx
-                                .send(Event::AudioStartFail {
-                                    id,
-                                    err: "Audio recorder unavailable".to_string(),
-                                })
-                                .await;
-                            return;
-                        }
-                    };
-
-                    // Start recording
-                    match rec.start(id) {
+                    // Now handle results without holding the mutex
+                    match start_result {
                         Ok((handle, wav_path)) => {
                             log::info!("Audio recording started: {:?}", wav_path);
 
@@ -107,16 +103,14 @@ impl EffectRunner for AudioEffectRunner {
                                     handle: Some(handle),
                                 },
                             );
+                            drop(active_guard); // Explicitly drop before await
 
                             let _ = tx.send(Event::AudioStartOk { id, wav_path }).await;
                         }
-                        Err(e) => {
-                            log::error!("Failed to start audio recording: {}", e);
+                        Err(err) => {
+                            log::error!("Failed to start audio recording: {}", err);
                             let _ = tx
-                                .send(Event::AudioStartFail {
-                                    id,
-                                    err: e.to_string(),
-                                })
+                                .send(Event::AudioStartFail { id, err })
                                 .await;
                         }
                     }
