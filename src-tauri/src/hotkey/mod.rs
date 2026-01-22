@@ -8,9 +8,9 @@
 //! - Log out and back in after adding to group
 
 mod detector;
-mod manager;
+pub mod manager;
 
-pub use manager::HotkeyManager;
+pub use manager::{failed_status, HotkeyManager, HotkeyStatus};
 
 use evdev::Key;
 

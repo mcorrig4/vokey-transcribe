@@ -24,7 +24,7 @@ tauri-plugin-log = "2"
 
 # State machine
 uuid = { version = "1", features = ["v4"] }
-tokio = { version = "1", features = ["sync", "time", "rt"] }
+tokio = { version = "1", features = ["sync", "time", "rt", "macros"] }
 
 # Global hotkey (Sprint 2)
 evdev = { version = "0.12", features = ["tokio"] }

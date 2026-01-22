@@ -46,3 +46,16 @@ After completing major work, checking in code, or making significant discoveries
 # Important
 - never use npm. only use pnpm.
 - always use gh cli to check for issues matching the work we are doing. use gh cli to manage PRs, linked to uses, and post comment on issues updating work statuses, and close issues when PRs get merged. use gh cli to follow software development lifecycle and project management best practices
+
+## Claude Code Web Environment
+
+In the web environment, apt doesn't work by default due to proxy restrictions. To enable apt:
+
+```bash
+# Configure apt to use the session proxy
+echo "Acquire::http::Proxy \"$HTTP_PROXY\";" | sudo tee /etc/apt/apt.conf.d/proxy.conf
+echo "Acquire::https::Proxy \"$HTTP_PROXY\";" | sudo tee -a /etc/apt/apt.conf.d/proxy.conf
+sudo apt-get update
+```
+
+Then install Tauri prerequisites: `sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev`

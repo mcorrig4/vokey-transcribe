@@ -12,7 +12,7 @@ use tauri::{
 use tokio::sync::mpsc;
 
 use effects::{EffectRunner, StubEffectRunner};
-use hotkey::{Hotkey, HotkeyManager};
+use hotkey::{Hotkey, HotkeyManager, HotkeyStatus};
 use state_machine::{reduce, Effect, Event, State};
 
 /// UI state sent to the frontend via Tauri events.
@@ -65,7 +65,7 @@ pub struct StateLoopHandle {
 
 /// Holds the hotkey status for display in the UI
 pub struct HotkeyStatusHolder {
-    status: hotkey::manager::HotkeyStatus,
+    status: HotkeyStatus,
 }
 
 impl StateLoopHandle {
