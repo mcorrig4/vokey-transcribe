@@ -263,3 +263,4 @@ To test:
 ```sh
 WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/$(id -u) pnpm tauri dev
 ```
+Codespace port forwarding `gh codespace ports forward 1455:1455`
