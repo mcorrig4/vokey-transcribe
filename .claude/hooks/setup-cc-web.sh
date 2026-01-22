@@ -66,3 +66,16 @@ export PATH="$LOCAL_BIN:$PATH"
 [ -n "$CLAUDE_ENV_FILE" ] && echo "export PATH=\"$LOCAL_BIN:\$PATH\"" >> "$CLAUDE_ENV_FILE"
 
 log "gh CLI installed successfully: $($LOCAL_BIN/gh --version | head -1)"
+
+log "===================================================="
+log "Setting up Tauri prerequisites..."
+# Configure apt proxy if not already done
+if [ ! -f /etc/apt/apt.conf.d/proxy.conf ] && [ -n "$HTTP_PROXY" ]; then
+    echo "Acquire::http::Proxy \"$HTTP_PROXY\";" | sudo tee /etc/apt/apt.conf.d/proxy.conf
+    echo "Acquire::https::Proxy \"$HTTP_PROXY\";" | sudo tee -a /etc/apt/apt.conf.d/proxy.conf
+fi
+
+# Install Tauri prerequisites
+sudo apt-get update -qq
+sudo apt-get install -y -qq libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
+log "Tauri prerequisites installed"
