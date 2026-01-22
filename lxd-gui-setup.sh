@@ -53,6 +53,12 @@ set -Eeuo pipefail
 #   Development: all on (convenience)
 #   Production:  gpu on + dbus on (keep AppArmor enabled)
 #
+# Known Issue:
+#   LXD proxy devices may fail to start on container restart due to timing issues.
+#   If sockets show as MISSING after restart, re-run the relevant command:
+#     ./lxd-gui-setup.sh <container> wayland on
+#     ./lxd-gui-setup.sh <container> audio on
+#
 # Examples:
 #   ./lxd-gui-setup.sh mycontainer info
 #   ./lxd-gui-setup.sh mycontainer all on
@@ -319,16 +325,19 @@ SVCEOF
         lxc config set "$CONTAINER" environment.XDG_RUNTIME_DIR=/run/user/${CONTAINER_UID}
         log "Set Wayland environment variables"
 
-        # Add Wayland socket proxy to /mnt (not /run, which gets wiped by systemd)
+        # Add Wayland socket proxy directly to /run/user/$UID/wayland-0
+        # NOTE: We mount directly at the expected path instead of using a symlink.
+        # This is required because the host's AppArmor profile for Wayland apps only
+        # allows access to @{run}/user/*/wayland-[0-9]*, not symlink targets in /mnt.
         if [[ -S "/run/user/${HOST_UID}/wayland-0" ]]; then
           lxc config device add "$CONTAINER" wayland proxy \
             connect="unix:/run/user/${HOST_UID}/wayland-0" \
-            listen="unix:/mnt/.wayland-socket" \
+            listen="unix:/run/user/${CONTAINER_UID}/wayland-0" \
             bind=container \
             uid="$CONTAINER_UID" gid="$CONTAINER_UID" \
             security.uid="$CONTAINER_UID" security.gid="$CONTAINER_UID" \
             mode=0777 2>/dev/null || true
-          log "Added Wayland socket proxy (host -> /mnt/.wayland-socket)"
+          log "Added Wayland socket proxy (host -> /run/user/${CONTAINER_UID}/wayland-0)"
         else
           die "Wayland socket not found at /run/user/${HOST_UID}/wayland-0"
         fi
@@ -341,41 +350,11 @@ SVCEOF
         lxc exec "$CONTAINER" -- loginctl enable-linger "$CONTAINER_USER"
         log "Enabled user linger for $CONTAINER_USER"
 
-        # Create user systemd service to symlink socket on login
-        lxc exec "$CONTAINER" -- bash -c "
-          mkdir -p '$USER_HOME/.config/systemd/user'
-          cat > '$USER_HOME/.config/systemd/user/wayland-socket.service' << 'SVCEOF'
-[Unit]
-Description=Symlink Wayland socket from /mnt
-
-[Service]
-Type=oneshot
-ExecStart=/bin/ln -sf /mnt/.wayland-socket %t/wayland-0
-RemainAfterExit=yes
-
-[Install]
-WantedBy=default.target
-SVCEOF
-          chown -R $CONTAINER_UID:$CONTAINER_UID '$USER_HOME/.config/systemd'
-        "
-        log "Created user systemd service for Wayland symlink"
-
-        # Enable the user service
-        lxc exec "$CONTAINER" -- su - "$CONTAINER_USER" -c \
-          "systemctl --user daemon-reload && systemctl --user enable wayland-socket.service"
-        log "Enabled wayland-socket.service"
-
         log "Done. Restart container to apply: lxc restart $CONTAINER"
         ;;
 
       off)
         log "Disabling Wayland passthrough for '$CONTAINER'"
-
-        # Disable and remove user service
-        lxc exec "$CONTAINER" -- su - "$CONTAINER_USER" -c \
-          "systemctl --user disable wayland-socket.service 2>/dev/null || true"
-        lxc exec "$CONTAINER" -- rm -f "$USER_HOME/.config/systemd/user/wayland-socket.service" 2>/dev/null || true
-        log "Removed user systemd service"
 
         # Remove devices and environment
         lxc config device remove "$CONTAINER" wayland 2>/dev/null || true
@@ -533,7 +512,7 @@ SVCEOF
         echo "           socket: MISSING (restart container)"
       fi
     else
-      echo "PulseAudio: disabled"
+      echo "Wayland:   disabled"
     fi
 
     # Check audio passthrough status
