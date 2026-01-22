@@ -216,7 +216,9 @@ fn audio_thread_main(
             Ok(AudioCommand::Shutdown) | Err(_) => {
                 // Finalize any active recording before shutting down
                 if let Some(stream) = active_stream.take() {
-                    let _ = finalize_recording(stream);
+                    if let Err(e) = finalize_recording(stream) {
+                        log::error!("Failed to finalize recording on shutdown: {}", e);
+                    }
                 }
                 log::info!("Audio thread shutting down");
                 break;
