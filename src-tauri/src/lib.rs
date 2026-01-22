@@ -199,7 +199,7 @@ pub struct AudioStatusResponse {
 fn get_audio_status() -> AudioStatusResponse {
     // Check if we can initialize an audio recorder
     match audio::AudioRecorder::new() {
-        Ok(recorder) => {
+        Ok(_) => {
             // Get the temp directory path
             let temp_dir = audio::create_temp_audio_dir()
                 .map(|p| p.to_string_lossy().to_string())

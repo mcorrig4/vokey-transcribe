@@ -36,7 +36,7 @@ pub fn generate_wav_path(recording_id: Uuid) -> std::io::Result<PathBuf> {
 }
 
 /// Simple timestamp without chrono dependency.
-/// Format: YYYYMMDD_HHMMSS
+/// Format: <seconds since UNIX epoch>
 fn chrono_lite_timestamp() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let duration = SystemTime::now()
@@ -70,12 +70,8 @@ pub fn cleanup_old_recordings() -> std::io::Result<usize> {
         return Ok(0);
     }
 
-    // Sort by modified time (oldest first)
-    entries.sort_by(|a, b| {
-        let time_a = a.metadata().and_then(|m| m.modified()).ok();
-        let time_b = b.metadata().and_then(|m| m.modified()).ok();
-        time_a.cmp(&time_b)
-    });
+    // Sort by modified time (oldest first) - sort_by_key is more efficient
+    entries.sort_by_key(|entry| entry.metadata().and_then(|m| m.modified()).ok());
 
     let to_delete = entries.len() - MAX_RECORDINGS;
     let mut deleted = 0;

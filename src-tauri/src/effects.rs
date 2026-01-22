@@ -17,15 +17,11 @@ pub trait EffectRunner: Send + Sync + 'static {
     fn spawn(&self, effect: Effect, tx: mpsc::Sender<Event>);
 }
 
-/// Active recording handle wrapper (Send + Sync safe)
+/// Active recording handle storage.
+/// RecordingHandle is now Send+Sync safe (uses channel to dedicated audio thread).
 struct ActiveRecording {
     handle: Option<crate::audio::recorder::RecordingHandle>,
 }
-
-// Safety: RecordingHandle contains Stream which isn't Send, but we only access it
-// from the same thread context via Mutex
-unsafe impl Send for ActiveRecording {}
-unsafe impl Sync for ActiveRecording {}
 
 /// Real effect runner with CPAL audio capture.
 /// Transcription is still stubbed (Sprint 4).
