@@ -42,3 +42,7 @@ After completing major work, checking in code, or making significant discoveries
 - **Stack:** Tauri 2 + React + TypeScript + Rust
 - **Target:** Linux (Kubuntu/KDE Plasma 6.4/Wayland)
 - **Approach:** Clipboard-only (no auto-paste), evdev for hotkeys
+
+# Important
+- never use npm. only use pnpm.
+- always use gh cli to check for issues matching the work we are doing. use gh cli to manage PRs, linked to uses, and post comment on issues updating work statuses, and close issues when PRs get merged. use gh cli to follow software development lifecycle and project management best practices
