@@ -179,6 +179,28 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 - `src-tauri/capabilities/default.json` - Added invoke permission
 - `src-tauri/icons/tray-test.png` - New test icon
 
+### Session 2026-01-22 (LXD notify-send Fix)
+**Debugged and fixed `notify-send` failing with "Permission denied" in LXD container:**
+
+**Root Cause:**
+The host system has an AppArmor profile at `/etc/apparmor.d/notify-send` that:
+1. Denies access to `/proc/@{pid}/cgroup r`
+2. Uses `dbus-session-strict` abstraction which only allows socket access to `@{run}/user/[0-9]*/bus`
+
+The AppArmor profile is enforced based on binary path (`/usr/bin/notify-send`) even inside LXD containers.
+The original setup used a symlink `/run/user/1000/bus -> /mnt/.dbus-socket`, which AppArmor blocks.
+
+**Fix:**
+Modified `lxd-gui-setup.sh` to mount the D-Bus socket directly at `/run/user/$UID/bus` instead of using a symlink through `/mnt/.dbus-socket`. This satisfies the AppArmor profile's path requirements.
+
+**Key findings:**
+- `gdbus` works because it doesn't trigger the AppArmor profile (different binary)
+- `notify-send` works when renamed (e.g., `/tmp/my-notify`) because AppArmor matches by path
+- The `owner` keyword in AppArmor rules requires matching UID, so commands must run as the socket owner
+
+**Files modified:**
+- `lxd-gui-setup.sh` - Changed D-Bus device from `/mnt/.dbus-socket` to `/run/user/$UID/bus`, removed symlink service
+
 ### Session 2026-01-22 (LXD GUI Setup Script)
 **Created `lxd-gui-setup.sh` - GUI app configuration for LXD containers:**
 - New script for toggling GUI-related LXD container settings

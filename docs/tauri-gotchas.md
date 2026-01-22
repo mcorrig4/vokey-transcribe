@@ -124,6 +124,43 @@ fn set_clipboard(text: &str) -> Result<(), arboard::Error> {
 
 ---
 
+### 6) LXD Container D-Bus and AppArmor
+
+When running Tauri apps in LXD containers, system notifications via `notify-send` may fail with "Permission denied" even though other D-Bus tools like `gdbus` work.
+
+**Root cause:**
+
+The host system has an AppArmor profile for `/usr/bin/notify-send` that:
+1. Includes `dbus-session-strict` abstraction which only allows socket access to `@{run}/user/[0-9]*/bus`
+2. This profile is enforced based on binary path, even inside LXD containers
+
+If the D-Bus socket is mounted at a different path (e.g., `/mnt/.dbus-socket`) and symlinked to `/run/user/$UID/bus`, AppArmor blocks access because it checks the target path, not the symlink.
+
+**Solution:**
+
+Mount the D-Bus socket directly at `/run/user/$UID/bus` instead of using a symlink:
+
+```bash
+# Wrong (symlink blocked by AppArmor):
+lxc config device add mycontainer dbus proxy \
+  connect=unix:/run/user/1000/lxd-dbus-proxy/mycontainer.sock \
+  listen=unix:/mnt/.dbus-socket  # Then symlink to /run/user/1000/bus
+
+# Correct (direct mount at AppArmor-allowed path):
+lxc config device add mycontainer dbus proxy \
+  connect=unix:/run/user/1000/lxd-dbus-proxy/mycontainer.sock \
+  listen=unix:/run/user/1000/bus  # Direct, no symlink needed
+```
+
+**Additional notes:**
+
+- The `owner` keyword in AppArmor rules requires the socket to be owned by the process's UID
+- Commands must run as the socket owner (e.g., `lxc exec mycontainer -- su - myuser -c 'notify-send ...'`)
+- Running as root will fail even with correct socket paths
+- Use `./lxd-gui-setup.sh <container> dbus on` to set this up automatically
+
+---
+
 # Rust state machine (Linux MVP) mapped cleanly
 
 This is the same conceptual machine as the Windows version, adapted for clipboard-only injection.

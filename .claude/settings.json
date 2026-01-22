@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/setup-gh-cli.sh"
+            "command": ".claude/hooks/setup-cc-web.sh"
           }
         ]
       }
