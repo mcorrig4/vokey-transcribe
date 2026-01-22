@@ -68,6 +68,10 @@ pub enum Event {
     TranscribeOk { id: Uuid, text: String },
     TranscribeFail { id: Uuid, err: String },
 
+    // Debug/testing events
+    /// Force transition to Error state (for debug panel)
+    ForceError { message: String },
+
     // Phase 2 (reserved for future)
     #[allow(dead_code)]
     PartialDelta { id: Uuid, delta: String },
@@ -295,6 +299,17 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             (Arming { recording_id: id }, vec![StartAudio { id }, EmitUi])
         }
         (Error { .. }, Cancel) => (Idle, vec![EmitUi]),
+
+        // -----------------
+        // Debug/testing: ForceError
+        // -----------------
+        (_, ForceError { message }) => (
+            Error {
+                message,
+                last_good_text: None,
+            },
+            vec![EmitUi],
+        ),
 
         // -----------------
         // Stale events (drop silently)

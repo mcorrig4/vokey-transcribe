@@ -6,7 +6,7 @@ use std::sync::Arc;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager,
+    AppHandle, Emitter, Manager, WindowEvent,
 };
 use tokio::sync::mpsc;
 
@@ -147,12 +147,10 @@ async fn simulate_cancel(state: tauri::State<'_, StateLoopHandle>) -> Result<(),
 #[tauri::command]
 async fn simulate_error(state: tauri::State<'_, StateLoopHandle>) -> Result<(), String> {
     log::info!("Simulate: error");
-    // Send a fake audio start failure
-    let id = uuid::Uuid::new_v4();
+    // Force transition to Error state (works from any state)
     state
-        .send(Event::AudioStartFail {
-            id,
-            err: "Simulated error for testing".to_string(),
+        .send(Event::ForceError {
+            message: "Simulated error for testing".to_string(),
         })
         .await
         .map_err(|e| e.to_string())
@@ -241,6 +239,17 @@ pub fn run() {
             simulate_cancel,
             simulate_error,
         ])
+        .on_window_event(|window, event| {
+            // Hide windows instead of closing them (except for quit)
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                let label = window.label();
+                if label == "debug" || label == "hud" {
+                    log::info!("Hiding window: {}", label);
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

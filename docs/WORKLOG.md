@@ -101,6 +101,7 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 | R-001 | KWin may steal focus on HUD update | Medium | To test in Sprint 0 |
 | R-002 | arboard clipboard may have Wayland quirks | Low | To test in Sprint 4 |
 | R-003 | evdev requires input group membership | Low | Documented in setup |
+| BUG-001 | Tray icon invisible on KDE Plasma system tray | Medium | Open - [#15](https://github.com/mcorrig4/vokey-transcribe/issues/15) |
 
 ---
 
@@ -117,6 +118,23 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 ---
 
 ## Session Notes
+
+### Session 2026-01-22 (Sprint 1 Bug Fixes)
+**Fixed remaining Sprint 1 issues:**
+- Fixed Tauri capabilities to allow `invoke` permission for debug panel commands
+- Added `ForceError { message }` event to state machine - allows forcing error state from any state (for testing)
+- Updated `simulate_error` command to use `ForceError` instead of `AudioStartFail` (which was ignored from Idle)
+- Added window close event handler - debug/HUD windows now hide instead of close (can reopen via tray)
+- Created `tray-test.png` (32x32 solid red) for tray icon visibility testing
+
+**Outstanding bug:** Tray icon still invisible on KDE Plasma system tray. Created GitHub issue to track.
+
+**Files modified:**
+- `src-tauri/src/state_machine.rs` - Added ForceError event + handler
+- `src-tauri/src/lib.rs` - Updated simulate_error, added on_window_event handler
+- `src-tauri/tauri.conf.json` - Updated tray icon path
+- `src-tauri/capabilities/default.json` - Added invoke permission
+- `src-tauri/icons/tray-test.png` - New test icon
 
 ### Session 2026-01-22 (LXD GUI Setup Script)
 **Created `lxd-gui-setup.sh` - GUI app configuration for LXD containers:**

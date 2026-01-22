@@ -40,8 +40,8 @@
     ],
     "trayIcon": {
       "id": "main",
-      "iconPath": "icons/32x32.png",
-      "iconAsTemplate": true
+      "iconPath": "icons/tray-test.png",
+      "iconAsTemplate": false
     },
     "security": {
       "csp": null

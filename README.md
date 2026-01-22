@@ -258,3 +258,8 @@ Architecture decisions are documented in `docs/WORKLOG.md` with:
 4. Mark sprint complete when all acceptance criteria pass
 
 ---
+
+To test:        
+```sh
+WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/$(id -u) pnpm tauri dev
+```

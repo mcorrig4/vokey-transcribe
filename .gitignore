@@ -163,3 +163,4 @@ vite.config.ts.timestamp-*
 .vite/
 .claude/settings.local.json
 show-kde.sh
+.venv/
