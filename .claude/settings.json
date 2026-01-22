@@ -1,4 +1,17 @@
 {
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/setup-gh-cli.sh"
+          }
+        ]
+      }
+    ]
+  },
   "env": {
     "addintolocalGH_TOKEN": "ghp_xABCD",
     "GH_USERNAME": "CodespaceAgent:Claude-Do",
