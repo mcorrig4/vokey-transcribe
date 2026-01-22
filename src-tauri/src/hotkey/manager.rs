@@ -33,9 +33,8 @@ pub fn find_keyboards() -> Vec<(PathBuf, Device)> {
 }
 
 /// Check if we have permission to access input devices
-pub fn check_permissions() -> Result<(), String> {
-    let keyboards = find_keyboards();
-
+/// Takes pre-discovered keyboards to avoid redundant enumeration
+pub fn check_permissions(keyboards: &[(PathBuf, Device)]) -> Result<(), String> {
     if keyboards.is_empty() {
         // Try to determine why
         let all_devices: Vec<_> = evdev::enumerate().collect();
@@ -80,15 +79,11 @@ impl HotkeyManager {
     /// Spawns async tasks to monitor all keyboard devices.
     /// Sends `Event::HotkeyToggle` to the state machine when hotkey is triggered.
     pub fn start(event_tx: mpsc::Sender<Event>, hotkeys: Vec<Hotkey>) -> Result<Self, String> {
-        // Check permissions first
-        check_permissions()?;
+        // Find keyboards once and check permissions
+        let keyboards = find_keyboards();
+        check_permissions(&keyboards)?;
 
         let cancel_token = CancellationToken::new();
-        let keyboards = find_keyboards();
-
-        if keyboards.is_empty() {
-            return Err("No keyboard devices found".to_string());
-        }
 
         let device_count = keyboards.len();
         let hotkey_display = hotkeys
