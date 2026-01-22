@@ -27,6 +27,8 @@ set -Eeuo pipefail
 #
 #   D-Bus:    Requires xdg-dbus-proxy on the host (sudo apt install xdg-dbus-proxy).
 #             A host-side systemd user service runs the proxy to bypass AppArmor.
+#             The socket is mounted directly at /run/user/$UID/bus (not symlinked)
+#             to satisfy the host's AppArmor profile for notify-send.
 #             Test: lxc exec <container> -- su - <user> -c 'notify-send Test Hello'
 #
 #   GPU:      Required for WebKit hardware acceleration in Tauri apps.
@@ -240,15 +242,18 @@ SVCEOF
         done
         [[ -S "$PROXY_SOCKET" ]] || die "Proxy socket not created at $PROXY_SOCKET"
 
-        # Add LXD proxy device to forward the proxy socket to container
+        # Add LXD proxy device to forward the proxy socket directly to /run/user/$UID/bus
+        # NOTE: We mount directly at /run/user/$UID/bus instead of using a symlink.
+        # This is required because the host's AppArmor profile for notify-send only
+        # allows access to @{run}/user/[0-9]*/bus, not symlink targets in /mnt.
         lxc config device add "$CONTAINER" dbus proxy \
           connect="unix:${PROXY_SOCKET}" \
-          listen="unix:/mnt/.dbus-socket" \
+          listen="unix:/run/user/${CONTAINER_UID}/bus" \
           bind=container \
           uid="$CONTAINER_UID" gid="$CONTAINER_UID" \
           security.uid="$CONTAINER_UID" security.gid="$CONTAINER_UID" \
           mode=0777 2>/dev/null || true
-        log "Added LXD proxy device (host proxy -> /mnt/.dbus-socket)"
+        log "Added LXD proxy device (host proxy -> /run/user/${CONTAINER_UID}/bus)"
 
         # Set D-Bus environment variable in container
         lxc config set "$CONTAINER" environment.DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${CONTAINER_UID}/bus"
@@ -257,30 +262,6 @@ SVCEOF
         # Enable user linger so user services start at boot
         lxc exec "$CONTAINER" -- loginctl enable-linger "$CONTAINER_USER"
         log "Enabled user linger for $CONTAINER_USER"
-
-        # Create container-side systemd service to symlink socket
-        lxc exec "$CONTAINER" -- bash -c "
-          mkdir -p '$USER_HOME/.config/systemd/user'
-          cat > '$USER_HOME/.config/systemd/user/dbus-socket.service' << 'INNERSVC'
-[Unit]
-Description=Symlink D-Bus socket from /mnt
-
-[Service]
-Type=oneshot
-ExecStart=/bin/ln -sf /mnt/.dbus-socket %t/bus
-RemainAfterExit=yes
-
-[Install]
-WantedBy=default.target
-INNERSVC
-          chown -R $CONTAINER_UID:$CONTAINER_UID '$USER_HOME/.config/systemd'
-        "
-        log "Created container systemd service for D-Bus symlink"
-
-        # Enable the container service
-        lxc exec "$CONTAINER" -- su - "$CONTAINER_USER" -c \
-          "systemctl --user daemon-reload && systemctl --user enable dbus-socket.service"
-        log "Enabled dbus-socket.service in container"
 
         log "Done. Restart container to apply: lxc restart $CONTAINER"
         log "Note: Host service '$HOST_SERVICE_NAME' must be running for D-Bus to work."
@@ -297,12 +278,6 @@ INNERSVC
 
         # Remove proxy socket
         rm -f "$PROXY_SOCKET"
-
-        # Disable and remove container service
-        lxc exec "$CONTAINER" -- su - "$CONTAINER_USER" -c \
-          "systemctl --user disable dbus-socket.service 2>/dev/null || true"
-        lxc exec "$CONTAINER" -- rm -f "$USER_HOME/.config/systemd/user/dbus-socket.service" 2>/dev/null || true
-        log "Removed container systemd service"
 
         # Remove LXD device and environment
         lxc config device remove "$CONTAINER" dbus 2>/dev/null || true
@@ -500,11 +475,11 @@ SVCEOF
       else
         echo "           host proxy: NOT RUNNING (start with: systemctl --user start $HOST_DBUS_SERVICE)"
       fi
-      # Check container symlink
-      if lxc exec "$CONTAINER" -- test -L "/run/user/${CONTAINER_UID}/bus" 2>/dev/null; then
-        echo "           container symlink: OK"
+      # Check container socket
+      if lxc exec "$CONTAINER" -- test -S "/run/user/${CONTAINER_UID}/bus" 2>/dev/null; then
+        echo "           container socket: OK"
       else
-        echo "           container symlink: MISSING (restart container)"
+        echo "           container socket: MISSING (restart container)"
       fi
     else
       echo "D-Bus:     disabled"
