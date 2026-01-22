@@ -6,9 +6,9 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Current Status
 
-**Phase:** Sprint 1 COMPLETE — State machine + UI wiring
+**Phase:** Sprint 2 IN PROGRESS — Global hotkey (evdev)
 **Target:** Kubuntu with KDE Plasma 6.4 on Wayland
-**Branch:** `claude/plan-next-priorities-Ab2wA`
+**Branch:** `claude/plan-next-priorities-3h72a`
 **Last Updated:** 2026-01-22
 
 ---
@@ -36,7 +36,7 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 |--------|--------|-------|
 | 0 - Project skeleton + HUD + tray | ✅ COMPLETE | HUD shows "Ready", tray icon works, Quit exits cleanly |
 | 1 - State machine + UI wiring | ✅ COMPLETE | Full state machine, debug panel, simulate commands |
-| 2 - Global hotkey (evdev) | Not started | |
+| 2 - Global hotkey (evdev) | 🔄 IN PROGRESS | evdev module implemented, needs testing on real hardware |
 | 3 - Audio capture (CPAL + Hound) | Not started | |
 | 4 - OpenAI transcription + clipboard | Not started | |
 | 5 - Full flow polish + tray controls | Not started | |
@@ -49,23 +49,33 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ### Active Sprint: Sprint 2 - Global hotkey (evdev)
 
+### Completed Tasks:
+1. ✅ Added evdev crate dependency with tokio feature
+2. ✅ Created hotkey module structure (`src-tauri/src/hotkey/`)
+3. ✅ Implemented ModifierState and HotkeyDetector with tests
+4. ✅ Implemented HotkeyManager with async device monitoring
+5. ✅ Wired hotkey manager into Tauri setup
+6. ✅ Added `get_hotkey_status` command for debug panel
+7. ✅ Updated Debug panel UI to show hotkey status
+
 ### Next Steps:
-1. Add evdev crate dependency
-2. Implement keyboard device enumeration
-3. Create hotkey listener thread that monitors /dev/input/event* devices
-4. Wire hotkey events (Ctrl+Alt+Space) to state machine via mpsc channel
-5. Test hotkey works while other apps are focused
+1. Test on real hardware with GTK libraries installed
+2. Verify hotkey works while other apps are focused
+3. Run manual validation checklist from SPRINT2-PLAN.md
+4. Create PR and merge
 
 ### Reference Implementation:
+- Detailed plan: `docs/SPRINT2-PLAN.md`
 - evdev approach documented in: `docs/tauri-gotchas.md` (section "Global hotkeys")
 - Requires user in `input` group for device access
 
-### Blockers: None
+### Blockers:
+- Cannot build/test in headless environment (missing GTK libs - expected)
 
 ### GitHub Issues:
 - Sprint 0: https://github.com/mcorrig4/vokey-transcribe/issues/2 (DONE)
 - Sprint 1: https://github.com/mcorrig4/vokey-transcribe/issues/3 (DONE)
-- Sprint 2: https://github.com/mcorrig4/vokey-transcribe/issues/4
+- Sprint 2: https://github.com/mcorrig4/vokey-transcribe/issues/4 (IN PROGRESS)
 
 ---
 
@@ -118,6 +128,39 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 ---
 
 ## Session Notes
+
+### Session 2026-01-22 (Sprint 2 Implementation)
+**Implemented global hotkey via evdev:**
+- Added `evdev` and `tokio-util` dependencies to Cargo.toml
+- Created modular hotkey subsystem in `src-tauri/src/hotkey/`
+  - `mod.rs`: Hotkey struct definition with Display trait
+  - `detector.rs`: ModifierState tracking (left/right Ctrl, Alt, Shift, Meta)
+  - `manager.rs`: HotkeyManager with async device monitoring
+- Integrated with Tauri:
+  - HotkeyManager spawns async tasks per keyboard device
+  - Sends `Event::HotkeyToggle` to state machine on Ctrl+Alt+Space
+  - Added `get_hotkey_status` command for debug panel
+  - Graceful shutdown via CancellationToken
+- Updated Debug panel to show hotkey status (active/inactive, device count, error)
+
+**Architecture decisions:**
+- Used evdev directly (not evdev-shortcut) for full control
+- Async monitoring with tokio instead of dedicated thread
+- One task per keyboard device for multi-keyboard support
+
+**Files created:**
+- `src-tauri/src/hotkey/mod.rs`
+- `src-tauri/src/hotkey/detector.rs`
+- `src-tauri/src/hotkey/manager.rs`
+- `docs/SPRINT2-PLAN.md` (detailed implementation plan)
+
+**Files modified:**
+- `src-tauri/Cargo.toml` - Added evdev, tokio-util deps
+- `src-tauri/src/lib.rs` - Integrated HotkeyManager
+- `src/Debug.tsx` - Added hotkey status display
+- `src/styles/debug.css` - Added hotkey status styles
+
+**Note:** Cannot build in headless env (missing GTK libs). TypeScript compiles. Needs testing on real hardware.
 
 ### Session 2026-01-22 (Sprint 1 Bug Fixes)
 **Fixed remaining Sprint 1 issues:**

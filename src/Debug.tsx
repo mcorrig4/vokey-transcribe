@@ -13,9 +13,18 @@ type UiState =
   | { status: 'done'; text: string }
   | { status: 'error'; message: string; lastText: string | null }
 
+// Hotkey status type matching Rust backend
+type HotkeyStatus = {
+  active: boolean
+  device_count: number
+  hotkey: string
+  error: string | null
+}
+
 function Debug() {
   const [uiState, setUiState] = useState<UiState>({ status: 'idle' })
   const [log, setLog] = useState<string[]>([])
+  const [hotkeyStatus, setHotkeyStatus] = useState<HotkeyStatus | null>(null)
 
   useEffect(() => {
     const unlisten = listen<UiState>('state-update', (event) => {
@@ -29,6 +38,19 @@ function Debug() {
     return () => {
       unlisten.then((fn) => fn())
     }
+  }, [])
+
+  // Load hotkey status on mount
+  useEffect(() => {
+    const loadHotkeyStatus = async () => {
+      try {
+        const status = await invoke<HotkeyStatus>('get_hotkey_status')
+        setHotkeyStatus(status)
+      } catch (e) {
+        console.error('Failed to get hotkey status:', e)
+      }
+    }
+    loadHotkeyStatus()
   }, [])
 
   const simulateRecordStart = async () => {
@@ -66,6 +88,28 @@ function Debug() {
   return (
     <div className="debug-container">
       <h3>VoKey Debug Panel</h3>
+
+      <div className="debug-section">
+        <strong>Hotkey Status:</strong>
+        {hotkeyStatus ? (
+          <div className={`hotkey-status ${hotkeyStatus.active ? 'active' : 'inactive'}`}>
+            {hotkeyStatus.active ? (
+              <>
+                <span className="status-badge active">Active</span>
+                <span>{hotkeyStatus.hotkey}</span>
+                <span className="device-count">({hotkeyStatus.device_count} device{hotkeyStatus.device_count !== 1 ? 's' : ''})</span>
+              </>
+            ) : (
+              <>
+                <span className="status-badge inactive">Inactive</span>
+                <span className="error-text">{hotkeyStatus.error || 'Unknown error'}</span>
+              </>
+            )}
+          </div>
+        ) : (
+          <span>Loading...</span>
+        )}
+      </div>
 
       <div className="debug-status">
         <strong>Current State:</strong> {uiState.status}
