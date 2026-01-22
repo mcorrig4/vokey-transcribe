@@ -9,12 +9,19 @@ Kubuntu with KDE Plasma 6.4 on Wayland
 
 ### 1. Install system dependencies
 ```bash
-# Tauri dependencies
-sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget \
-  libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+# Tauri dependencies (Ubuntu 22.04+)
+sudo apt install -y \
+  libwebkit2gtk-4.1-dev \
+  libgtk-3-dev \
+  libayatana-appindicator3-dev \
+  librsvg2-dev \
+  patchelf
+
+# Build tools (if not already installed)
+sudo apt install -y build-essential curl wget libssl-dev
 
 # Audio dependencies (usually pre-installed)
-sudo apt install libasound2-dev
+sudo apt install -y libasound2-dev
 
 # ydotool for global hotkeys (optional, for evdev we just need input group)
 sudo apt install ydotool
@@ -133,9 +140,21 @@ cd src-tauri && cargo clippy
 
 ## Codespace / Remote Development
 
-For GitHub Codespace setup, port forwarding may be needed for OAuth callbacks:
-```bash
-gh codespace ssh -c <codespace-name> -- -L 1455:localhost:1455
-```
+**Important:** Codespaces are headless (no display). Tauri GUI apps cannot run in Codespaces.
 
-Note: Audio capture won't work in a headless environment. Use Codespace for code editing only; test locally on Kubuntu.
+### What works in Codespace:
+- ✅ Code editing
+- ✅ `cargo check`, `cargo clippy`, `cargo test`
+- ✅ `pnpm build` (frontend compilation)
+- ✅ `pnpm exec tsc --noEmit` (TypeScript checking)
+
+### What requires local machine (with display):
+- ❌ `pnpm tauri dev` — needs GTK/display
+- ❌ GUI testing — needs Wayland/X11
+- ❌ Audio capture — needs microphone
+
+### Recommended workflow:
+1. **Codespace:** Write code, run checks, commit/push
+2. **Local Kubuntu:** Pull changes, run `pnpm tauri dev`, test GUI
+
+Note: If you see `Failed to initialize GTK`, you're trying to run the GUI in a headless environment.

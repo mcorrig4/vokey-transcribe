@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-echo "== Setting `nvm` to use v22 (for convex) =="
-nvm install v22
-nvm alias default 22
-nvm alias system 22
+set -e
 
-echo "== Install Claude Code =="
-curl -fsSL https://claude.ai/install.sh | bash
+echo "== Installing pnpm dependencies =="
+pnpm install
 
+echo "== Installing Claude Code =="
+curl -fsSL https://claude.ai/install.sh | bash || true
+
+echo "== Setup complete =="
+echo "Run 'pnpm tauri dev' to start the app"

@@ -6,9 +6,10 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Current Status
 
-**Phase:** Pre-implementation (documentation complete, ready to start Sprint 0)
+**Phase:** Sprint 0 COMPLETE — Ready for Sprint 1
 **Target:** Kubuntu with KDE Plasma 6.4 on Wayland
-**Branch:** `claude/pivot-linux-kubuntu-uzulY`
+**Branch:** `claude/review-docs-planning-qguM0`
+**Last Updated:** 2025-01-21
 
 ---
 
@@ -33,8 +34,8 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 | Sprint | Status | Notes |
 |--------|--------|-------|
-| 0 - Project skeleton + HUD + tray | Not started | |
-| 1 - State machine + UI wiring | Not started | |
+| 0 - Project skeleton + HUD + tray | ✅ COMPLETE | HUD shows "Ready", tray icon works, Quit exits cleanly |
+| 1 - State machine + UI wiring | **NEXT** | Full reducer documented in tauri-gotchas.md |
 | 2 - Global hotkey (evdev) | Not started | |
 | 3 - Audio capture (CPAL + Hound) | Not started | |
 | 4 - OpenAI transcription + clipboard | Not started | |
@@ -46,16 +47,24 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Current Task Context
 
-### Active Sprint: None (awaiting start)
+### Active Sprint: Sprint 1 - State machine + UI wiring
 
 ### Next Steps:
-1. Run `./scripts/create-github-issues.sh` to create GitHub issues (requires gh CLI auth)
-2. Start Sprint 0: Tauri + Vite + React skeleton
+1. Implement Rust state machine (State, Event, Effect enums)
+2. Implement reduce() function with pattern matching
+3. Wire state machine to UI via Tauri events
+4. Add debug commands to simulate state transitions
+
+### Reference Implementation:
+- Full reducer code: `docs/tauri-gotchas.md` (section "Full Reducer Implementation")
+- Event loop skeleton: `docs/tauri-gotchas.md` (section "Single-Writer Event Loop")
+- EffectRunner trait: `docs/tauri-gotchas.md` (section "Effect Runner")
 
 ### Blockers: None
 
-### Pending Setup:
-- [ ] Run `./scripts/create-github-issues.sh` locally after `gh auth login`
+### GitHub Issues:
+- Sprint 0: https://github.com/mcorrig4/vokey-transcribe/issues/2 (DONE)
+- Sprint 1: https://github.com/mcorrig4/vokey-transcribe/issues/3
 
 ---
 
@@ -108,6 +117,32 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Session Notes
 
+### Session 2025-01-21 (Sprint 0 Complete)
+**Completed Sprint 0:**
+- Scaffolded Tauri 2 + Vite + React project
+- Created HUD window (180x40px, frameless, always-on-top, transparent)
+- Added system tray icon with Settings/Quit menu
+- Aligned frontend UiState with Sprint 1 planning (tagged union, 7 states)
+- Created GitHub issues #2-#9 for all sprints
+- Fixed devcontainer to use Ubuntu 22.04 for webkit2gtk-4.1 support
+- Verified app launches and HUD displays "Ready"
+
+**Files created:**
+- `src/App.tsx` - HUD component with state-aware colors
+- `src/main.tsx` - React entry point
+- `src/styles/hud.css`, `src/styles/index.css` - Styling
+- `src-tauri/src/lib.rs` - Tray icon, UiState enum, event emission
+- `src-tauri/tauri.conf.json` - Window and tray configuration
+- `vite.config.ts`, `tsconfig.json`, `index.html` - Build config
+- `.devcontainer/Dockerfile` - Ubuntu 22.04 with Tauri deps
+
+**Planning docs merged from PR #11:**
+- Full reducer implementation with pattern matching
+- Single-writer event loop skeleton
+- EffectRunner trait and stub implementation
+- UiEmitter for Tauri-to-React state updates
+- Phase 2 extension points (streaming, post-processing)
+
 ### Session 2025-01-20
 - Pivoted from Windows-first to Linux-first (Kubuntu/KDE Plasma 6.4/Wayland)
 - Simplified MVP approach: clipboard-only instead of auto-injection
@@ -152,6 +187,10 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 tracing-appender = "0.2"
 
+# Error handling
+anyhow = "1"
+thiserror = "1"
+
 # Audio
 cpal = "0.15"
 hound = "3.5"
@@ -167,6 +206,10 @@ reqwest = { version = "0.11", features = ["json", "multipart"] }
 
 # Paths
 dirs = "5"
+
+# Phase 2: Streaming transcription (add when needed)
+# tokio-tungstenite = "0.21"
+# futures-util = "0.3"
 ```
 
 ### Frontend (package.json)
