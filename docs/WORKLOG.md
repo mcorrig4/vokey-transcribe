@@ -118,6 +118,18 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Session Notes
 
+### Session 2026-01-22 (LXD GUI Setup Script)
+**Created `lxd-gui-setup.sh` - GUI app configuration for LXD containers:**
+- New script for toggling GUI-related LXD container settings
+- AppArmor toggle (unconfined mode for quick testing)
+- GPU passthrough toggle (/dev/dri/* for WebKit hardware acceleration)
+- D-Bus forwarding (via xdg-dbus-proxy, copied from lxd-post-setup.sh)
+- Wayland passthrough (copied from lxd-post-setup.sh)
+- `all on/off` convenience command for development
+- `info` command shows current configuration status
+
+**Usage:** `./lxd-gui-setup.sh <container> all on` then `lxc restart <container>`
+
 ### Session 2026-01-22 (Sprint 1 Complete)
 **Completed Sprint 1 - State machine + UI wiring:**
 - Implemented full state machine with State, Event, Effect enums
