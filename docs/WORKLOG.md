@@ -134,6 +134,18 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Session Notes
 
+### Session 2026-01-22 (PR #26 & #27 Code Review)
+**Reviewed and addressed code review feedback from PRs #26 and #27:**
+
+**PR #26 (Fixed):**
+- `src-tauri/src/audio/recorder.rs:218-222` - Added error logging when `finalize_recording` fails during shutdown
+- Prevents silent data loss if WAV finalization fails on app exit
+
+**PR #27 (Declined):**
+- Stylistic suggestion to use `if let...else` instead of `match` for Option handling
+- Both patterns are functionally equivalent and idiomatic Rust
+- Left comment explaining the decision to keep current syntax
+
 ### Session 2026-01-22 (PR #22 Code Review Fixes)
 **Addressed code review feedback from PR #22 (gemini-code-assist[bot]):**
 
