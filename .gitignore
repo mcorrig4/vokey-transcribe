@@ -164,3 +164,4 @@ vite.config.ts.timestamp-*
 .claude/settings.local.json
 show-kde.sh
 .venv/
+.vscode/settings.*.json
