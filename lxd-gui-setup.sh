@@ -22,6 +22,7 @@ set -Eeuo pipefail
 #   all on           Enable all features (apparmor unconfined + gpu + dbus + wayland + audio)
 #   all off          Disable all features
 #   info             Show current configuration status
+#   refresh          Re-add all proxy devices (fixes timing issues after restart)
 #
 # Notes:
 #   AppArmor: Unconfined mode is less secure but eliminates all AppArmor-related
@@ -54,10 +55,8 @@ set -Eeuo pipefail
 #   Production:  gpu on + dbus on (keep AppArmor enabled)
 #
 # Known Issue:
-#   LXD proxy devices may fail to start on container restart due to timing issues.
-#   If sockets show as MISSING after restart, re-run the relevant command:
-#     ./lxd-gui-setup.sh <container> wayland on
-#     ./lxd-gui-setup.sh <container> audio on
+#   LXD proxy devices may fail to start on container restart due to timing.
+#   Run refresh after restart: ./lxd-gui-setup.sh <container> refresh
 #
 # Examples:
 #   ./lxd-gui-setup.sh mycontainer info
@@ -245,12 +244,12 @@ WantedBy=default.target
 SVCEOF
         log "Created host systemd service for xdg-dbus-proxy"
 
-        # Enable and start the host service
+        # Enable and start the host service (may fail initially but auto-recovers)
         systemctl --user daemon-reload
-        systemctl --user enable --now "$HOST_SERVICE_NAME"
+        systemctl --user enable --now "$HOST_SERVICE_NAME" || true
         log "Started xdg-dbus-proxy on host"
 
-        # Wait for socket to be created
+        # Wait for socket to be created (service has Restart=on-failure)
         for i in {1..10}; do
           [[ -S "$PROXY_SOCKET" ]] && break
           sleep 0.5
@@ -477,6 +476,40 @@ SVCEOF
         die "Unknown all mode: $ALL_MODE (use: on, off)"
         ;;
     esac
+    ;;
+
+  refresh)
+    log "Refreshing proxy devices for '$CONTAINER'"
+
+    # Check which devices exist before we start removing them
+    DEVICES_CONFIG=$(lxc config device show "$CONTAINER" 2>/dev/null)
+    HAS_DBUS=$(echo "$DEVICES_CONFIG" | grep -q "^dbus:" && echo 1 || echo 0)
+    HAS_WAYLAND=$(echo "$DEVICES_CONFIG" | grep -q "^wayland:" && echo 1 || echo 0)
+    HAS_AUDIO=$(echo "$DEVICES_CONFIG" | grep -qE "^(pipewire|pulseaudio):" && echo 1 || echo 0)
+
+    # Refresh D-Bus (needs full output - has host-side service dependencies)
+    if [[ "$HAS_DBUS" == "1" ]]; then
+      log "Refreshing dbus..."
+      "$0" "$CONTAINER" dbus off >/dev/null 2>&1 || true
+      "$0" "$CONTAINER" dbus on || log "Warning: dbus refresh had errors (may still work)"
+    fi
+
+    # Refresh Wayland
+    if [[ "$HAS_WAYLAND" == "1" ]]; then
+      log "Refreshing wayland..."
+      lxc config device remove "$CONTAINER" wayland 2>/dev/null || true
+      "$0" "$CONTAINER" wayland on 2>&1 | grep -E "^==>" || true
+    fi
+
+    # Refresh Audio (pipewire + pulseaudio together)
+    if [[ "$HAS_AUDIO" == "1" ]]; then
+      log "Refreshing audio..."
+      lxc config device remove "$CONTAINER" pipewire 2>/dev/null || true
+      lxc config device remove "$CONTAINER" pulseaudio 2>/dev/null || true
+      "$0" "$CONTAINER" audio on 2>&1 | grep -E "^==>" || true
+    fi
+
+    log "Done. All proxy devices refreshed."
     ;;
 
   info)
