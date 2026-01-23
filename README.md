@@ -86,67 +86,51 @@ tsconfig.json
 vite.config.ts
 
 src/                                  # React UI (TSX)
-  main.tsx                            # Boot React app
-  App.tsx                             # Layout + routes (Overlay / Settings)
+  main.tsx                            # Boot React app, route HUD vs Debug window
+  App.tsx                             # HUD component with state-aware display
+  Debug.tsx                           # Debug panel with simulate buttons + status
   styles/
-    overlay.css                       # HUD styling
-    theme.css                         # Color tokens for states
-  components/
-    OverlayHUD.tsx                    # Floating indicator + optional partial line
-    SettingsPanel.tsx                 # API key, hotkey display, mode toggles
-    ModeSelector.tsx                  # Normal / Coding / Markdown / Prompt
-    Diagnostics.tsx                   # Optional: last events/log tail view
-  lib/
-    ipc.ts                            # Typed wrapper for Tauri invoke + event listeners
-    state.ts                          # UI-side state shape + helpers
-    throttle.ts                       # Throttle UI updates (partial transcript)
+    hud.css                           # HUD overlay styling
+    debug.css                         # Debug panel styling
+    index.css                         # Global styles
 
 src-tauri/                            # Rust backend (Tauri host)
-  tauri.conf.json                     # Window/tray config
+  tauri.conf.json                     # Window/tray config (HUD + debug windows)
   Cargo.toml
   icons/                              # App/tray icons
+  capabilities/
+    default.json                      # Tauri permissions
   src/
-    main.rs                           # Tauri init: windows, tray, IPC, start state loop
+    main.rs                           # Tauri entry point
+    lib.rs                            # App setup: tray, state loop, commands
 
-    app/
-      mod.rs                          # App wiring (build services, spawn loops)
-      paths.rs                        # App dirs: temp audio, logs, settings (XDG)
-      config.rs                       # Load/save settings defaults + migrations
-      state_machine.rs                # Single-writer reducer + effect dispatcher
-      events.rs                       # Internal events (hotkey/audio/transcribe)
-      models.rs                       # Settings + IPC payload types
+    state_machine.rs                  # State, Event, Effect enums + reduce()
+    effects.rs                        # EffectRunner trait + AudioEffectRunner
 
-    services/
-      hotkey/
-        mod.rs
-        ydotool.rs                    # ydotool/evdev hotkey detection
-      audio/
-        mod.rs
-        capture_cpal.rs               # CPAL mic capture -> PCM frames
-        wav_writer.rs                 # Hound WAV writer + finalize
-        device.rs                     # Choose mic, sample rate/channel config
-      openai/
-        mod.rs
-        client.rs                     # reqwest + auth + base URL
-        transcribe.rs                 # Batch transcription endpoint
-        realtime.rs                   # Phase 2: streaming transcription (optional)
-        postprocess.rs                # Phase 2: text-model cleanup/format (optional)
-      clipboard/
-        mod.rs
-        clipboard.rs                  # Clipboard operations (arboard)
-      logging/
-        mod.rs
-        logger.rs                     # tracing + rolling file logs
+    hotkey/                           # Global hotkey (evdev)
+      mod.rs                          # Hotkey struct, exports
+      detector.rs                     # ModifierState tracking (Ctrl/Alt/Shift/Meta)
+      manager.rs                      # HotkeyManager with async device monitoring
 
-    ipc/
-      mod.rs
-      commands.rs                     # tauri::command: start/stop/status/settings
-      events.rs                       # emit state snapshots to UI
+    audio/                            # Audio capture (CPAL + hound)
+      mod.rs                          # Module exports
+      paths.rs                        # XDG paths for temp audio, cleanup
+      recorder.rs                     # AudioRecorder with dedicated thread
+
+# Future/Planned:
+#   openai/                           # Sprint 4: transcription
+#   clipboard/                        # Sprint 4: arboard clipboard
+
+docs/
+  WORKLOG.md                          # Progress tracking, session notes
+  ISSUES-v1.0.0.md                    # Sprint definitions with acceptance criteria
+  tauri-gotchas.md                    # Technical patterns and Wayland gotchas
+  notes.md                            # Setup instructions, troubleshooting
+  SPRINT2-PLAN.md                     # Hotkey implementation planning
 
 scripts/
-  setup.sh                            # One-time setup: input group, ydotool, etc.
-  dev.sh                              # Run dev quickly
-  build.sh                            # Build release bundle
+  lxd-gui-setup.sh                    # LXD container GUI configuration
+  lxd-post-setup.sh                   # LXD post-setup (Wayland, D-Bus)
 ```
 
 ---

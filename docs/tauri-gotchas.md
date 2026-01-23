@@ -161,6 +161,87 @@ lxc config device add mycontainer dbus proxy \
 
 ---
 
+### 7) CPAL Audio Thread Architecture
+
+CPAL (Cross-Platform Audio Library) has a critical threading requirement: streams must be created and dropped on the same thread. This prevents using async/await directly with CPAL streams.
+
+**Solution: Dedicated Audio Thread with Command Channel**
+
+Use a dedicated thread that owns the CPAL stream, communicating via `std::sync::mpsc` channels:
+
+```rust
+use std::sync::mpsc;
+use std::thread;
+
+/// Commands sent to the audio thread
+enum AudioCommand {
+    Start { recording_id: Uuid, response: mpsc::Sender<Result<PathBuf, AudioError>> },
+    Stop { response: mpsc::Sender<Result<PathBuf, AudioError>> },
+    Shutdown,
+}
+
+/// AudioRecorder owns the command sender; thread owns the stream
+pub struct AudioRecorder {
+    command_sender: mpsc::Sender<AudioCommand>,
+    _thread_handle: thread::JoinHandle<()>,
+}
+
+impl AudioRecorder {
+    pub fn new() -> Result<Self, AudioError> {
+        let (command_tx, command_rx) = mpsc::channel();
+
+        let thread_handle = thread::spawn(move || {
+            audio_thread_main(command_rx);
+        });
+
+        Ok(Self { command_sender: command_tx, _thread_handle: thread_handle })
+    }
+
+    pub fn start(&self, recording_id: Uuid) -> Result<(RecordingHandle, PathBuf), AudioError> {
+        let (response_tx, response_rx) = mpsc::channel();
+        self.command_sender.send(AudioCommand::Start { recording_id, response: response_tx })?;
+        response_rx.recv()??
+    }
+}
+```
+
+**Key points:**
+
+1. **Use `std::sync::mpsc`**, not `tokio::sync::mpsc` — the audio thread is not async
+2. **Audio thread owns the CPAL stream** — create, play, and drop all happen on same thread
+3. **Response channels for synchronous results** — caller waits for start/stop confirmation
+4. **Graceful shutdown** — send `Shutdown` command in `Drop` impl
+
+**Handling Poisoned Mutex in Audio Callbacks**
+
+CPAL audio callbacks run on a system audio thread. If a panic occurs, the mutex protecting the WAV writer may become poisoned. Handle this gracefully:
+
+```rust
+// In the audio callback
+let mut guard = match writer.lock() {
+    Ok(guard) => guard,
+    Err(poisoned) => {
+        log::warn!("Writer mutex was poisoned, recovering");
+        poisoned.into_inner()  // Recover the data
+    }
+};
+```
+
+For the input stream data callback, don't panic — set a flag and stop recording:
+
+```rust
+let mut guard = match writer.lock() {
+    Ok(guard) => guard,
+    Err(_) => {
+        log::error!("Audio writer mutex was poisoned. Stopping recording.");
+        is_recording.store(false, Ordering::SeqCst);
+        return;
+    }
+};
+```
+
+---
+
 # Rust state machine (Linux MVP) mapped cleanly
 
 This is the same conceptual machine as the Windows version, adapted for clipboard-only injection.

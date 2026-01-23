@@ -64,6 +64,20 @@
   font-size: 11px;
 }
 
+/* Audio status styles */
+.audio-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.temp-dir {
+  color: #a0aec0;
+  font-size: 11px;
+  font-family: monospace;
+}
+
 .debug-buttons {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -56,41 +56,95 @@ pub enum Event {
     /// Application exit requested
     Exit,
     /// Done state auto-dismiss timeout (includes id to prevent stale timeouts)
-    DoneTimeout { id: Uuid },
+    DoneTimeout {
+        id: Uuid,
+    },
+    /// Tick event for updating recording timer (includes id to prevent stale ticks)
+    RecordingTick {
+        id: Uuid,
+    },
 
     // Audio events
-    AudioStartOk { id: Uuid, wav_path: PathBuf },
-    AudioStartFail { id: Uuid, err: String },
-    AudioStopOk { id: Uuid },
-    AudioStopFail { id: Uuid, err: String },
+    AudioStartOk {
+        id: Uuid,
+        wav_path: PathBuf,
+    },
+    AudioStartFail {
+        id: Uuid,
+        err: String,
+    },
+    AudioStopOk {
+        id: Uuid,
+    },
+    AudioStopFail {
+        id: Uuid,
+        err: String,
+    },
 
     // Transcription events
-    TranscribeOk { id: Uuid, text: String },
-    TranscribeFail { id: Uuid, err: String },
+    TranscribeOk {
+        id: Uuid,
+        text: String,
+    },
+    TranscribeFail {
+        id: Uuid,
+        err: String,
+    },
 
     // Debug/testing events
     /// Force transition to Error state (for debug panel)
-    ForceError { message: String },
+    ForceError {
+        message: String,
+    },
 
     // Phase 2 (reserved for future)
     #[allow(dead_code)]
-    PartialDelta { id: Uuid, delta: String },
+    PartialDelta {
+        id: Uuid,
+        delta: String,
+    },
     #[allow(dead_code)]
-    PostProcessOk { id: Uuid, text: String },
+    PostProcessOk {
+        id: Uuid,
+        text: String,
+    },
     #[allow(dead_code)]
-    PostProcessFail { id: Uuid, err: String },
+    PostProcessFail {
+        id: Uuid,
+        err: String,
+    },
 }
 
 /// Effects to be executed after a state transition.
 /// The effect runner handles these asynchronously.
 #[derive(Debug, Clone)]
 pub enum Effect {
-    StartAudio { id: Uuid },
-    StopAudio { id: Uuid },
-    StartTranscription { id: Uuid, wav_path: PathBuf },
-    CopyToClipboard { id: Uuid, text: String },
-    StartDoneTimeout { id: Uuid, duration: Duration },
-    Cleanup { id: Uuid, wav_path: Option<PathBuf> },
+    StartAudio {
+        id: Uuid,
+    },
+    StopAudio {
+        id: Uuid,
+    },
+    StartTranscription {
+        id: Uuid,
+        wav_path: PathBuf,
+    },
+    CopyToClipboard {
+        id: Uuid,
+        text: String,
+    },
+    StartDoneTimeout {
+        id: Uuid,
+        duration: Duration,
+    },
+    /// Start sending RecordingTick events every second while recording
+    StartRecordingTick {
+        id: Uuid,
+    },
+    Cleanup {
+        id: Uuid,
+        wav_path: Option<PathBuf>,
+    },
     /// Signal to emit UI state to the frontend
     EmitUi,
 }
@@ -140,7 +194,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
                 wav_path,
                 started_at: Instant::now(),
             },
-            vec![EmitUi],
+            vec![StartRecordingTick { id }, EmitUi],
         ),
         (Arming { recording_id }, AudioStartFail { id, err }) if *recording_id == id => (
             Error {
@@ -171,7 +225,14 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
         // -----------------
         // Recording
         // -----------------
-        (Recording { recording_id, wav_path, .. }, HotkeyToggle) => (
+        (
+            Recording {
+                recording_id,
+                wav_path,
+                ..
+            },
+            HotkeyToggle,
+        ) => (
             Stopping {
                 recording_id: *recording_id,
                 wav_path: wav_path.clone(),
@@ -179,7 +240,14 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             vec![StopAudio { id: *recording_id }, EmitUi],
         ),
         // Cancel during recording aborts without transcription
-        (Recording { recording_id, wav_path, .. }, Cancel) => (
+        (
+            Recording {
+                recording_id,
+                wav_path,
+                ..
+            },
+            Cancel,
+        ) => (
             Idle,
             vec![
                 StopAudio { id: *recording_id },
@@ -190,11 +258,21 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
                 EmitUi,
             ],
         ),
+        // Tick during recording - just update UI with new elapsed time
+        (Recording { recording_id, .. }, RecordingTick { id }) if *recording_id == id => {
+            (state.clone(), vec![EmitUi])
+        }
 
         // -----------------
         // Stopping
         // -----------------
-        (Stopping { recording_id, wav_path }, AudioStopOk { id }) if *recording_id == id => (
+        (
+            Stopping {
+                recording_id,
+                wav_path,
+            },
+            AudioStopOk { id },
+        ) if *recording_id == id => (
             Transcribing {
                 recording_id: *recording_id,
                 wav_path: wav_path.clone(),
@@ -207,7 +285,13 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
                 EmitUi,
             ],
         ),
-        (Stopping { recording_id, wav_path }, AudioStopFail { id, err }) if *recording_id == id => (
+        (
+            Stopping {
+                recording_id,
+                wav_path,
+            },
+            AudioStopFail { id, err },
+        ) if *recording_id == id => (
             Error {
                 message: err,
                 last_good_text: None,
@@ -241,24 +325,32 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
                 EmitUi,
             ],
         ),
-        (Transcribing { recording_id, wav_path }, TranscribeFail { id, err })
-            if *recording_id == id =>
-        {
-            (
-                Error {
-                    message: err,
-                    last_good_text: None,
+        (
+            Transcribing {
+                recording_id,
+                wav_path,
+            },
+            TranscribeFail { id, err },
+        ) if *recording_id == id => (
+            Error {
+                message: err,
+                last_good_text: None,
+            },
+            vec![
+                Cleanup {
+                    id: *recording_id,
+                    wav_path: Some(wav_path.clone()),
                 },
-                vec![
-                    Cleanup {
-                        id: *recording_id,
-                        wav_path: Some(wav_path.clone()),
-                    },
-                    EmitUi,
-                ],
-            )
-        }
-        (Transcribing { recording_id, wav_path }, Cancel) => (
+                EmitUi,
+            ],
+        ),
+        (
+            Transcribing {
+                recording_id,
+                wav_path,
+            },
+            Cancel,
+        ) => (
             Idle,
             vec![
                 Cleanup {
@@ -336,7 +428,9 @@ mod tests {
     fn idle_hotkey_transitions_to_arming() {
         let (next, effects) = reduce(&State::Idle, Event::HotkeyToggle);
         assert!(matches!(next, State::Arming { .. }));
-        assert!(effects.iter().any(|e| matches!(e, Effect::StartAudio { .. })));
+        assert!(effects
+            .iter()
+            .any(|e| matches!(e, Effect::StartAudio { .. })));
         assert!(effects.iter().any(|e| matches!(e, Effect::EmitUi)));
     }
 
@@ -380,7 +474,9 @@ mod tests {
         };
         let (next, effects) = reduce(&state, Event::HotkeyToggle);
         assert!(matches!(next, State::Arming { .. }));
-        assert!(effects.iter().any(|e| matches!(e, Effect::StartAudio { .. })));
+        assert!(effects
+            .iter()
+            .any(|e| matches!(e, Effect::StartAudio { .. })));
     }
 
     // =========================================================================
@@ -395,7 +491,9 @@ mod tests {
 
         assert!(matches!(next, State::Idle));
         // Should issue StopAudio in case audio started late
-        assert!(effects.iter().any(|e| matches!(e, Effect::StopAudio { .. })));
+        assert!(effects
+            .iter()
+            .any(|e| matches!(e, Effect::StopAudio { .. })));
         assert!(effects.iter().any(|e| matches!(e, Effect::Cleanup { .. })));
         assert!(effects.iter().any(|e| matches!(e, Effect::EmitUi)));
     }
@@ -412,10 +510,14 @@ mod tests {
 
         // Should go directly to Idle, NOT to Stopping->Transcribing
         assert!(matches!(next, State::Idle));
-        assert!(effects.iter().any(|e| matches!(e, Effect::StopAudio { .. })));
+        assert!(effects
+            .iter()
+            .any(|e| matches!(e, Effect::StopAudio { .. })));
         assert!(effects.iter().any(|e| matches!(e, Effect::Cleanup { .. })));
         // Should NOT start transcription
-        assert!(!effects.iter().any(|e| matches!(e, Effect::StartTranscription { .. })));
+        assert!(!effects
+            .iter()
+            .any(|e| matches!(e, Effect::StartTranscription { .. })));
     }
 
     #[test]
@@ -475,6 +577,8 @@ mod tests {
 
         // Should start new recording with new id
         assert!(matches!(next, State::Arming { recording_id } if recording_id != old_id));
-        assert!(effects.iter().any(|e| matches!(e, Effect::StartAudio { .. })));
+        assert!(effects
+            .iter()
+            .any(|e| matches!(e, Effect::StartAudio { .. })));
     }
 }

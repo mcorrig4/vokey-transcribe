@@ -47,6 +47,13 @@ After completing major work, checking in code, or making significant discoveries
 - never use npm. only use pnpm.
 - always use gh cli to check for issues matching the work we are doing. use gh cli to manage PRs, linked to uses, and post comment on issues updating work statuses, and close issues when PRs get merged. use gh cli to follow software development lifecycle and project management best practices
 
+## LXD Container Development
+
+The project can be developed inside the `chaintail` LXD container:
+- **Host path:** `~/chaintail/vokey-transcribe`
+- **Container path:** `/workspace/vokey-transcribe`
+- Use `lxc exec chaintail -- su - chaintail -c "cd /workspace/vokey-transcribe && <command>"` to run commands
+
 ## Claude Code Web Environment
 
 In the web environment, apt doesn't work by default due to proxy restrictions. To enable apt:
@@ -59,3 +66,8 @@ sudo apt-get update
 ```
 
 Then install Tauri prerequisites: `sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev`
+
+# Check & Address PR Code Review Comments
+When asked to review a Pull Request: use gh cli to read code review comments on the specified PR #.
+- install the gh cli if it is not installed
+- when reviewer(s) has left comments, summarize them; state whether you believe each one requires addressing now, should be delayed (create a new gh issue) or ignored/not a problem/false positve. present summary and recommend what you think should be done next. wait for user direction to continue fixing (unless otherwise directed to immediately start fixes)
