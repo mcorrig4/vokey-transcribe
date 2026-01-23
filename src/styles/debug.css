@@ -78,6 +78,27 @@
   font-family: monospace;
 }
 
+/* Transcription status styles */
+.transcription-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.api-key-hint {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #fc8181;
+}
+
+.api-key-hint code {
+  background: #2d3748;
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-family: monospace;
+}
+
 .debug-buttons {
   display: grid;
   grid-template-columns: 1fr 1fr;

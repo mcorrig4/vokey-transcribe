@@ -6,10 +6,10 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Current Status
 
-**Phase:** Sprint 3 COMPLETE — Audio capture (CPAL + Hound)
+**Phase:** Sprint 4 IN PROGRESS — OpenAI transcription + clipboard
 **Target:** Kubuntu with KDE Plasma 6.4 on Wayland
-**Branch:** `claude/audio-capture-0jHnu`
-**Last Updated:** 2026-01-22
+**Branch:** `claude/plan-next-priorities-WWH92`
+**Last Updated:** 2026-01-23
 
 ---
 
@@ -38,7 +38,7 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 | 1 - State machine + UI wiring | ✅ COMPLETE | Full state machine, debug panel, simulate commands |
 | 2 - Global hotkey (evdev) | ✅ COMPLETE | evdev module implemented, needs testing on real hardware |
 | 3 - Audio capture (CPAL + Hound) | ✅ COMPLETE | CPAL capture, hound WAV writing, XDG paths |
-| 4 - OpenAI transcription + clipboard | Not started | |
+| 4 - OpenAI transcription + clipboard | 🔄 IN PROGRESS | OpenAI Whisper API, arboard clipboard, needs testing |
 | 5 - Full flow polish + tray controls | Not started | |
 | 6 - Hardening + UX polish | Not started | |
 | 7 - Phase 2 (streaming or post-processing) | Not started | |
@@ -47,40 +47,43 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Current Task Context
 
-### Active Sprint: Sprint 3 - Audio capture (CPAL + Hound) - COMPLETE
+### Active Sprint: Sprint 4 - OpenAI transcription + clipboard
 
 ### Completed Tasks:
-1. ✅ Added cpal, hound, dirs dependencies to Cargo.toml
-2. ✅ Created audio module structure (`src-tauri/src/audio/`)
-3. ✅ Implemented AudioRecorder with CPAL for mic capture
-4. ✅ Implemented WAV writing with hound crate (16-bit PCM)
-5. ✅ Added XDG path helpers for temp audio directory
-6. ✅ Created AudioEffectRunner (replaces StubEffectRunner)
-7. ✅ Wired audio recorder into state machine effects
-8. ✅ Added `get_audio_status` command for debug panel
-9. ✅ Handle no-mic error gracefully (AudioError::NoInputDevice)
-10. ✅ Auto-cleanup old recordings (keeps last 5)
+1. ✅ Added reqwest (HTTP client) and arboard (clipboard) dependencies
+2. ✅ Created transcription module (`src-tauri/src/transcription/`)
+3. ✅ Implemented OpenAI Whisper API client for speech-to-text
+4. ✅ Implemented real clipboard copy using arboard crate
+5. ✅ Replaced stubbed StartTranscription effect with real API call
+6. ✅ Added API key handling (OPENAI_API_KEY env var)
+7. ✅ Added `get_transcription_status` command for debug panel
+8. ✅ Updated Debug panel to show API key status
+9. ✅ TypeScript compiles successfully
 
 ### Next Steps:
-1. Test on real hardware with audio device
-2. Verify WAV files play correctly
-3. Run manual validation checklist
-4. Create PR and merge
-5. Start Sprint 4: OpenAI transcription + clipboard
+1. Test on real hardware with valid OpenAI API key
+2. Verify transcription produces correct text
+3. Verify clipboard copy works on Wayland
+4. Test error handling (missing key, network, API errors)
+5. Run manual validation checklist
+6. Create PR and merge
 
 ### Reference Implementation:
-- Audio files stored at: `~/.local/share/vokey-transcribe/temp/audio/`
-- File naming: `<timestamp>_<uuid>.wav`
-- Sample format: 16-bit PCM at device's native sample rate
+- API key from: `OPENAI_API_KEY` environment variable
+- Transcription endpoint: OpenAI Whisper (`https://api.openai.com/v1/audio/transcriptions`)
+- Clipboard: arboard crate (handles Wayland via wl-clipboard protocols)
+- HUD shows "Copied — paste now" when transcription completes
 
 ### Blockers:
 - Cannot build/test in headless environment (missing GTK libs - expected)
+- Requires valid OpenAI API key for transcription testing
 
 ### GitHub Issues:
 - Sprint 0: https://github.com/mcorrig4/vokey-transcribe/issues/2 (DONE)
 - Sprint 1: https://github.com/mcorrig4/vokey-transcribe/issues/3 (DONE)
 - Sprint 2: https://github.com/mcorrig4/vokey-transcribe/issues/4 (DONE)
-- Sprint 3: https://github.com/mcorrig4/vokey-transcribe/issues/5 (IN PROGRESS)
+- Sprint 3: https://github.com/mcorrig4/vokey-transcribe/issues/5 (DONE)
+- Sprint 4: https://github.com/mcorrig4/vokey-transcribe/issues/6 (IN PROGRESS)
 
 ---
 
@@ -133,6 +136,34 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 ---
 
 ## Session Notes
+
+### Session 2026-01-23 (Sprint 4 Implementation)
+**Implemented OpenAI transcription and clipboard copy:**
+
+**Dependencies added (Cargo.toml):**
+- `reqwest` v0.12 with `json` and `multipart` features for HTTP/file upload
+- `arboard` v3 for clipboard access
+
+**Files created:**
+- `src-tauri/src/transcription/mod.rs` - Module exports
+- `src-tauri/src/transcription/openai.rs` - OpenAI Whisper API client
+
+**Files modified:**
+- `src-tauri/Cargo.toml` - Added reqwest, arboard deps
+- `src-tauri/src/lib.rs` - Added transcription module, `get_transcription_status` command
+- `src-tauri/src/effects.rs` - Replaced stubbed transcription/clipboard with real implementations
+- `src/Debug.tsx` - Added transcription status display
+- `src/styles/debug.css` - Added transcription status styles
+
+**Key implementation details:**
+- OpenAI Whisper API for speech-to-text transcription
+- API key from `OPENAI_API_KEY` environment variable
+- Multipart file upload for WAV files
+- Error handling: MissingApiKey, FileReadError, NetworkError, ApiError, ParseError
+- Clipboard copy via arboard (handles Wayland via wl-clipboard protocols)
+- Debug panel shows API key configuration status
+
+**Note:** Cannot build in headless env (missing GTK libs). TypeScript compiles. Needs testing on real hardware with valid API key.
 
 ### Session 2026-01-22 (PR #26 & #27 Code Review)
 **Reviewed and addressed code review feedback from PRs #26 and #27:**

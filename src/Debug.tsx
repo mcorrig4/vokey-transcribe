@@ -28,11 +28,18 @@ type AudioStatus = {
   error: string | null
 }
 
+// Transcription status type matching Rust backend
+type TranscriptionStatus = {
+  api_key_configured: boolean
+  api_provider: string
+}
+
 function Debug() {
   const [uiState, setUiState] = useState<UiState>({ status: 'idle' })
   const [log, setLog] = useState<string[]>([])
   const [hotkeyStatus, setHotkeyStatus] = useState<HotkeyStatus | null>(null)
   const [audioStatus, setAudioStatus] = useState<AudioStatus | null>(null)
+  const [transcriptionStatus, setTranscriptionStatus] = useState<TranscriptionStatus | null>(null)
 
   useEffect(() => {
     const unlisten = listen<UiState>('state-update', (event) => {
@@ -72,6 +79,19 @@ function Debug() {
       }
     }
     loadAudioStatus()
+  }, [])
+
+  // Load transcription status on mount
+  useEffect(() => {
+    const loadTranscriptionStatus = async () => {
+      try {
+        const status = await invoke<TranscriptionStatus>('get_transcription_status')
+        setTranscriptionStatus(status)
+      } catch (e) {
+        console.error('Failed to get transcription status:', e)
+      }
+    }
+    loadTranscriptionStatus()
   }, [])
 
   const simulateRecordStart = async () => {
@@ -152,6 +172,27 @@ function Debug() {
           </div>
         ) : (
           <span>Loading...</span>
+        )}
+      </div>
+
+      <div className="debug-section">
+        <strong>Transcription:</strong>
+        {transcriptionStatus ? (
+          <div className={`transcription-status ${transcriptionStatus.api_key_configured ? 'active' : 'inactive'}`}>
+            <span className="status-badge">{transcriptionStatus.api_provider}</span>
+            {transcriptionStatus.api_key_configured ? (
+              <span className="status-badge active">API Key Configured</span>
+            ) : (
+              <span className="status-badge inactive">API Key Missing</span>
+            )}
+          </div>
+        ) : (
+          <span>Loading...</span>
+        )}
+        {transcriptionStatus && !transcriptionStatus.api_key_configured && (
+          <div className="api-key-hint">
+            Set <code>OPENAI_API_KEY</code> environment variable
+          </div>
         )}
       </div>
 
