@@ -5,16 +5,15 @@ working in the `chaintail` container without profiles/scripts.
 
 ## Current findings
 
-- `~/.profile` sets:
+- GUI env vars were previously in dotfiles but have now been removed.
+- We must provide GUI env vars via LXD `environment.*` config (or a setup script).
+  Required env vars:
   - `WAYLAND_DISPLAY=wayland-0`
   - `XDG_SESSION_TYPE=wayland`
-- `~/.bashrc` sets:
+  - `XDG_RUNTIME_DIR=/run/user/1000`
   - `DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus`
   - `PULSE_SERVER=unix:/run/user/1000/pulse/native`
   - `PIPEWIRE_REMOTE=/run/user/1000/pipewire-0`
-- These are required for the container to find host-proxied sockets.
-- If we remove these from dotfiles, we must reintroduce them via LXD `environment.*`
-  config or a per-user login script.
 
 ## Next steps
 
