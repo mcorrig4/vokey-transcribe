@@ -47,6 +47,13 @@ After completing major work, checking in code, or making significant discoveries
 - never use npm. only use pnpm.
 - always use gh cli to check for issues matching the work we are doing. use gh cli to manage PRs, linked to uses, and post comment on issues updating work statuses, and close issues when PRs get merged. use gh cli to follow software development lifecycle and project management best practices
 
+## LXD Container Development
+
+The project can be developed inside the `chaintail` LXD container:
+- **Host path:** `~/chaintail/vokey-transcribe`
+- **Container path:** `/workspace/vokey-transcribe`
+- Use `lxc exec chaintail -- su - chaintail -c "cd /workspace/vokey-transcribe && <command>"` to run commands
+
 ## Claude Code Web Environment
 
 In the web environment, apt doesn't work by default due to proxy restrictions. To enable apt:

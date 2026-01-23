@@ -338,7 +338,7 @@ fn build_stream_typed<T>(
     err_fn: impl FnMut(cpal::StreamError) + Send + 'static,
 ) -> Result<Stream, AudioError>
 where
-    T: cpal::Sample + cpal::SizedSample + Send + 'static,
+    T: cpal::Sample<Float = f32> + cpal::SizedSample + Send + 'static,
 {
     let stream = device
         .build_input_stream(
@@ -379,7 +379,7 @@ where
 }
 
 /// Convert any sample type to i16 for WAV writing.
-fn sample_to_i16<T: cpal::Sample>(sample: T) -> i16 {
+fn sample_to_i16<T: cpal::Sample<Float = f32>>(sample: T) -> i16 {
     let f32_sample: f32 = sample.to_float_sample();
     // Clamp and convert to i16
     let clamped = f32_sample.clamp(-1.0, 1.0);

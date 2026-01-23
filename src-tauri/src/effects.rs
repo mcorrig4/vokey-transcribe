@@ -69,7 +69,10 @@ impl EffectRunner for AudioEffectRunner {
                         if recorder_guard.is_none() {
                             // Retry creating recorder
                             match AudioRecorder::new() {
-                                Ok(r) => *recorder_guard = Some(r),
+                                Ok(r) => {
+                                    *recorder_guard = Some(r);
+                                    Ok(())
+                                }
                                 Err(e) => {
                                     log::error!("Failed to initialize audio recorder: {}", e);
                                     // Return error to be handled after lock is dropped
