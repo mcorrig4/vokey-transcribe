@@ -88,9 +88,9 @@ pub enum Effect {
     StartAudio { id: Uuid },
     StopAudio { id: Uuid },
     StartTranscription { id: Uuid, wav_path: PathBuf },
-    CopyToClipboard { id: Uuid, text: String },
+    CopyToClipboard { _id: Uuid, text: String },
     StartDoneTimeout { id: Uuid, duration: Duration },
-    Cleanup { id: Uuid, wav_path: Option<PathBuf> },
+    Cleanup { _id: Uuid, wav_path: Option<PathBuf> },
     /// Signal to emit UI state to the frontend
     EmitUi,
 }
@@ -149,7 +149,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             },
             vec![
                 Cleanup {
-                    id: *recording_id,
+                    _id: *recording_id,
                     wav_path: None,
                 },
                 EmitUi,
@@ -161,7 +161,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
                 // Stop audio in case it started between cancel and AudioStartOk
                 StopAudio { id: *recording_id },
                 Cleanup {
-                    id: *recording_id,
+                    _id: *recording_id,
                     wav_path: None,
                 },
                 EmitUi,
@@ -184,7 +184,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             vec![
                 StopAudio { id: *recording_id },
                 Cleanup {
-                    id: *recording_id,
+                    _id: *recording_id,
                     wav_path: Some(wav_path.clone()),
                 },
                 EmitUi,
@@ -214,7 +214,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             },
             vec![
                 Cleanup {
-                    id: *recording_id,
+                    _id: *recording_id,
                     wav_path: Some(wav_path.clone()),
                 },
                 EmitUi,
@@ -231,7 +231,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             },
             vec![
                 CopyToClipboard {
-                    id: *recording_id,
+                    _id: *recording_id,
                     text,
                 },
                 StartDoneTimeout {
@@ -262,7 +262,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             Idle,
             vec![
                 Cleanup {
-                    id: *recording_id,
+                    _id: *recording_id,
                     wav_path: Some(wav_path.clone()),
                 },
                 EmitUi,
@@ -277,7 +277,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             Idle,
             vec![
                 Cleanup {
-                    id: *recording_id,
+                    _id: *recording_id,
                     wav_path: None,
                 },
                 EmitUi,
