@@ -24,6 +24,7 @@ pub enum UiState {
     Idle,
     Arming,
     Recording {
+        #[serde(rename = "elapsedSecs")]
         elapsed_secs: u64,
     },
     Stopping,
@@ -33,6 +34,7 @@ pub enum UiState {
     },
     Error {
         message: String,
+        #[serde(rename = "lastText")]
         last_text: Option<String>,
     },
 }
@@ -61,6 +63,7 @@ fn state_to_ui(state: &State) -> UiState {
 /// Emit a UI state update to the frontend
 fn emit_ui_state(app: &AppHandle, state: &State) {
     let ui_state = state_to_ui(state);
+    log::debug!("Emitting UI state: {:?}", serde_json::to_string(&ui_state));
     if let Err(e) = app.emit("state-update", &ui_state) {
         log::warn!("Failed to emit state to UI: {:?}", e);
     }

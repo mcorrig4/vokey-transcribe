@@ -100,7 +100,7 @@ impl AudioRecorder {
         log::info!("Using audio input device: {:?}", device.name());
 
         // Find a supported sample format (F32, I16, or U16)
-        let supported_config = device
+        let supported_config_range = device
             .supported_input_configs()
             .map_err(|_| AudioError::NoSupportedConfig)?
             .find(|c| {
@@ -109,8 +109,24 @@ impl AudioRecorder {
                     SampleFormat::F32 | SampleFormat::I16 | SampleFormat::U16
                 )
             })
-            .ok_or(AudioError::NoSupportedConfig)?
-            .with_max_sample_rate();
+            .ok_or(AudioError::NoSupportedConfig)?;
+
+        // Use a reasonable sample rate - prefer 48kHz or 44.1kHz, clamped to device range
+        // Some devices report unbounded max (u32::MAX) which causes overflow in WAV writing
+        let preferred_rate = cpal::SampleRate(48000);
+        let min_rate = supported_config_range.min_sample_rate();
+        let max_rate = supported_config_range.max_sample_rate();
+
+        let target_rate = if preferred_rate >= min_rate && preferred_rate <= max_rate {
+            preferred_rate
+        } else if cpal::SampleRate(44100) >= min_rate && cpal::SampleRate(44100) <= max_rate {
+            cpal::SampleRate(44100)
+        } else {
+            // Fall back to min rate if preferred rates not supported
+            min_rate
+        };
+
+        let supported_config = supported_config_range.with_sample_rate(target_rate);
 
         log::info!(
             "Audio config: {} Hz, {} channels, {:?}",
