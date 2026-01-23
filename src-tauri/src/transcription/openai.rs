@@ -3,8 +3,17 @@
 //! Uses the OpenAI Whisper API to transcribe WAV audio files to text.
 
 use reqwest::multipart::{Form, Part};
+use reqwest::Client;
 use serde::Deserialize;
 use std::path::Path;
+use std::sync::OnceLock;
+
+/// Global HTTP client for reuse across requests (avoids TLS handshake overhead)
+static HTTP_CLIENT: OnceLock<Client> = OnceLock::new();
+
+fn get_http_client() -> &'static Client {
+    HTTP_CLIENT.get_or_init(Client::new)
+}
 
 /// Errors that can occur during transcription
 #[derive(Debug)]
@@ -115,9 +124,8 @@ pub async fn transcribe_audio(wav_path: &Path) -> Result<String, TranscriptionEr
         .part("file", file_part)
         .text("model", "whisper-1");
 
-    // Make API request
-    let client = reqwest::Client::new();
-    let response = client
+    // Make API request using shared client
+    let response = get_http_client()
         .post("https://api.openai.com/v1/audio/transcriptions")
         .header("Authorization", format!("Bearer {}", api_key))
         .multipart(form)
