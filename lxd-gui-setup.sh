@@ -17,9 +17,14 @@ set -Eeuo pipefail
 #   dbus off         Disable D-Bus forwarding
 #   wayland on       Enable Wayland display passthrough + GPU
 #   wayland off      Disable Wayland passthrough
-#   all on           Enable all features (apparmor unconfined + gpu + dbus + wayland)
+#   audio on         Enable audio passthrough (PipeWire + PulseAudio)
+#   audio off        Disable audio passthrough
+#   input on         Enable input device passthrough (/dev/input/*)
+#   input off        Disable input passthrough
+#   all on           Enable all features (apparmor + gpu + dbus + wayland + audio + input)
 #   all off          Disable all features
 #   info             Show current configuration status
+#   refresh          Re-add all proxy devices (fixes timing issues after restart)
 #
 # Notes:
 #   AppArmor: Unconfined mode is less secure but eliminates all AppArmor-related
@@ -31,7 +36,17 @@ set -Eeuo pipefail
 #             to satisfy the host's AppArmor profile for notify-send.
 #             Test: lxc exec <container> -- su - <user> -c 'notify-send Test Hello'
 #
+#   Wayland:  The socket is mounted directly at /run/user/$UID/wayland-0 (not symlinked).
+#             This satisfies the host's AppArmor profile which only allows access to
+#             @{run}/user/*/wayland-[0-9]*, blocking symlinks from /mnt.
+#
+#   Audio:    PipeWire and PulseAudio sockets are mounted directly at their
+#             expected paths for AppArmor compatibility.
+#
 #   GPU:      Required for WebKit hardware acceleration in Tauri apps.
+#
+#   Input:    Passes through /dev/input/* devices (keyboards, mice, joysticks).
+#             User is added to the 'input' group for device access.
 #
 # Security Trade-offs:
 #   Feature              Security Impact    When to Use
@@ -43,6 +58,10 @@ set -Eeuo pipefail
 # Recommendation:
 #   Development: all on (convenience)
 #   Production:  gpu on + dbus on (keep AppArmor enabled)
+#
+# Known Issue:
+#   LXD proxy devices may fail to start on container restart due to timing.
+#   Run refresh after restart: ./lxd-gui-setup.sh <container> refresh
 #
 # Examples:
 #   ./lxd-gui-setup.sh mycontainer info
@@ -230,12 +249,12 @@ WantedBy=default.target
 SVCEOF
         log "Created host systemd service for xdg-dbus-proxy"
 
-        # Enable and start the host service
+        # Enable and start the host service (may fail initially but auto-recovers)
         systemctl --user daemon-reload
-        systemctl --user enable --now "$HOST_SERVICE_NAME"
+        systemctl --user enable --now "$HOST_SERVICE_NAME" || true
         log "Started xdg-dbus-proxy on host"
 
-        # Wait for socket to be created
+        # Wait for socket to be created (service has Restart=on-failure)
         for i in {1..10}; do
           [[ -S "$PROXY_SOCKET" ]] && break
           sleep 0.5
@@ -310,16 +329,19 @@ SVCEOF
         lxc config set "$CONTAINER" environment.XDG_RUNTIME_DIR=/run/user/${CONTAINER_UID}
         log "Set Wayland environment variables"
 
-        # Add Wayland socket proxy to /mnt (not /run, which gets wiped by systemd)
+        # Add Wayland socket proxy directly to /run/user/$UID/wayland-0
+        # NOTE: We mount directly at the expected path instead of using a symlink.
+        # This is required because the host's AppArmor profile for Wayland apps only
+        # allows access to @{run}/user/*/wayland-[0-9]*, not symlink targets in /mnt.
         if [[ -S "/run/user/${HOST_UID}/wayland-0" ]]; then
           lxc config device add "$CONTAINER" wayland proxy \
             connect="unix:/run/user/${HOST_UID}/wayland-0" \
-            listen="unix:/mnt/.wayland-socket" \
+            listen="unix:/run/user/${CONTAINER_UID}/wayland-0" \
             bind=container \
             uid="$CONTAINER_UID" gid="$CONTAINER_UID" \
             security.uid="$CONTAINER_UID" security.gid="$CONTAINER_UID" \
             mode=0777 2>/dev/null || true
-          log "Added Wayland socket proxy (host -> /mnt/.wayland-socket)"
+          log "Added Wayland socket proxy (host -> /run/user/${CONTAINER_UID}/wayland-0)"
         else
           die "Wayland socket not found at /run/user/${HOST_UID}/wayland-0"
         fi
@@ -332,41 +354,11 @@ SVCEOF
         lxc exec "$CONTAINER" -- loginctl enable-linger "$CONTAINER_USER"
         log "Enabled user linger for $CONTAINER_USER"
 
-        # Create user systemd service to symlink socket on login
-        lxc exec "$CONTAINER" -- bash -c "
-          mkdir -p '$USER_HOME/.config/systemd/user'
-          cat > '$USER_HOME/.config/systemd/user/wayland-socket.service' << 'SVCEOF'
-[Unit]
-Description=Symlink Wayland socket from /mnt
-
-[Service]
-Type=oneshot
-ExecStart=/bin/ln -sf /mnt/.wayland-socket %t/wayland-0
-RemainAfterExit=yes
-
-[Install]
-WantedBy=default.target
-SVCEOF
-          chown -R $CONTAINER_UID:$CONTAINER_UID '$USER_HOME/.config/systemd'
-        "
-        log "Created user systemd service for Wayland symlink"
-
-        # Enable the user service
-        lxc exec "$CONTAINER" -- su - "$CONTAINER_USER" -c \
-          "systemctl --user daemon-reload && systemctl --user enable wayland-socket.service"
-        log "Enabled wayland-socket.service"
-
         log "Done. Restart container to apply: lxc restart $CONTAINER"
         ;;
 
       off)
         log "Disabling Wayland passthrough for '$CONTAINER'"
-
-        # Disable and remove user service
-        lxc exec "$CONTAINER" -- su - "$CONTAINER_USER" -c \
-          "systemctl --user disable wayland-socket.service 2>/dev/null || true"
-        lxc exec "$CONTAINER" -- rm -f "$USER_HOME/.config/systemd/user/wayland-socket.service" 2>/dev/null || true
-        log "Removed user systemd service"
 
         # Remove devices and environment
         lxc config device remove "$CONTAINER" wayland 2>/dev/null || true
@@ -379,6 +371,111 @@ SVCEOF
 
       *)
         die "Unknown wayland mode: $WAYLAND_MODE (use: on, off)"
+        ;;
+    esac
+    ;;
+
+  audio)
+    AUDIO_MODE="${1:-}"
+    [[ -n "$AUDIO_MODE" ]] || die "Usage: $0 $CONTAINER audio <on|off>"
+
+    HOST_UID=$(id -u)
+    CONTAINER_UID=$(lxc exec "$CONTAINER" -- id -u "$CONTAINER_USER")
+
+    case "$AUDIO_MODE" in
+      on)
+        log "Enabling audio passthrough for '$CONTAINER'"
+
+        # PipeWire socket - mount directly at expected path for AppArmor
+        if [[ -S "/run/user/${HOST_UID}/pipewire-0" ]]; then
+          lxc config device add "$CONTAINER" pipewire proxy \
+            connect="unix:/run/user/${HOST_UID}/pipewire-0" \
+            listen="unix:/run/user/${CONTAINER_UID}/pipewire-0" \
+            bind=container \
+            uid="$CONTAINER_UID" gid="$CONTAINER_UID" \
+            security.uid="$CONTAINER_UID" security.gid="$CONTAINER_UID" \
+            mode=0777 2>/dev/null || true
+          log "Added PipeWire socket proxy"
+        else
+          log "Warning: PipeWire socket not found at /run/user/${HOST_UID}/pipewire-0"
+        fi
+
+        # PulseAudio socket - mount directly at expected path for AppArmor
+        if [[ -S "/run/user/${HOST_UID}/pulse/native" ]]; then
+          # Create pulse directory in container if needed
+          lxc exec "$CONTAINER" -- mkdir -p "/run/user/${CONTAINER_UID}/pulse"
+          lxc exec "$CONTAINER" -- chown "${CONTAINER_UID}:${CONTAINER_UID}" "/run/user/${CONTAINER_UID}/pulse"
+
+          lxc config device add "$CONTAINER" pulseaudio proxy \
+            connect="unix:/run/user/${HOST_UID}/pulse/native" \
+            listen="unix:/run/user/${CONTAINER_UID}/pulse/native" \
+            bind=container \
+            uid="$CONTAINER_UID" gid="$CONTAINER_UID" \
+            security.uid="$CONTAINER_UID" security.gid="$CONTAINER_UID" \
+            mode=0777 2>/dev/null || true
+          log "Added PulseAudio socket proxy"
+        else
+          log "Warning: PulseAudio socket not found at /run/user/${HOST_UID}/pulse/native"
+        fi
+
+        log "Done. Restart container to apply: lxc restart $CONTAINER"
+        ;;
+
+      off)
+        log "Disabling audio passthrough for '$CONTAINER'"
+        lxc config device remove "$CONTAINER" pipewire 2>/dev/null || true
+        lxc config device remove "$CONTAINER" pulseaudio 2>/dev/null || true
+        log "Done. Audio passthrough disabled."
+        ;;
+
+      *)
+        die "Unknown audio mode: $AUDIO_MODE (use: on, off)"
+        ;;
+    esac
+    ;;
+
+  input)
+    INPUT_MODE="${1:-}"
+    [[ -n "$INPUT_MODE" ]] || die "Usage: $0 $CONTAINER input <on|off>"
+
+    case "$INPUT_MODE" in
+      on)
+        log "Enabling input device passthrough for '$CONTAINER'"
+
+        # Add disk device to pass through /dev/input
+        lxc config device add "$CONTAINER" input-devices disk \
+          source=/dev/input \
+          path=/dev/input 2>/dev/null || {
+          if lxc config device show "$CONTAINER" 2>/dev/null | grep -q "input-devices:"; then
+            log "Input devices already configured"
+          else
+            die "Failed to add input devices"
+          fi
+        }
+        log "Added /dev/input passthrough"
+
+        # Add user to input group in container
+        lxc exec "$CONTAINER" -- bash -c "
+          usermod -aG input '$CONTAINER_USER' 2>/dev/null || true
+        " 2>/dev/null || true
+        log "Added user to input group"
+
+        log "Done. Restart container to apply: lxc restart $CONTAINER"
+        log "Note: User may need to log out/in or run 'newgrp input' inside container."
+        ;;
+
+      off)
+        log "Disabling input device passthrough for '$CONTAINER'"
+
+        # Remove input devices
+        lxc config device remove "$CONTAINER" input-devices 2>/dev/null || true
+        log "Removed input device passthrough"
+
+        log "Done."
+        ;;
+
+      *)
+        die "Unknown input mode: $INPUT_MODE (use: on, off)"
         ;;
     esac
     ;;
@@ -401,6 +498,10 @@ SVCEOF
         echo ""
         "$0" "$CONTAINER" wayland on
         echo ""
+        "$0" "$CONTAINER" audio on
+        echo ""
+        "$0" "$CONTAINER" input on
+        echo ""
 
         log "All GUI features enabled. Restart container: lxc restart $CONTAINER"
         ;;
@@ -410,6 +511,10 @@ SVCEOF
         echo ""
 
         # Call each command in sequence
+        "$0" "$CONTAINER" input off
+        echo ""
+        "$0" "$CONTAINER" audio off
+        echo ""
         "$0" "$CONTAINER" wayland off
         echo ""
         "$0" "$CONTAINER" dbus off
@@ -426,6 +531,40 @@ SVCEOF
         die "Unknown all mode: $ALL_MODE (use: on, off)"
         ;;
     esac
+    ;;
+
+  refresh)
+    log "Refreshing proxy devices for '$CONTAINER'"
+
+    # Check which devices exist before we start removing them
+    DEVICES_CONFIG=$(lxc config device show "$CONTAINER" 2>/dev/null)
+    HAS_DBUS=$(echo "$DEVICES_CONFIG" | grep -q "^dbus:" && echo 1 || echo 0)
+    HAS_WAYLAND=$(echo "$DEVICES_CONFIG" | grep -q "^wayland:" && echo 1 || echo 0)
+    HAS_AUDIO=$(echo "$DEVICES_CONFIG" | grep -qE "^(pipewire|pulseaudio):" && echo 1 || echo 0)
+
+    # Refresh D-Bus (needs full output - has host-side service dependencies)
+    if [[ "$HAS_DBUS" == "1" ]]; then
+      log "Refreshing dbus..."
+      "$0" "$CONTAINER" dbus off >/dev/null 2>&1 || true
+      "$0" "$CONTAINER" dbus on || log "Warning: dbus refresh had errors (may still work)"
+    fi
+
+    # Refresh Wayland
+    if [[ "$HAS_WAYLAND" == "1" ]]; then
+      log "Refreshing wayland..."
+      lxc config device remove "$CONTAINER" wayland 2>/dev/null || true
+      "$0" "$CONTAINER" wayland on 2>&1 | grep -E "^==>" || true
+    fi
+
+    # Refresh Audio (pipewire + pulseaudio together)
+    if [[ "$HAS_AUDIO" == "1" ]]; then
+      log "Refreshing audio..."
+      lxc config device remove "$CONTAINER" pipewire 2>/dev/null || true
+      lxc config device remove "$CONTAINER" pulseaudio 2>/dev/null || true
+      "$0" "$CONTAINER" audio on 2>&1 | grep -E "^==>" || true
+    fi
+
+    log "Done. All proxy devices refreshed."
     ;;
 
   info)
@@ -454,14 +593,37 @@ SVCEOF
     # Check Wayland passthrough status
     if lxc config device show "$CONTAINER" 2>/dev/null | grep -q "wayland:"; then
       echo "Wayland:   enabled (host passthrough)"
-      # Check if symlink exists
-      if lxc exec "$CONTAINER" -- test -L "/run/user/${CONTAINER_UID}/wayland-0" 2>/dev/null; then
-        echo "           socket symlink: OK"
+      # Check if socket exists (directly mounted, not symlinked)
+      if lxc exec "$CONTAINER" -- test -S "/run/user/${CONTAINER_UID}/wayland-0" 2>/dev/null; then
+        echo "           socket: OK"
       else
-        echo "           socket symlink: MISSING (restart container or run: lxc exec $CONTAINER -- su - $CONTAINER_USER -c 'systemctl --user start wayland-socket.service')"
+        echo "           socket: MISSING (restart container)"
       fi
     else
       echo "Wayland:   disabled"
+    fi
+
+    # Check audio passthrough status
+    if lxc config device show "$CONTAINER" 2>/dev/null | grep -q "pipewire:"; then
+      echo "PipeWire:  enabled"
+      if lxc exec "$CONTAINER" -- test -S "/run/user/${CONTAINER_UID}/pipewire-0" 2>/dev/null; then
+        echo "           socket: OK"
+      else
+        echo "           socket: MISSING (restart container)"
+      fi
+    else
+      echo "PipeWire:  disabled"
+    fi
+
+    if lxc config device show "$CONTAINER" 2>/dev/null | grep -q "pulseaudio:"; then
+      echo "PulseAudio: enabled"
+      if lxc exec "$CONTAINER" -- test -S "/run/user/${CONTAINER_UID}/pulse/native" 2>/dev/null; then
+        echo "           socket: OK"
+      else
+        echo "           socket: MISSING (restart container)"
+      fi
+    else
+      echo "PulseAudio: disabled"
     fi
 
     # Check D-Bus forwarding status
@@ -483,6 +645,13 @@ SVCEOF
       fi
     else
       echo "D-Bus:     disabled"
+    fi
+
+    # Check input device passthrough status
+    if lxc config device show "$CONTAINER" 2>/dev/null | grep -q "input-devices:"; then
+      echo "Input:     enabled (/dev/input passthrough)"
+    else
+      echo "Input:     disabled"
     fi
 
     echo ""

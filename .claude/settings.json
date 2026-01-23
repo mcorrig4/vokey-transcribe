@@ -1,21 +1,31 @@
 {
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": ".claude/hooks/setup-cc-web.sh"
-          }
-        ]
-      }
-    ]
-  },
   "env": {
     "addintolocalGH_TOKEN": "ghp_xABCD",
     "GH_USERNAME": "CodespaceAgent:Claude-Do",
     "GH_EMAIL": "claude@claude.do"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/setup-cc-web.sh",
+            "timeout": 5000
+          }
+        ]
+      },
+      {
+        "matcher": "resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "true || echo 'Resumed session hook executed.'"
+          }
+        ]
+      }
+    ]
   },
   "enabledPlugins": {
     "frontend-design@claude-plugins-official": true,
