@@ -25,6 +25,43 @@ jobs:
       id-token: write
       actions: read # Required for Claude to read CI results on PRs
     steps:
+      - name: Check user authorization
+        id: auth_check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRIGGERING_USER: ${{ github.actor }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Whitelist of allowed usernames
+          WHITELISTED_USERS="mcorrig4 claude-do"
+
+          # Check if user is in whitelist
+          for user in $WHITELISTED_USERS; do
+            if [ "$TRIGGERING_USER" = "$user" ]; then
+              echo "User $TRIGGERING_USER is whitelisted"
+              echo "authorized=true" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+          done
+
+          # Check if user is a repository collaborator
+          PERMISSION=$(gh api "repos/$REPO/collaborators/$TRIGGERING_USER/permission" --jq '.permission' 2>/dev/null || echo "none")
+
+          if [ "$PERMISSION" = "admin" ] || [ "$PERMISSION" = "write" ] || [ "$PERMISSION" = "maintain" ]; then
+            echo "User $TRIGGERING_USER is a collaborator with $PERMISSION permission"
+            echo "authorized=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "User $TRIGGERING_USER is not authorized to activate Claude"
+          echo "authorized=false" >> $GITHUB_OUTPUT
+
+      - name: Exit if unauthorized
+        if: steps.auth_check.outputs.authorized != 'true'
+        run: |
+          echo "::error::User ${{ github.actor }} is not authorized to activate Claude. Only repository collaborators and whitelisted users can use this feature."
+          exit 1
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
