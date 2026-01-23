@@ -181,6 +181,31 @@ impl EffectRunner for AudioEffectRunner {
                 });
             }
 
+            Effect::StartRecordingTick { id } => {
+                let active = self.active_recordings.clone();
+                tokio::spawn(async move {
+                    // Send tick events every second while the recording is active
+                    let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
+                    loop {
+                        interval.tick().await;
+                        // Check if recording is still active
+                        let is_active = {
+                            let guard = active.lock().await;
+                            guard.contains_key(&id)
+                        };
+                        if !is_active {
+                            log::debug!("Recording tick stopping - recording {} no longer active", id);
+                            break;
+                        }
+                        // Send tick event
+                        if tx.send(Event::RecordingTick { id }).await.is_err() {
+                            log::debug!("Recording tick stopping - channel closed");
+                            break;
+                        }
+                    }
+                });
+            }
+
             Effect::Cleanup { wav_path, .. } => {
                 tokio::spawn(async move {
                     // Cleanup old recordings (keep last N)
@@ -259,6 +284,18 @@ impl EffectRunner for StubEffectRunner {
                     tokio::time::sleep(duration).await;
                     log::debug!("Done timeout elapsed for id={}", id);
                     let _ = tx.send(Event::DoneTimeout { id }).await;
+                });
+            }
+
+            Effect::StartRecordingTick { id } => {
+                tokio::spawn(async move {
+                    // Stub: send tick events every second for up to 60 seconds
+                    for _ in 0..60 {
+                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                        if tx.send(Event::RecordingTick { id }).await.is_err() {
+                            break;
+                        }
+                    }
                 });
             }
 

@@ -59,6 +59,10 @@ pub enum Event {
     DoneTimeout {
         id: Uuid,
     },
+    /// Tick event for updating recording timer (includes id to prevent stale ticks)
+    RecordingTick {
+        id: Uuid,
+    },
 
     // Audio events
     AudioStartOk {
@@ -133,6 +137,10 @@ pub enum Effect {
         id: Uuid,
         duration: Duration,
     },
+    /// Start sending RecordingTick events every second while recording
+    StartRecordingTick {
+        id: Uuid,
+    },
     Cleanup {
         id: Uuid,
         wav_path: Option<PathBuf>,
@@ -186,7 +194,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
                 wav_path,
                 started_at: Instant::now(),
             },
-            vec![EmitUi],
+            vec![StartRecordingTick { id }, EmitUi],
         ),
         (Arming { recording_id }, AudioStartFail { id, err }) if *recording_id == id => (
             Error {
@@ -250,6 +258,10 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
                 EmitUi,
             ],
         ),
+        // Tick during recording - just update UI with new elapsed time
+        (Recording { recording_id, .. }, RecordingTick { id }) if *recording_id == id => {
+            (state.clone(), vec![EmitUi])
+        }
 
         // -----------------
         // Stopping
