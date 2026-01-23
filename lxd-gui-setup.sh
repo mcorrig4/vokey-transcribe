@@ -19,7 +19,9 @@ set -Eeuo pipefail
 #   wayland off      Disable Wayland passthrough
 #   audio on         Enable audio passthrough (PipeWire + PulseAudio)
 #   audio off        Disable audio passthrough
-#   all on           Enable all features (apparmor unconfined + gpu + dbus + wayland + audio)
+#   input on         Enable input device passthrough (/dev/input/*)
+#   input off        Disable input passthrough
+#   all on           Enable all features (apparmor + gpu + dbus + wayland + audio + input)
 #   all off          Disable all features
 #   info             Show current configuration status
 #   refresh          Re-add all proxy devices (fixes timing issues after restart)
@@ -42,6 +44,9 @@ set -Eeuo pipefail
 #             expected paths for AppArmor compatibility.
 #
 #   GPU:      Required for WebKit hardware acceleration in Tauri apps.
+#
+#   Input:    Passes through /dev/input/* devices (keyboards, mice, joysticks).
+#             User is added to the 'input' group for device access.
 #
 # Security Trade-offs:
 #   Feature              Security Impact    When to Use
@@ -429,6 +434,52 @@ SVCEOF
     esac
     ;;
 
+  input)
+    INPUT_MODE="${1:-}"
+    [[ -n "$INPUT_MODE" ]] || die "Usage: $0 $CONTAINER input <on|off>"
+
+    case "$INPUT_MODE" in
+      on)
+        log "Enabling input device passthrough for '$CONTAINER'"
+
+        # Add disk device to pass through /dev/input
+        lxc config device add "$CONTAINER" input-devices disk \
+          source=/dev/input \
+          path=/dev/input 2>/dev/null || {
+          if lxc config device show "$CONTAINER" 2>/dev/null | grep -q "input-devices:"; then
+            log "Input devices already configured"
+          else
+            die "Failed to add input devices"
+          fi
+        }
+        log "Added /dev/input passthrough"
+
+        # Add user to input group in container
+        lxc exec "$CONTAINER" -- bash -c "
+          usermod -aG input '$CONTAINER_USER' 2>/dev/null || true
+        " 2>/dev/null || true
+        log "Added user to input group"
+
+        log "Done. Restart container to apply: lxc restart $CONTAINER"
+        log "Note: User may need to log out/in or run 'newgrp input' inside container."
+        ;;
+
+      off)
+        log "Disabling input device passthrough for '$CONTAINER'"
+
+        # Remove input devices
+        lxc config device remove "$CONTAINER" input-devices 2>/dev/null || true
+        log "Removed input device passthrough"
+
+        log "Done."
+        ;;
+
+      *)
+        die "Unknown input mode: $INPUT_MODE (use: on, off)"
+        ;;
+    esac
+    ;;
+
   all)
     ALL_MODE="${1:-}"
     [[ -n "$ALL_MODE" ]] || die "Usage: $0 $CONTAINER all <on|off>"
@@ -449,6 +500,8 @@ SVCEOF
         echo ""
         "$0" "$CONTAINER" audio on
         echo ""
+        "$0" "$CONTAINER" input on
+        echo ""
 
         log "All GUI features enabled. Restart container: lxc restart $CONTAINER"
         ;;
@@ -458,6 +511,8 @@ SVCEOF
         echo ""
 
         # Call each command in sequence
+        "$0" "$CONTAINER" input off
+        echo ""
         "$0" "$CONTAINER" audio off
         echo ""
         "$0" "$CONTAINER" wayland off
@@ -590,6 +645,13 @@ SVCEOF
       fi
     else
       echo "D-Bus:     disabled"
+    fi
+
+    # Check input device passthrough status
+    if lxc config device show "$CONTAINER" 2>/dev/null | grep -q "input-devices:"; then
+      echo "Input:     enabled (/dev/input passthrough)"
+    else
+      echo "Input:     disabled"
     fi
 
     echo ""
