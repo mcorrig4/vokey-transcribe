@@ -53,14 +53,14 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ### Sprint 6 Phases:
 1. ✅ Metrics Infrastructure - `metrics.rs` module, timing/file size tracking
-2. ⬜ Timing Logs - Structured `tracing` spans for durations
+2. ✅ Timing Logs - State transition timing, short recording warnings
 3. ✅ Enhanced Diagnostics UI - Metrics table, error history in Debug panel
-4. ⬜ Edge Case Handling - Short/long recordings, hotkey debounce
+4. ✅ Edge Case Handling - Auto-stop at 120s, 300ms hotkey debounce
 5. ⬜ Bug Fixes - #15 tray icon, #23/#24/#25 deferred items, #43 error testing
 6. ⬜ Stability Testing - 50 cycles without restart
 
 ### Current Task:
-Phase 2 - Timing Logs (or Phase 4 - Edge Case Handling)
+Phase 5 - Bug Fixes
 
 ### Acceptance Criteria (from ISSUES-v1.0.0.md):
 - [ ] 50 record/transcribe cycles without restart
@@ -175,6 +175,24 @@ Phase 2 - Timing Logs (or Phase 4 - Edge Case Handling)
 
 **Planning document:**
 - Created `docs/SPRINT6-PLAN.md` with full 6-phase implementation plan
+
+**Sprint 6 Phase 2+4 - Timing Logs + Edge Cases:**
+
+**Phase 2 - Timing Logs:**
+- State transition timing in lib.rs run_state_loop
+- Short recording warnings (<500ms) in effects.rs
+- Added get_current_recording_duration_ms() to metrics.rs
+- Filtered RecordingTick events from debug logs
+
+**Phase 4 - Edge Case Handling:**
+- Auto-stop recordings at 120 seconds (state_machine.rs)
+- 30-second milestone warning for long recordings
+- 300ms hotkey debounce with atomic CAS (hotkey/manager.rs)
+- DebounceState struct with thread-safe should_trigger()
+
+**Code review findings:**
+- Fixed debounce race condition: was discarding CAS result
+- Fixed auto-stop boundary: use >= instead of > for exact timing
 
 ---
 
