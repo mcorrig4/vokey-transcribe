@@ -51,3 +51,9 @@ Observed warnings/errors:
   a disk device; error persists. This suggests the socat proxy itself breaks
   FD passing, even if we bind-mount the socket file.
 - Tried direct bind-mount of host `/run/user/1000/wayland-0`; GTK init still fails.
+- Strace shows `connect("/run/user/1000/wayland-0") = -1 EACCES`.
+- Inside container, Wayland socket is `nobody:nogroup` with mode `775`;
+  `chaintail` lacks write permission, so GTK cannot connect.
+- Fix: set `shift=true` on the Wayland bind mount:
+  - `lxc config device set chaintail wayland shift true`
+  - Socket becomes owned by `chaintail` and Wayland traffic proceeds.
