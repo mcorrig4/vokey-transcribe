@@ -6,5 +6,6 @@
         "librsvg",
         "libwebkit",
         "Tauri"
-    ]
+    ],
+    "python.terminal.activateEnvironment": false
 }
