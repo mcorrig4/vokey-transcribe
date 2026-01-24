@@ -256,23 +256,67 @@ This is a known bug in Tauri's TAO windowing library related to Client-Side Deco
 
 The issue is that TAO's CSD implementation doesn't correctly calculate hit-test regions for window controls until a maximize/unmaximize cycle occurs.
 
-**Solution: Programmatic maximize/unmaximize**
+**Solution: Async maximize/unmaximize with delay**
 
-Since manually maximizing and unmaximizing the window fixes the buttons, we can do this programmatically when showing the window:
+Since manually maximizing and unmaximizing the window fixes the buttons, we can do this programmatically. **Critical:** There must be a delay between maximize and unmaximize because Wayland window operations are asynchronous.
+
+Create a shared async function that can be called from both Rust (tray menu) and frontend (buttons):
 
 ```rust
-// In your menu event handler or wherever you show the window:
-if let Some(window) = app.get_webview_window("my-window") {
-    let _ = window.show();
-    let _ = window.set_focus();
-    // Workaround for Wayland CSD bug (tao#1046): window control buttons
-    // don't work until maximize/unmaximize cycle fixes hit-testing
-    let _ = window.maximize();
-    let _ = window.unmaximize();
+/// Internal implementation for opening a window with Wayland CSD workaround
+async fn open_settings_window_impl(app: &AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("debug") {
+        window.show().map_err(|e| e.to_string())?;
+        window.set_focus().map_err(|e| e.to_string())?;
+
+        // Workaround for Wayland CSD bug (tao#1046): window control buttons
+        // don't work until a maximize/unmaximize cycle fixes hit-testing.
+        // IMPORTANT: Need delay between maximize and unmaximize because
+        // Wayland window operations are asynchronous.
+        window.maximize().map_err(|e| e.to_string())?;
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        window.unmaximize().map_err(|e| e.to_string())?;
+
+        Ok(())
+    } else {
+        Err("Window not found".to_string())
+    }
+}
+
+/// Tauri command for frontend to call
+#[tauri::command]
+async fn open_settings_window(app: AppHandle) -> Result<(), String> {
+    open_settings_window_impl(&app).await
 }
 ```
 
-The maximize/unmaximize happens instantly and is invisible to the user, but it triggers the necessary hit-test region recalculation in TAO's CSD code.
+For tray menu handlers (which are synchronous), spawn the async function:
+
+```rust
+.on_menu_event(|app, event| match event.id.as_ref() {
+    "settings" => {
+        let app_handle = app.clone();
+        tauri::async_runtime::spawn(async move {
+            if let Err(e) = open_settings_window_impl(&app_handle).await {
+                log::error!("Failed to open settings: {}", e);
+            }
+        });
+    }
+    // ...
+})
+```
+
+From the frontend, call the Tauri command:
+
+```typescript
+import { invoke } from '@tauri-apps/api/core'
+
+const openSettings = async () => {
+    await invoke('open_settings_window')
+}
+```
+
+**Why the delay is critical:** Without the delay, unmaximize is called before maximize completes, causing the window to stay maximized. The 50ms delay gives Wayland time to process the maximize before we unmaximize.
 
 **Additional CSS recommendation:**
 

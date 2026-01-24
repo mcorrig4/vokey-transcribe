@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { WebviewWindow } from '@tauri-apps/api/webviewWindow'
+import { invoke } from '@tauri-apps/api/core'
 import './styles/hud.css'
 
 // UI state types matching Rust backend (tagged union with camelCase)
@@ -70,10 +70,11 @@ function App() {
   const message = getMessage(uiState)
 
   const openSettings = async () => {
-    const settingsWindow = await WebviewWindow.getByLabel('debug')
-    if (settingsWindow) {
-      await settingsWindow.show()
-      await settingsWindow.setFocus()
+    // Use Tauri command which includes Wayland CSD workaround
+    try {
+      await invoke('open_settings_window')
+    } catch (e) {
+      console.error('Failed to open settings:', e)
     }
   }
 
