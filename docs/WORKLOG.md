@@ -56,11 +56,11 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 2. ✅ Timing Logs - State transition timing, short recording warnings
 3. ✅ Enhanced Diagnostics UI - Metrics table, error history in Debug panel
 4. ✅ Edge Case Handling - Auto-stop at 120s, 300ms hotkey debounce
-5. ⬜ Bug Fixes - #15 tray icon, #23/#24/#25 deferred items, #43 error testing
+5. ✅ Bug Fixes (partial) - #23, #24, #25 fixed; #15, #43 need real hardware
 6. ⬜ Stability Testing - 50 cycles without restart
 
 ### Current Task:
-Phase 5 - Bug Fixes
+Phase 6 - Stability Testing (requires real hardware)
 
 ### Acceptance Criteria (from ISSUES-v1.0.0.md):
 - [ ] 50 record/transcribe cycles without restart
