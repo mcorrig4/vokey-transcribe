@@ -1,9 +1,7 @@
+# yaml-language-server: $schema=./.gemini/config.schema.yaml
 # Gemini Code Assist Configuration
 # https://developers.google.com/gemini-code-assist/docs/customize-gemini-behavior-github
 
-# Disable automatic code review on PRs - we use a workflow to validate users first
-code_review:
-  disable: true
 
 # Additional settings
 have_fun: false

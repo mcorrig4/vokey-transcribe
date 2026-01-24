@@ -2,6 +2,7 @@ mod audio;
 mod effects;
 mod hotkey;
 mod state_machine;
+mod transcription;
 
 use serde::Serialize;
 use std::sync::Arc;
@@ -225,6 +226,21 @@ fn get_audio_status() -> AudioStatusResponse {
     }
 }
 
+/// Transcription status for debug panel
+#[derive(Clone, serde::Serialize)]
+pub struct TranscriptionStatusResponse {
+    api_key_configured: bool,
+    api_provider: String,
+}
+
+#[tauri::command]
+fn get_transcription_status() -> TranscriptionStatusResponse {
+    TranscriptionStatusResponse {
+        api_key_configured: transcription::is_api_key_configured(),
+        api_provider: "OpenAI Whisper".to_string(),
+    }
+}
+
 // ============================================================================
 // Application entry point
 // ============================================================================
@@ -259,6 +275,10 @@ pub fn run() {
                         if let Some(window) = app.get_webview_window("debug") {
                             let _ = window.show();
                             let _ = window.set_focus();
+                            // Workaround for Wayland CSD bug (tao#1046): window control buttons
+                            // don't work until maximize/unmaximize cycle fixes hit-testing
+                            let _ = window.maximize();
+                            let _ = window.unmaximize();
                         }
                     }
                     "quit" => {
@@ -329,6 +349,7 @@ pub fn run() {
             simulate_error,
             get_hotkey_status,
             get_audio_status,
+            get_transcription_status,
         ])
         .on_window_event(|window, event| {
             // Hide windows instead of closing them (except for quit)

@@ -4,8 +4,9 @@
   font-size: 13px;
   background: #1a1a2e;
   color: #eee;
-  min-height: 100vh;
+  height: 100%;
   box-sizing: border-box;
+  overflow-y: auto;
 }
 
 .debug-container h3 {
@@ -75,6 +76,27 @@
 .temp-dir {
   color: #a0aec0;
   font-size: 11px;
+  font-family: monospace;
+}
+
+/* Transcription status styles */
+.transcription-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.api-key-hint {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #fc8181;
+}
+
+.api-key-hint code {
+  background: #2d3748;
+  padding: 1px 4px;
+  border-radius: 2px;
   font-family: monospace;
 }
 
