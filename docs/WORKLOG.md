@@ -6,10 +6,10 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Current Status
 
-**Phase:** Sprint 4 IN PROGRESS — OpenAI transcription + clipboard
+**Phase:** Sprint 5 IN PROGRESS — Full flow polish + tray controls
 **Target:** Kubuntu with KDE Plasma 6.4 on Wayland
-**Branch:** `claude/plan-next-priorities-WWH92`
-**Last Updated:** 2026-01-23
+**Branch:** `claude/plan-next-steps-NNuBc`
+**Last Updated:** 2026-01-24
 
 ---
 
@@ -38,8 +38,8 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 | 1 - State machine + UI wiring | ✅ COMPLETE | Full state machine, debug panel, simulate commands |
 | 2 - Global hotkey (evdev) | ✅ COMPLETE | evdev module implemented, needs testing on real hardware |
 | 3 - Audio capture (CPAL + Hound) | ✅ COMPLETE | CPAL capture, hound WAV writing, XDG paths |
-| 4 - OpenAI transcription + clipboard | 🔄 IN PROGRESS | OpenAI Whisper API, arboard clipboard, needs testing |
-| 5 - Full flow polish + tray controls | Not started | |
+| 4 - OpenAI transcription + clipboard | ✅ COMPLETE | OpenAI Whisper API, arboard clipboard, tested on real hardware |
+| 5 - Full flow polish + tray controls | 🔄 IN PROGRESS | Tray menu enhanced, existing HUD features verified |
 | 6 - Hardening + UX polish | Not started | |
 | 7 - Phase 2 (streaming or post-processing) | Not started | |
 
@@ -47,43 +47,38 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Current Task Context
 
-### Active Sprint: Sprint 4 - OpenAI transcription + clipboard
+### Active Sprint: Sprint 5 - Full flow polish + tray controls
 
 ### Completed Tasks:
-1. ✅ Added reqwest (HTTP client) and arboard (clipboard) dependencies
-2. ✅ Created transcription module (`src-tauri/src/transcription/`)
-3. ✅ Implemented OpenAI Whisper API client for speech-to-text
-4. ✅ Implemented real clipboard copy using arboard crate
-5. ✅ Replaced stubbed StartTranscription effect with real API call
-6. ✅ Added API key handling (OPENAI_API_KEY env var)
-7. ✅ Added `get_transcription_status` command for debug panel
-8. ✅ Updated Debug panel to show API key status
-9. ✅ TypeScript compiles successfully
+1. ✅ Added tray menu items: Toggle Recording, Cancel, Open Logs Folder
+2. ✅ Verified existing features already implemented:
+   - Recording duration timer (MM:SS) in HUD
+   - HUD auto-dismiss (3-second timeout after Done)
+   - Error recovery on next hotkey press (Error → Arming)
 
 ### Next Steps:
-1. Test on real hardware with valid OpenAI API key
-2. Verify transcription produces correct text
-3. Verify clipboard copy works on Wayland
-4. Test error handling (missing key, network, API errors)
-5. Run manual validation checklist
-6. Create PR and merge
+1. Test full flow end-to-end via hotkey on real hardware
+2. Test full flow end-to-end via tray menu
+3. Test Cancel during recording and transcribing states
+4. Verify HUD states are clear and self-explanatory
+5. Create PR and merge
 
-### Reference Implementation:
-- API key from: `OPENAI_API_KEY` environment variable
-- Transcription endpoint: OpenAI Whisper (`https://api.openai.com/v1/audio/transcriptions`)
-- Clipboard: arboard crate (handles Wayland via wl-clipboard protocols)
-- HUD shows "Copied — paste now" when transcription completes
+### Acceptance Criteria (from Issue #7):
+- [ ] Full flow works end-to-end via hotkey
+- [ ] Full flow works end-to-end via tray menu
+- [ ] Cancel works during recording and transcribing
+- [ ] HUD states are clear and self-explanatory
 
 ### Blockers:
 - Cannot build/test in headless environment (missing GTK libs - expected)
-- Requires valid OpenAI API key for transcription testing
 
 ### GitHub Issues:
 - Sprint 0: https://github.com/mcorrig4/vokey-transcribe/issues/2 (DONE)
 - Sprint 1: https://github.com/mcorrig4/vokey-transcribe/issues/3 (DONE)
 - Sprint 2: https://github.com/mcorrig4/vokey-transcribe/issues/4 (DONE)
 - Sprint 3: https://github.com/mcorrig4/vokey-transcribe/issues/5 (DONE)
-- Sprint 4: https://github.com/mcorrig4/vokey-transcribe/issues/6 (IN PROGRESS)
+- Sprint 4: https://github.com/mcorrig4/vokey-transcribe/issues/6 (DONE)
+- Sprint 5: https://github.com/mcorrig4/vokey-transcribe/issues/7 (IN PROGRESS)
 
 ---
 
@@ -136,6 +131,29 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 ---
 
 ## Session Notes
+
+### Session 2026-01-24 (Sprint 5 - Tray Controls)
+**Closed Sprint 4, started Sprint 5:**
+
+**Sprint 4 Closure:**
+- Happy path tested and working on real hardware
+- Created issue #43 for deferred error case testing
+- Closed issue #6 with summary comment
+
+**Sprint 5 Analysis:**
+- Discovered HUD improvements already implemented:
+  - Recording duration timer (MM:SS format)
+  - Auto-dismiss after Done (3-second timeout)
+  - Error recovery on hotkey press
+- Only tray menu enhancements needed
+
+**Tray Menu Enhancements (src-tauri/src/lib.rs):**
+- Added "Toggle Recording" - sends HotkeyToggle event
+- Added "Cancel" - sends Cancel event
+- Added "Open Logs Folder" - opens XDG logs dir via xdg-open
+- Organized menu with separators
+
+**Note:** Cannot build in headless env (missing GTK libs). TypeScript compiles. Needs testing on real hardware.
 
 ### Session 2026-01-23 (Sprint 4 Implementation)
 **Implemented OpenAI transcription and clipboard copy:**
