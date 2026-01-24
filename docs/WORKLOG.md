@@ -97,7 +97,9 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 - Sprint 3: https://github.com/mcorrig4/vokey-transcribe/issues/5 (DONE)
 - Sprint 4: https://github.com/mcorrig4/vokey-transcribe/issues/6 (DONE)
 - Sprint 5: https://github.com/mcorrig4/vokey-transcribe/issues/7 (DONE)
-- Sprint 6: TBD (create issue)
+- Sprint 6: https://github.com/mcorrig4/vokey-transcribe/issues/8
+- Sprint 7 (umbrella): https://github.com/mcorrig4/vokey-transcribe/issues/9
+- Sprint 7B: https://github.com/mcorrig4/vokey-transcribe/issues/51 ← **ACTIVE**
 
 ---
 
