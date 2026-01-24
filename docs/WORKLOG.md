@@ -52,15 +52,15 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 **Implementation Plan:** See `docs/SPRINT6-PLAN.md` for detailed breakdown.
 
 ### Sprint 6 Phases:
-1. 🔄 Metrics Infrastructure - `metrics.rs` module, timing/file size tracking
+1. ✅ Metrics Infrastructure - `metrics.rs` module, timing/file size tracking
 2. ⬜ Timing Logs - Structured `tracing` spans for durations
-3. ⬜ Enhanced Diagnostics UI - Metrics table, error history in Debug panel
+3. ✅ Enhanced Diagnostics UI - Metrics table, error history in Debug panel
 4. ⬜ Edge Case Handling - Short/long recordings, hotkey debounce
 5. ⬜ Bug Fixes - #15 tray icon, #23/#24/#25 deferred items, #43 error testing
 6. ⬜ Stability Testing - 50 cycles without restart
 
 ### Current Task:
-Phase 1 - Creating metrics infrastructure
+Phase 2 - Timing Logs (or Phase 4 - Edge Case Handling)
 
 ### Acceptance Criteria (from ISSUES-v1.0.0.md):
 - [ ] 50 record/transcribe cycles without restart
@@ -134,26 +134,47 @@ Phase 1 - Creating metrics infrastructure
 ## Session Notes
 
 ### Session 2026-01-24 (Sprint 6 Start - Hardening)
-**Completed Sprint 5, started Sprint 6:**
+**Sprint 5 in UAT, started Sprint 6 Phase 1:**
 
-**Sprint 5 Closure:**
-- Acceptance testing passed (assumed based on user confirmation)
-- Full flow works via hotkey and tray menu
-- Cancel works during recording/transcribing
-- HUD states are clear
+**Sprint 6 Phase 1 - Metrics Infrastructure:**
 
-**Sprint 6 Planning:**
-- Created detailed implementation plan: `docs/SPRINT6-PLAN.md`
-- 6 phases: Metrics, Logging, UI, Edge Cases, Bug Fixes, Testing
-- Key deliverables:
-  - New `metrics.rs` module for cycle timing/file size tracking
-  - Enhanced Debug panel with metrics table and error history
-  - Edge case handling (short/long recordings, hotkey debounce)
-  - Target: 50 cycles stable without restart
+**New files created:**
+- `src-tauri/src/metrics.rs` — Full metrics collection module
+  - CycleMetrics: per-cycle timing, file size, transcript length
+  - MetricsSummary: totals, averages, success rate, last error
+  - ErrorRecord: error history with timestamps
+  - MetricsCollector: thread-safe collector (50 cycle, 20 error history)
 
-**Starting Phase 1:** Metrics Infrastructure
-- Creating `src-tauri/src/metrics.rs` module
-- Integrating with effects runner
+**Effects integration (src-tauri/src/effects.rs):**
+- Track cycle start/complete/fail/cancel at effect hook points
+- Collect file size from WAV recordings
+- Track transcription timing
+
+**Tauri commands (src-tauri/src/lib.rs):**
+- `get_metrics_summary`: totals and averages
+- `get_metrics_history`: recent cycle details
+- `get_error_history`: recent errors
+
+**Code review findings (3 parallel reviews):**
+- Correctness reviewer found 4 bugs, 4 risks
+- Performance reviewer found 1 critical, 2 medium issues
+- Rust idioms reviewer found 1 critical, 3 important issues
+
+**Critical bugs fixed:**
+1. Clipboard failures now correctly mark cycle as failed (was marking success unconditionally)
+2. start_cycle() handles in-progress cycles (logs warning, marks old as failed)
+3. Use async tokio::fs::metadata to avoid blocking runtime
+4. Removed unwrap() on tray icon (proper error handling)
+5. Changed metrics commands to return values directly (not Result<T, ()>)
+
+**Debug panel UI (src/Debug.tsx):**
+- Performance Metrics section: total cycles, success rate, avg durations
+- Recent Cycles table: last 10 cycles with timing breakdown
+- Error History list: recent errors with timestamps
+- Auto-refreshes on state changes
+
+**Planning document:**
+- Created `docs/SPRINT6-PLAN.md` with full 6-phase implementation plan
 
 ---
 
