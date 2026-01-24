@@ -87,6 +87,11 @@ pub struct HotkeyStatusHolder {
     status: HotkeyStatus,
 }
 
+/// Holds cached audio status to avoid expensive re-initialization (Sprint 6 #25)
+pub struct AudioStatusHolder {
+    status: AudioStatusResponse,
+}
+
 impl StateLoopHandle {
     /// Send an event to the state machine
     pub async fn send(&self, event: Event) -> Result<(), mpsc::error::SendError<Event>> {
@@ -217,8 +222,8 @@ pub struct AudioStatusResponse {
     error: Option<String>,
 }
 
-#[tauri::command]
-fn get_audio_status() -> AudioStatusResponse {
+/// Check audio availability and return status (used for initialization)
+fn check_audio_status() -> AudioStatusResponse {
     // Check if we can initialize an audio recorder
     match audio::AudioRecorder::new() {
         Ok(_) => {
@@ -242,6 +247,12 @@ fn get_audio_status() -> AudioStatusResponse {
             error: Some(e.to_string()),
         },
     }
+}
+
+#[tauri::command]
+fn get_audio_status(handle: tauri::State<'_, AudioStatusHolder>) -> AudioStatusResponse {
+    // Return cached status (Sprint 6 #25: avoid expensive re-initialization)
+    handle.status.clone()
 }
 
 /// Transcription status for debug panel
@@ -483,6 +494,17 @@ pub fn run() {
             };
             app.manage(HotkeyStatusHolder {
                 status: hotkey_status,
+            });
+
+            // Cache audio status at startup (Sprint 6 #25)
+            let audio_status = check_audio_status();
+            log::info!(
+                "Audio status cached: available={}, temp_dir={}",
+                audio_status.available,
+                audio_status.temp_dir
+            );
+            app.manage(AudioStatusHolder {
+                status: audio_status,
             });
 
             log::info!("VoKey Transcribe started");

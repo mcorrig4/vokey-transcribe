@@ -4,9 +4,23 @@
 
 use std::fs;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 use uuid::Uuid;
 
-const MAX_RECORDINGS: usize = 5;
+/// Default number of recordings to keep
+const DEFAULT_MAX_RECORDINGS: usize = 5;
+
+/// Get the configured maximum recordings to keep.
+/// Sprint 6 #23: Configurable via VOKEY_MAX_RECORDINGS environment variable.
+fn get_max_recordings() -> usize {
+    static MAX_RECORDINGS: OnceLock<usize> = OnceLock::new();
+    *MAX_RECORDINGS.get_or_init(|| {
+        std::env::var("VOKEY_MAX_RECORDINGS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(DEFAULT_MAX_RECORDINGS)
+    })
+}
 
 /// Get the temp audio directory path.
 /// Returns: ~/.local/share/vokey-transcribe/temp/audio/
@@ -66,14 +80,28 @@ pub fn cleanup_old_recordings() -> std::io::Result<usize> {
         })
         .collect();
 
-    if entries.len() <= MAX_RECORDINGS {
+    let max_recordings = get_max_recordings();
+    if entries.len() <= max_recordings {
         return Ok(0);
     }
 
     // Sort by modified time (oldest first) - sort_by_key is more efficient
-    entries.sort_by_key(|entry| entry.metadata().and_then(|m| m.modified()).ok());
+    // Sprint 6 #24: Log metadata errors instead of silently swallowing them
+    entries.sort_by_key(|entry| {
+        match entry.metadata().and_then(|m| m.modified()) {
+            Ok(time) => Some(time),
+            Err(e) => {
+                log::warn!(
+                    "Failed to get modified time for {:?}: {} - file may be deleted in wrong order",
+                    entry.path(),
+                    e
+                );
+                None
+            }
+        }
+    });
 
-    let to_delete = entries.len() - MAX_RECORDINGS;
+    let to_delete = entries.len() - max_recordings;
     let mut deleted = 0;
 
     for entry in entries.into_iter().take(to_delete) {
