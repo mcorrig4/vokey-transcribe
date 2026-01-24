@@ -265,7 +265,7 @@ Create a shared async function that can be called from both Rust (tray menu) and
 ```rust
 /// Internal implementation for opening a window with Wayland CSD workaround
 async fn open_settings_window_impl(app: &AppHandle) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window("my-window") {
+    if let Some(window) = app.get_webview_window("debug") {
         window.show().map_err(|e| e.to_string())?;
         window.set_focus().map_err(|e| e.to_string())?;
 
