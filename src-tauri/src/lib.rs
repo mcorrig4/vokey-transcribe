@@ -3,7 +3,9 @@ mod effects;
 mod hotkey;
 mod metrics;
 mod state_machine;
-mod transcription;
+
+// Public for integration tests
+pub mod transcription;
 
 use serde::Serialize;
 use std::sync::Arc;
