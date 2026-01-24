@@ -3,6 +3,7 @@
 **Target:** Kubuntu with KDE Plasma 6.4 on Wayland
 **Parallel Track:** Sprint 7B (Post-Processing Modes) is being developed separately
 **Branch:** `claude/sprint-7a-*`
+**Tracking Issue:** [#67](https://github.com/mcorrig4/vokey-transcribe/issues/67)
 
 ## Overview
 
@@ -31,7 +32,7 @@ Audio Pipeline (Dual-Stream):
 
 ---
 
-## Issue 7A.1 — WebSocket Infrastructure (Foundation)
+## Issue 7A.1 — WebSocket Infrastructure (Foundation) [#68](https://github.com/mcorrig4/vokey-transcribe/issues/68)
 
 **Goal:** Establish reliable WebSocket connection to OpenAI Realtime API
 
@@ -92,7 +93,7 @@ Audio Pipeline (Dual-Stream):
 
 ---
 
-## Issue 7A.2 — Audio Streaming Pipeline
+## Issue 7A.2 — Audio Streaming Pipeline [#69](https://github.com/mcorrig4/vokey-transcribe/issues/69)
 
 **Goal:** Stream audio samples to WebSocket in real-time while continuing WAV recording
 
@@ -156,7 +157,7 @@ let callback = move |data: &[f32], _: &cpal::InputCallbackInfo| {
 
 ---
 
-## Issue 7A.3 — Transcript Reception & Aggregation
+## Issue 7A.3 — Transcript Reception & Aggregation [#70](https://github.com/mcorrig4/vokey-transcribe/issues/70)
 
 **Goal:** Receive partial transcripts from WebSocket and aggregate into coherent text
 
@@ -213,7 +214,7 @@ WebSocket → TranscriptEvent::PartialText { delta }
 
 ---
 
-## Issue 7A.4 — State Machine Integration
+## Issue 7A.4 — State Machine Integration [#71](https://github.com/mcorrig4/vokey-transcribe/issues/71)
 
 **Goal:** Wire streaming into Recording state lifecycle
 
@@ -279,7 +280,7 @@ Effect::StopStreaming { id: Uuid },
 
 ---
 
-## Issue 7A.5 — Waveform Data Buffer
+## Issue 7A.5 — Waveform Data Buffer [#72](https://github.com/mcorrig4/vokey-transcribe/issues/72)
 
 **Goal:** Expose real-time audio waveform data for frontend visualization
 
@@ -346,7 +347,7 @@ async fn get_waveform_data(state: State<'_, AppState>) -> Result<Vec<f32>, Strin
 
 ---
 
-## Issue 7A.6 — HUD Component Scaffolding
+## Issue 7A.6 — HUD Component Scaffolding [#73](https://github.com/mcorrig4/vokey-transcribe/issues/73)
 
 **Goal:** Create new HUD component structure with Control Pill and Transcript Panel
 
@@ -412,7 +413,7 @@ src/components/HUD/
 
 ---
 
-## Issue 7A.7 — Microphone Button States
+## Issue 7A.7 — Microphone Button States [#74](https://github.com/mcorrig4/vokey-transcribe/issues/74)
 
 **Goal:** Create polished microphone button with state-based icons, colors, and animations
 
@@ -481,7 +482,7 @@ src/components/HUD/
 
 ---
 
-## Issue 7A.8 — Waveform Visualization Component
+## Issue 7A.8 — Waveform Visualization Component [#75](https://github.com/mcorrig4/vokey-transcribe/issues/75)
 
 **Goal:** Real-time waveform visualization during recording
 
@@ -553,7 +554,7 @@ function useWaveform(enabled: boolean): number[] {
 
 ---
 
-## Issue 7A.9 — Transcript Panel with Fade Scroll
+## Issue 7A.9 — Transcript Panel with Fade Scroll [#76](https://github.com/mcorrig4/vokey-transcribe/issues/76)
 
 **Goal:** Floating transcript panel showing partial text with fade-scrolling effect
 
@@ -632,7 +633,7 @@ function parseLines(text: string, maxWidth: number): TranscriptLine[] {
 
 ---
 
-## Issue 7A.10 — Pill Content States
+## Issue 7A.10 — Pill Content States [#77](https://github.com/mcorrig4/vokey-transcribe/issues/77)
 
 **Goal:** Dynamic content area showing status/timer/waveform based on state
 
@@ -701,7 +702,7 @@ function PillContent({ state }: { state: UiState }) {
 
 ---
 
-## Issue 7A.11 — Integration Testing
+## Issue 7A.11 — Integration Testing [#78](https://github.com/mcorrig4/vokey-transcribe/issues/78)
 
 **Goal:** End-to-end testing of streaming transcription flow
 
@@ -750,7 +751,7 @@ function PillContent({ state }: { state: UiState }) {
 
 ---
 
-## Issue 7A.12 — Documentation & Polish
+## Issue 7A.12 — Documentation & Polish [#79](https://github.com/mcorrig4/vokey-transcribe/issues/79)
 
 **Goal:** Update documentation and add final polish
 
@@ -792,45 +793,45 @@ function PillContent({ state }: { state: UiState }) {
 ## Dependency Graph
 
 ```
-7A.1 (WebSocket) ─────┐
+#68 (WebSocket) ──────┐
                       │
-7A.2 (Audio Stream) ──┼──▶ 7A.3 (Transcript) ──▶ 7A.4 (State Machine)
+#69 (Audio Stream) ───┼──▶ #70 (Transcript) ──▶ #71 (State Machine)
                       │                                    │
-7A.5 (Waveform) ──────┘                                    │
+#72 (Waveform) ───────┘                                    │
                                                            │
-7A.6 (HUD Scaffold) ──────────────────────────────────────┤
+#73 (HUD Scaffold) ────────────────────────────────────────┤
         │                                                  │
-        ├──▶ 7A.7 (Mic Button)                            │
+        ├──▶ #74 (Mic Button)                              │
         │                                                  │
-        ├──▶ 7A.8 (Waveform UI) ◀──────────────────────────┘
+        ├──▶ #75 (Waveform UI) ◀───────────────────────────┘
         │
-        ├──▶ 7A.9 (Transcript Panel)
+        ├──▶ #76 (Transcript Panel)
         │
-        └──▶ 7A.10 (Pill Content)
+        └──▶ #77 (Pill Content)
                       │
                       ▼
-              7A.11 (Integration) ──▶ 7A.12 (Documentation)
+              #78 (Integration) ──▶ #79 (Documentation)
 ```
 
 ## Recommended Order
 
-### Backend First (Issues 7A.1 - 7A.5)
-1. **7A.1** — WebSocket Infrastructure
-2. **7A.2** — Audio Streaming Pipeline
-3. **7A.3** — Transcript Reception
-4. **7A.4** — State Machine Integration
-5. **7A.5** — Waveform Data Buffer
+### Backend First (Issues #68 - #72)
+1. **#68** — WebSocket Infrastructure
+2. **#69** — Audio Streaming Pipeline
+3. **#70** — Transcript Reception
+4. **#71** — State Machine Integration
+5. **#72** — Waveform Data Buffer
 
-### Frontend Next (Issues 7A.6 - 7A.10)
-6. **7A.6** — HUD Component Scaffolding
-7. **7A.7** — Microphone Button States
-8. **7A.8** — Waveform Visualization
-9. **7A.9** — Transcript Panel
-10. **7A.10** — Pill Content States
+### Frontend Next (Issues #73 - #77)
+6. **#73** — HUD Component Scaffolding
+7. **#74** — Microphone Button States
+8. **#75** — Waveform Visualization
+9. **#76** — Transcript Panel
+10. **#77** — Pill Content States
 
-### Final (Issues 7A.11 - 7A.12)
-11. **7A.11** — Integration Testing
-12. **7A.12** — Documentation & Polish
+### Final (Issues #78 - #79)
+11. **#78** — Integration Testing
+12. **#79** — Documentation & Polish
 
 ---
 
