@@ -1,6 +1,7 @@
 mod audio;
 mod effects;
 mod hotkey;
+mod metrics;
 mod state_machine;
 mod transcription;
 
@@ -11,11 +12,17 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager, WindowEvent,
 };
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 
 use effects::{AudioEffectRunner, EffectRunner};
 use hotkey::{Hotkey, HotkeyManager, HotkeyStatus};
+use metrics::{CycleMetrics, ErrorRecord, MetricsCollector, MetricsSummary};
 use state_machine::{reduce, Effect, Event, State};
+
+/// Thread-safe wrapper for metrics collector
+pub struct MetricsHandle {
+    collector: Arc<Mutex<MetricsCollector>>,
+}
 
 /// UI state sent to the frontend via Tauri events.
 /// Uses tagged union format: { "status": "idle" } or { "status": "recording", "elapsedSecs": 5 }
@@ -241,6 +248,31 @@ fn get_transcription_status() -> TranscriptionStatusResponse {
     }
 }
 
+// ============================================================================
+// Metrics Commands (Sprint 6)
+// ============================================================================
+
+/// Get metrics summary (totals, averages, last error)
+#[tauri::command]
+async fn get_metrics_summary(handle: tauri::State<'_, MetricsHandle>) -> MetricsSummary {
+    let collector = handle.collector.lock().await;
+    collector.get_summary()
+}
+
+/// Get recent cycle history (newest first)
+#[tauri::command]
+async fn get_metrics_history(handle: tauri::State<'_, MetricsHandle>) -> Vec<CycleMetrics> {
+    let collector = handle.collector.lock().await;
+    collector.get_history()
+}
+
+/// Get recent error history (newest first)
+#[tauri::command]
+async fn get_error_history(handle: tauri::State<'_, MetricsHandle>) -> Vec<ErrorRecord> {
+    let collector = handle.collector.lock().await;
+    collector.get_errors()
+}
+
 /// Internal implementation for opening the settings window with Wayland workaround
 ///
 /// This handles the full window open sequence including a workaround for the
@@ -315,8 +347,12 @@ pub fn run() {
             )?;
 
             // Create tray icon
+            let tray_icon = app
+                .default_window_icon()
+                .ok_or("No default window icon configured")?
+                .clone();
             let _tray = TrayIconBuilder::with_id("main")
-                .icon(app.default_window_icon().unwrap().clone())
+                .icon(tray_icon)
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
@@ -402,8 +438,15 @@ pub fn run() {
             let state_handle = StateLoopHandle { tx: tx.clone() };
             app.manage(state_handle);
 
+            // Create metrics collector (Sprint 6)
+            let metrics_collector = Arc::new(Mutex::new(MetricsCollector::new()));
+            app.manage(MetricsHandle {
+                collector: metrics_collector.clone(),
+            });
+
             // Create effect runner (real audio capture as of Sprint 3)
-            let effect_runner = AudioEffectRunner::new();
+            // Pass metrics collector for tracking (Sprint 6)
+            let effect_runner = AudioEffectRunner::new(metrics_collector);
 
             // Spawn the state loop
             let app_handle = app.handle().clone();
@@ -442,6 +485,9 @@ pub fn run() {
             get_hotkey_status,
             get_audio_status,
             get_transcription_status,
+            get_metrics_summary,
+            get_metrics_history,
+            get_error_history,
             open_settings_window,
         ])
         .on_window_event(|window, event| {

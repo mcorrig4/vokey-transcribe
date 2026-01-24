@@ -6,9 +6,9 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Current Status
 
-**Phase:** Sprint 5 IN PROGRESS — Full flow polish + tray controls
+**Phase:** Sprint 6 IN PROGRESS — Hardening + UX polish
 **Target:** Kubuntu with KDE Plasma 6.4 on Wayland
-**Branch:** `claude/plan-next-steps-NNuBc`
+**Branch:** `claude/plan-next-sprint-JNzkH`
 **Last Updated:** 2026-01-24
 
 ---
@@ -39,35 +39,35 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 | 2 - Global hotkey (evdev) | ✅ COMPLETE | evdev module implemented, needs testing on real hardware |
 | 3 - Audio capture (CPAL + Hound) | ✅ COMPLETE | CPAL capture, hound WAV writing, XDG paths |
 | 4 - OpenAI transcription + clipboard | ✅ COMPLETE | OpenAI Whisper API, arboard clipboard, tested on real hardware |
-| 5 - Full flow polish + tray controls | 🔄 IN PROGRESS | Tray menu enhanced, existing HUD features verified |
-| 6 - Hardening + UX polish | Not started | |
+| 5 - Full flow polish + tray controls | 🧪 UAT | Tray menu with Toggle/Cancel/Open Logs, HUD timer, auto-dismiss |
+| 6 - Hardening + UX polish | 🔄 IN PROGRESS | Metrics, timing logs, edge cases, stability testing |
 | 7 - Phase 2 (streaming or post-processing) | Not started | |
 
 ---
 
 ## Current Task Context
 
-### Active Sprint: Sprint 5 - Full flow polish + tray controls
+### Active Sprint: Sprint 6 - Hardening + UX polish
 
-### Completed Tasks:
-1. ✅ Added tray menu items: Toggle Recording, Cancel, Open Logs Folder
-2. ✅ Verified existing features already implemented:
-   - Recording duration timer (MM:SS) in HUD
-   - HUD auto-dismiss (3-second timeout after Done)
-   - Error recovery on next hotkey press (Error → Arming)
+**Implementation Plan:** See `docs/SPRINT6-PLAN.md` for detailed breakdown.
 
-### Next Steps:
-1. Test full flow end-to-end via hotkey on real hardware
-2. Test full flow end-to-end via tray menu
-3. Test Cancel during recording and transcribing states
-4. Verify HUD states are clear and self-explanatory
-5. Create PR and merge
+### Sprint 6 Phases:
+1. 🔄 Metrics Infrastructure - `metrics.rs` module, timing/file size tracking
+2. ⬜ Timing Logs - Structured `tracing` spans for durations
+3. ⬜ Enhanced Diagnostics UI - Metrics table, error history in Debug panel
+4. ⬜ Edge Case Handling - Short/long recordings, hotkey debounce
+5. ⬜ Bug Fixes - #15 tray icon, #23/#24/#25 deferred items, #43 error testing
+6. ⬜ Stability Testing - 50 cycles without restart
 
-### Acceptance Criteria (from Issue #7):
-- [ ] Full flow works end-to-end via hotkey
-- [ ] Full flow works end-to-end via tray menu
-- [ ] Cancel works during recording and transcribing
-- [ ] HUD states are clear and self-explanatory
+### Current Task:
+Phase 1 - Creating metrics infrastructure
+
+### Acceptance Criteria (from ISSUES-v1.0.0.md):
+- [ ] 50 record/transcribe cycles without restart
+- [ ] Cancel works during transcribing
+- [ ] Errors recover without restart
+- [ ] Logs show durations/timings
+- [ ] Very short recording (<0.5s) handled gracefully
 
 ### Blockers:
 - Cannot build/test in headless environment (missing GTK libs - expected)
@@ -78,7 +78,8 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 - Sprint 2: https://github.com/mcorrig4/vokey-transcribe/issues/4 (DONE)
 - Sprint 3: https://github.com/mcorrig4/vokey-transcribe/issues/5 (DONE)
 - Sprint 4: https://github.com/mcorrig4/vokey-transcribe/issues/6 (DONE)
-- Sprint 5: https://github.com/mcorrig4/vokey-transcribe/issues/7 (IN PROGRESS)
+- Sprint 5: https://github.com/mcorrig4/vokey-transcribe/issues/7 (DONE)
+- Sprint 6: TBD (create issue)
 
 ---
 
@@ -131,6 +132,30 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 ---
 
 ## Session Notes
+
+### Session 2026-01-24 (Sprint 6 Start - Hardening)
+**Completed Sprint 5, started Sprint 6:**
+
+**Sprint 5 Closure:**
+- Acceptance testing passed (assumed based on user confirmation)
+- Full flow works via hotkey and tray menu
+- Cancel works during recording/transcribing
+- HUD states are clear
+
+**Sprint 6 Planning:**
+- Created detailed implementation plan: `docs/SPRINT6-PLAN.md`
+- 6 phases: Metrics, Logging, UI, Edge Cases, Bug Fixes, Testing
+- Key deliverables:
+  - New `metrics.rs` module for cycle timing/file size tracking
+  - Enhanced Debug panel with metrics table and error history
+  - Edge case handling (short/long recordings, hotkey debounce)
+  - Target: 50 cycles stable without restart
+
+**Starting Phase 1:** Metrics Infrastructure
+- Creating `src-tauri/src/metrics.rs` module
+- Integrating with effects runner
+
+---
 
 ### Session 2026-01-24 (Sprint 5 - Tray Controls)
 **Closed Sprint 4, started Sprint 5:**

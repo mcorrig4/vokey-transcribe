@@ -3,13 +3,16 @@
 //! This module handles executing effects produced by the state machine.
 //! Sprint 4: Real audio capture with CPAL, real transcription via OpenAI Whisper,
 //! and clipboard copy via arboard.
+//! Sprint 6: Metrics collection for timing and performance tracking.
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::{mpsc, Mutex};
 use uuid::Uuid;
 
 use crate::audio::{cleanup_old_recordings, AudioRecorder};
+use crate::metrics::MetricsCollector;
 use crate::state_machine::{Effect, Event};
 use crate::transcription;
 
@@ -26,16 +29,18 @@ struct ActiveRecording {
 }
 
 /// Real effect runner with CPAL audio capture.
-/// Transcription is still stubbed (Sprint 4).
+/// Sprint 4: Real transcription via OpenAI Whisper.
+/// Sprint 6: Metrics collection for performance tracking.
 pub struct AudioEffectRunner {
     recorder: Arc<Mutex<Option<AudioRecorder>>>,
     active_recordings: Arc<Mutex<HashMap<Uuid, ActiveRecording>>>,
+    metrics: Arc<Mutex<MetricsCollector>>,
 }
 
 impl AudioEffectRunner {
-    /// Create a new AudioEffectRunner.
+    /// Create a new AudioEffectRunner with metrics collection.
     /// Returns Ok even if audio device isn't available - errors happen at record time.
-    pub fn new() -> Arc<Self> {
+    pub fn new(metrics: Arc<Mutex<MetricsCollector>>) -> Arc<Self> {
         // Try to create the recorder now, but don't fail if we can't
         let recorder = match AudioRecorder::new() {
             Ok(r) => {
@@ -51,6 +56,7 @@ impl AudioEffectRunner {
         Arc::new(Self {
             recorder: Arc::new(Mutex::new(recorder)),
             active_recordings: Arc::new(Mutex::new(HashMap::new())),
+            metrics,
         })
     }
 }
@@ -61,8 +67,14 @@ impl EffectRunner for AudioEffectRunner {
             Effect::StartAudio { id } => {
                 let recorder = self.recorder.clone();
                 let active = self.active_recordings.clone();
+                let metrics = self.metrics.clone();
 
                 tokio::spawn(async move {
+                    // Start metrics tracking for this cycle
+                    {
+                        let mut m = metrics.lock().await;
+                        m.start_cycle(id);
+                    }
                     // Try to get or create recorder, then start recording while holding lock
                     // We capture the result and drop the lock before any awaits to avoid
                     // holding the mutex across await points (can cause contention/deadlocks)
@@ -100,6 +112,12 @@ impl EffectRunner for AudioEffectRunner {
                         Ok((handle, wav_path)) => {
                             log::info!("Audio recording started: {:?}", wav_path);
 
+                            // Track recording started in metrics
+                            {
+                                let mut m = metrics.lock().await;
+                                m.recording_started();
+                            }
+
                             // Store handle for later stop
                             let mut active_guard = active.lock().await;
                             active_guard.insert(
@@ -114,6 +132,11 @@ impl EffectRunner for AudioEffectRunner {
                         }
                         Err(err) => {
                             log::error!("Failed to start audio recording: {}", err);
+                            // Record error in metrics
+                            {
+                                let mut m = metrics.lock().await;
+                                m.cycle_failed(err.clone());
+                            }
                             let _ = tx
                                 .send(Event::AudioStartFail { id, err })
                                 .await;
@@ -124,6 +147,7 @@ impl EffectRunner for AudioEffectRunner {
 
             Effect::StopAudio { id } => {
                 let active = self.active_recordings.clone();
+                let metrics = self.metrics.clone();
 
                 tokio::spawn(async move {
                     let mut active_guard = active.lock().await;
@@ -133,10 +157,31 @@ impl EffectRunner for AudioEffectRunner {
                             match handle.stop() {
                                 Ok(path) => {
                                     log::info!("Audio recording stopped: {:?}", path);
+
+                                    // Get file size for metrics (use async fs to avoid blocking)
+                                    let file_size = match tokio::fs::metadata(&path).await {
+                                        Ok(m) => m.len(),
+                                        Err(e) => {
+                                            log::warn!("Failed to get file size for {:?}: {}", path, e);
+                                            0
+                                        }
+                                    };
+
+                                    // Track recording stopped in metrics
+                                    {
+                                        let mut m = metrics.lock().await;
+                                        m.recording_stopped(file_size);
+                                    }
+
                                     let _ = tx.send(Event::AudioStopOk { id }).await;
                                 }
                                 Err(e) => {
                                     log::error!("Failed to stop audio recording: {}", e);
+                                    // Record error in metrics
+                                    {
+                                        let mut m = metrics.lock().await;
+                                        m.cycle_failed(e.to_string());
+                                    }
                                     let _ = tx
                                         .send(Event::AudioStopFail {
                                             id,
@@ -158,20 +203,44 @@ impl EffectRunner for AudioEffectRunner {
             }
 
             Effect::StartTranscription { id, wav_path } => {
+                let metrics = self.metrics.clone();
+
                 tokio::spawn(async move {
                     log::info!("Starting transcription for {:?}", wav_path);
 
+                    // Track transcription started in metrics
+                    {
+                        let mut m = metrics.lock().await;
+                        m.transcription_started();
+                    }
+
+                    let start_time = Instant::now();
+
                     match transcription::transcribe_audio(&wav_path).await {
                         Ok(text) => {
+                            let duration = start_time.elapsed();
                             log::info!(
-                                "Transcription successful: {} chars for {:?}",
+                                "Transcription successful: {} chars in {:?} for {:?}",
                                 text.len(),
+                                duration,
                                 wav_path
                             );
+
+                            // Track transcription completed in metrics
+                            {
+                                let mut m = metrics.lock().await;
+                                m.transcription_completed(text.len());
+                            }
+
                             let _ = tx.send(Event::TranscribeOk { id, text }).await;
                         }
                         Err(e) => {
                             log::error!("Transcription failed: {}", e);
+                            // Record error in metrics
+                            {
+                                let mut m = metrics.lock().await;
+                                m.cycle_failed(e.to_string());
+                            }
                             let _ = tx
                                 .send(Event::TranscribeFail {
                                     id,
@@ -188,49 +257,67 @@ impl EffectRunner for AudioEffectRunner {
                 // Note: arboard::Clipboard is not Send, so we need to use std::thread::spawn
                 // On Linux/X11, we must keep the clipboard alive for other apps to read it
                 let text_clone = text.clone();
-                std::thread::spawn(move || {
-                    match arboard::Clipboard::new() {
-                        Ok(mut clipboard) => {
-                            match clipboard.set_text(&text_clone) {
-                                Ok(_) => {
-                                    log::info!(
-                                        "Copied {} chars to clipboard",
-                                        text_clone.len()
-                                    );
-                                    // On Linux/X11, keep clipboard alive for other apps to read
-                                    // Wait for up to 30 seconds or until another app takes ownership
-                                    #[cfg(target_os = "linux")]
-                                    {
-                                        use std::time::{Duration, Instant};
-                                        let start = Instant::now();
-                                        let timeout = Duration::from_secs(30);
+                let metrics = self.metrics.clone();
 
-                                        // Poll clipboard ownership - when our content is replaced,
-                                        // we can exit. Otherwise keep serving for up to 30 seconds.
-                                        while start.elapsed() < timeout {
-                                            std::thread::sleep(Duration::from_millis(100));
-                                            // Check if clipboard still has our content
-                                            match clipboard.get_text() {
-                                                Ok(current) if current == text_clone => {
-                                                    // Still our content, keep waiting
-                                                }
-                                                _ => {
-                                                    // Content changed or error, another app took over
-                                                    log::debug!("Clipboard ownership transferred");
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                        log::debug!("Clipboard thread exiting after {:?}", start.elapsed());
+                // Use oneshot channel to signal clipboard result back to async context
+                let (result_tx, result_rx) = std::sync::mpsc::sync_channel::<Result<(), String>>(1);
+
+                std::thread::spawn(move || {
+                    let result = (|| {
+                        let mut clipboard = arboard::Clipboard::new()
+                            .map_err(|e| format!("Clipboard access failed: {}", e))?;
+
+                        clipboard.set_text(&text_clone)
+                            .map_err(|e| format!("Clipboard set failed: {}", e))?;
+
+                        log::info!("Copied {} chars to clipboard", text_clone.len());
+
+                        // On Linux/X11, keep clipboard alive for other apps to read
+                        #[cfg(target_os = "linux")]
+                        {
+                            use std::time::{Duration, Instant};
+                            let start = Instant::now();
+                            let timeout = Duration::from_secs(30);
+
+                            while start.elapsed() < timeout {
+                                std::thread::sleep(Duration::from_millis(100));
+                                match clipboard.get_text() {
+                                    Ok(current) if current == text_clone => {}
+                                    _ => {
+                                        log::debug!("Clipboard ownership transferred");
+                                        break;
                                     }
                                 }
-                                Err(e) => {
-                                    log::error!("Failed to set clipboard text: {}", e);
-                                }
                             }
+                            log::debug!("Clipboard thread exiting after {:?}", start.elapsed());
                         }
-                        Err(e) => {
-                            log::error!("Failed to access clipboard: {}", e);
+
+                        Ok(())
+                    })();
+
+                    // Signal result (ignore if receiver dropped)
+                    let _ = result_tx.send(result);
+                });
+
+                // Spawn async task to wait for clipboard result and update metrics
+                tokio::spawn(async move {
+                    // Use spawn_blocking to wait for the sync channel without blocking async runtime
+                    let result = tokio::task::spawn_blocking(move || {
+                        result_rx.recv_timeout(std::time::Duration::from_secs(35))
+                    })
+                    .await;
+
+                    let mut m = metrics.lock().await;
+                    match result {
+                        Ok(Ok(Ok(()))) => {
+                            m.cycle_completed();
+                        }
+                        Ok(Ok(Err(err))) => {
+                            m.cycle_failed(err);
+                        }
+                        _ => {
+                            // Timeout, channel error, or task panic
+                            m.cycle_failed("Clipboard operation timed out or failed".to_string());
                         }
                     }
                 });
@@ -269,8 +356,18 @@ impl EffectRunner for AudioEffectRunner {
                 });
             }
 
-            Effect::Cleanup { wav_path, .. } => {
+            Effect::Cleanup { wav_path, id } => {
+                let metrics = self.metrics.clone();
+
                 tokio::spawn(async move {
+                    // Mark cycle as cancelled in metrics (if still active)
+                    {
+                        let mut m = metrics.lock().await;
+                        if m.is_active_cycle(id) {
+                            m.cycle_cancelled();
+                        }
+                    }
+
                     // Cleanup old recordings (keep last N)
                     match cleanup_old_recordings() {
                         Ok(count) if count > 0 => {
