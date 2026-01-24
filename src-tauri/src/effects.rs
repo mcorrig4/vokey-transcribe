@@ -185,7 +185,8 @@ impl EffectRunner for AudioEffectRunner {
 
             Effect::CopyToClipboard { text, .. } => {
                 // Copy to clipboard using arboard
-                // Note: arboard::Clipboard is not Send, so we need to use spawn_blocking
+                // Note: arboard::Clipboard is not Send, so we need to use std::thread::spawn
+                // On Linux/X11, we must keep the clipboard alive for other apps to read it
                 let text_clone = text.clone();
                 std::thread::spawn(move || {
                     match arboard::Clipboard::new() {
@@ -196,6 +197,32 @@ impl EffectRunner for AudioEffectRunner {
                                         "Copied {} chars to clipboard",
                                         text_clone.len()
                                     );
+                                    // On Linux/X11, keep clipboard alive for other apps to read
+                                    // Wait for up to 30 seconds or until another app takes ownership
+                                    #[cfg(target_os = "linux")]
+                                    {
+                                        use std::time::{Duration, Instant};
+                                        let start = Instant::now();
+                                        let timeout = Duration::from_secs(30);
+
+                                        // Poll clipboard ownership - when our content is replaced,
+                                        // we can exit. Otherwise keep serving for up to 30 seconds.
+                                        while start.elapsed() < timeout {
+                                            std::thread::sleep(Duration::from_millis(100));
+                                            // Check if clipboard still has our content
+                                            match clipboard.get_text() {
+                                                Ok(current) if current == text_clone => {
+                                                    // Still our content, keep waiting
+                                                }
+                                                _ => {
+                                                    // Content changed or error, another app took over
+                                                    log::debug!("Clipboard ownership transferred");
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                        log::debug!("Clipboard thread exiting after {:?}", start.elapsed());
+                                    }
                                 }
                                 Err(e) => {
                                     log::error!("Failed to set clipboard text: {}", e);
