@@ -40,3 +40,6 @@ arboard = "3"
 
 # XDG paths
 dirs = "5"
+
+# Development environment
+dotenvy = "0.15"
