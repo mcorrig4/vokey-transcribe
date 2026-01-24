@@ -259,9 +259,29 @@ pub fn run() {
             }
 
             // Build tray menu
+            let toggle_item =
+                MenuItem::with_id(app, "toggle", "Toggle Recording", true, None::<&str>)?;
+            let cancel_item = MenuItem::with_id(app, "cancel", "Cancel", true, None::<&str>)?;
+            let logs_item =
+                MenuItem::with_id(app, "open_logs", "Open Logs Folder", true, None::<&str>)?;
             let settings_item = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&settings_item, &quit_item])?;
+
+            let separator1 = tauri::menu::PredefinedMenuItem::separator(app)?;
+            let separator2 = tauri::menu::PredefinedMenuItem::separator(app)?;
+
+            let menu = Menu::with_items(
+                app,
+                &[
+                    &toggle_item,
+                    &cancel_item,
+                    &separator1,
+                    &logs_item,
+                    &settings_item,
+                    &separator2,
+                    &quit_item,
+                ],
+            )?;
 
             // Create tray icon
             let _tray = TrayIconBuilder::with_id("main")
@@ -269,6 +289,41 @@ pub fn run() {
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
+                    "toggle" => {
+                        log::info!("Toggle Recording clicked");
+                        if let Some(state) = app.try_state::<StateLoopHandle>() {
+                            let tx = state.tx.clone();
+                            tauri::async_runtime::spawn(async move {
+                                if let Err(e) = tx.send(Event::HotkeyToggle).await {
+                                    log::error!("Failed to send toggle event: {}", e);
+                                }
+                            });
+                        }
+                    }
+                    "cancel" => {
+                        log::info!("Cancel clicked");
+                        if let Some(state) = app.try_state::<StateLoopHandle>() {
+                            let tx = state.tx.clone();
+                            tauri::async_runtime::spawn(async move {
+                                if let Err(e) = tx.send(Event::Cancel).await {
+                                    log::error!("Failed to send cancel event: {}", e);
+                                }
+                            });
+                        }
+                    }
+                    "open_logs" => {
+                        log::info!("Open Logs Folder clicked");
+                        // Open logs folder using xdg-open (Linux)
+                        if let Some(data_dir) = dirs::data_dir() {
+                            let logs_dir = data_dir.join("vokey-transcribe").join("logs");
+                            if let Err(e) = std::process::Command::new("xdg-open")
+                                .arg(&logs_dir)
+                                .spawn()
+                            {
+                                log::error!("Failed to open logs folder: {}", e);
+                            }
+                        }
+                    }
                     "settings" => {
                         log::info!("Settings/Debug clicked");
                         // Open or focus the debug window
