@@ -242,6 +242,73 @@ let mut guard = match writer.lock() {
 
 ---
 
+### 8) Window control buttons don't work on Wayland (decorated windows)
+
+On Wayland (especially KDE Plasma), window control buttons (minimize, maximize, close) may not respond to clicks when a decorated Tauri window is first shown. The buttons start working after maximizing/restoring the window.
+
+**Root cause:**
+
+Two issues combine to cause this:
+
+1. **CSS `100vh` includes decoration height:** On Wayland, `100vh` calculates the full viewport including the window decoration (title bar). This causes the webview content to extend beyond the visible content area, overlapping with where the window controls are rendered.
+
+2. **Wayland input region calculation:** When a window is shown, the Wayland compositor may not correctly calculate the input regions that separate the window decoration from the webview content. The webview intercepts clicks meant for the decoration buttons.
+
+**Solution (two parts):**
+
+**Part 1: Fix CSS to not overflow into decorations**
+
+```css
+/* BAD: 100vh includes decoration height on Wayland */
+.container {
+  min-height: 100vh;
+}
+
+/* GOOD: inherit from parent, allow scrolling */
+.container {
+  height: 100%;
+  overflow-y: auto;
+}
+```
+
+**Part 2: Force input region recalculation when showing window**
+
+Trigger a resize operation immediately after showing the window. This forces the compositor to recalculate the input regions:
+
+```rust
+// In your menu event handler or wherever you show the window:
+if let Some(window) = app.get_webview_window("my-window") {
+    let _ = window.show();
+    let _ = window.set_focus();
+
+    // Workaround for Wayland: trigger a resize to fix window control hit-testing
+    // This forces the compositor to recalculate the window's input regions
+    if let Ok(size) = window.outer_size() {
+        let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize {
+            width: size.width + 1,
+            height: size.height,
+        }));
+        let _ = window.set_size(tauri::Size::Physical(size));
+    }
+}
+```
+
+The resize-and-restore happens so fast it's invisible to the user, but it triggers the necessary region recalculation in the compositor.
+
+**When this applies:**
+
+- Tauri windows with `decorations: true` (native window decorations)
+- Running on Wayland (KDE Plasma, GNOME, etc.)
+- Window is hidden and then shown (not destroyed and recreated)
+
+**When this doesn't apply:**
+
+- Frameless windows (`decorations: false`) with custom title bars
+- X11 sessions
+- Windows/macOS
+
+---
+
 # Rust state machine (Linux MVP) mapped cleanly
 
 This is the same conceptual machine as the Windows version, adapted for clipboard-only injection.
