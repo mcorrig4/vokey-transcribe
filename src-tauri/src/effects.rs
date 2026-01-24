@@ -1,15 +1,17 @@
 //! Effect runner for VoKey Transcribe
 //!
 //! This module handles executing effects produced by the state machine.
-//! Sprint 3: Real audio capture with CPAL, transcription still stubbed.
+//! Sprint 4: Real audio capture with CPAL, real transcription via OpenAI Whisper,
+//! and clipboard copy via arboard.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use uuid::Uuid;
 
-use crate::audio::{cleanup_old_recordings, AudioError, AudioRecorder};
+use crate::audio::{cleanup_old_recordings, AudioRecorder};
 use crate::state_machine::{Effect, Event};
+use crate::transcription;
 
 /// Trait for running effects asynchronously.
 /// Completion events are sent back via the provided channel.
@@ -156,21 +158,55 @@ impl EffectRunner for AudioEffectRunner {
             }
 
             Effect::StartTranscription { id, wav_path } => {
-                // Still stubbed for Sprint 3 (Sprint 4 will implement real transcription)
                 tokio::spawn(async move {
-                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                    let text = format!(
-                        "[Transcription placeholder - Sprint 4]\nFile: {}",
-                        wav_path.display()
-                    );
-                    log::info!("Stub: transcription complete for {:?}", wav_path);
-                    let _ = tx.send(Event::TranscribeOk { id, text }).await;
+                    log::info!("Starting transcription for {:?}", wav_path);
+
+                    match transcription::transcribe_audio(&wav_path).await {
+                        Ok(text) => {
+                            log::info!(
+                                "Transcription successful: {} chars for {:?}",
+                                text.len(),
+                                wav_path
+                            );
+                            let _ = tx.send(Event::TranscribeOk { id, text }).await;
+                        }
+                        Err(e) => {
+                            log::error!("Transcription failed: {}", e);
+                            let _ = tx
+                                .send(Event::TranscribeFail {
+                                    id,
+                                    err: e.to_string(),
+                                })
+                                .await;
+                        }
+                    }
                 });
             }
 
             Effect::CopyToClipboard { text, .. } => {
-                // Still stubbed for Sprint 3 (Sprint 4 will implement clipboard)
-                log::info!("Stub: would copy to clipboard ({} chars)", text.len());
+                // Copy to clipboard using arboard
+                // Note: arboard::Clipboard is not Send, so we need to use spawn_blocking
+                let text_clone = text.clone();
+                std::thread::spawn(move || {
+                    match arboard::Clipboard::new() {
+                        Ok(mut clipboard) => {
+                            match clipboard.set_text(&text_clone) {
+                                Ok(_) => {
+                                    log::info!(
+                                        "Copied {} chars to clipboard",
+                                        text_clone.len()
+                                    );
+                                }
+                                Err(e) => {
+                                    log::error!("Failed to set clipboard text: {}", e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("Failed to access clipboard: {}", e);
+                        }
+                    }
+                });
             }
 
             Effect::StartDoneTimeout { id, duration } => {

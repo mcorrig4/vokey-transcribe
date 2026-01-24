@@ -242,6 +242,74 @@ let mut guard = match writer.lock() {
 
 ---
 
+### 8) Window control buttons don't work on Wayland (decorated windows)
+
+On Wayland (especially KDE Plasma), window control buttons (minimize, maximize, close) may not respond to clicks when a decorated Tauri window is first shown. The buttons start working after maximizing/restoring the window manually.
+
+**Root cause:**
+
+This is a known bug in Tauri's TAO windowing library related to Client-Side Decorations (CSD):
+
+- **GitHub Issues:** [tauri-apps/tao#1046](https://github.com/tauri-apps/tao/issues/1046), [tauri-apps/tauri#12685](https://github.com/tauri-apps/tauri/issues/12685)
+- **Cause:** PR #979 added CSD support to TAO for Wayland, which broke window control button hit-testing on KDE Plasma
+- **Status:** Still open as of January 2025, affects latest Tauri/TAO versions
+
+The issue is that TAO's CSD implementation doesn't correctly calculate hit-test regions for window controls until a maximize/unmaximize cycle occurs.
+
+**Solution: Programmatic maximize/unmaximize**
+
+Since manually maximizing and unmaximizing the window fixes the buttons, we can do this programmatically when showing the window:
+
+```rust
+// In your menu event handler or wherever you show the window:
+if let Some(window) = app.get_webview_window("my-window") {
+    let _ = window.show();
+    let _ = window.set_focus();
+    // Workaround for Wayland CSD bug (tao#1046): window control buttons
+    // don't work until maximize/unmaximize cycle fixes hit-testing
+    let _ = window.maximize();
+    let _ = window.unmaximize();
+}
+```
+
+The maximize/unmaximize happens instantly and is invisible to the user, but it triggers the necessary hit-test region recalculation in TAO's CSD code.
+
+**Additional CSS recommendation:**
+
+Avoid `100vh` in decorated windows as it can cause overflow issues:
+
+```css
+/* BAD: 100vh may include decoration height on some systems */
+.container {
+  min-height: 100vh;
+}
+
+/* GOOD: inherit from parent, allow scrolling */
+.container {
+  height: 100%;
+  overflow-y: auto;
+}
+```
+
+**When this applies:**
+
+- Tauri windows with `decorations: true` (native window decorations)
+- Running on Wayland (KDE Plasma specifically affected)
+- Window is hidden and then shown (not destroyed and recreated)
+
+**When this doesn't apply:**
+
+- Frameless windows (`decorations: false`) with custom title bars
+- X11 sessions (use `GDK_BACKEND=x11` as alternative workaround)
+- Windows/macOS
+
+**Alternative workarounds:**
+
+1. **Force X11:** Set `std::env::set_var("GDK_BACKEND", "x11")` before Tauri initializes (loses Wayland benefits)
+2. **Custom title bar:** Use `decorations: false` and implement window controls in React (significant effort)
+
+---
+
 # Rust state machine (Linux MVP) mapped cleanly
 
 This is the same conceptual machine as the Windows version, adapted for clipboard-only injection.
