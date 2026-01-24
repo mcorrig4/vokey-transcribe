@@ -6,12 +6,13 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Current Status
 
-**Phase:** Sprint 7B PLANNING — Post-processing modes
+**Phase:** Sprint 7A PLANNING — Real-time streaming transcription + HUD redesign
 **Target:** Kubuntu with KDE Plasma 6.4 on Wayland
-**Branch:** `claude/plan-sprint-7-70hjz`
+**Branch:** `claude/sprint-7a-planning-PpLVC`
 **Last Updated:** 2026-01-24
 
 **Sprint 6 Status:** Phases 1-5 complete, Phase 6 (Stability Testing) needs real hardware
+**Parallel Development:** Sprint 7A (this team) and Sprint 7B (other team) developing in parallel
 
 ---
 
@@ -43,45 +44,83 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 | 4 - OpenAI transcription + clipboard | ✅ COMPLETE | OpenAI Whisper API, arboard clipboard, tested on real hardware |
 | 5 - Full flow polish + tray controls | 🧪 UAT | Tray menu with Toggle/Cancel/Open Logs, HUD timer, auto-dismiss |
 | 6 - Hardening + UX polish | ⏸️ PAUSED | Phases 1-5 done; Phase 6 (50-cycle stability) needs real hardware |
-| 7A - Streaming transcription | 🔄 PARALLEL | Separate team implementing Option A (Realtime API) |
-| 7B - Post-processing modes | 📋 PLANNING | Option B chosen: Normal/Coding/Markdown/Prompt modes |
+| 7A - Streaming transcription + HUD redesign | 📋 PLANNING | This team: OpenAI Realtime API + new HUD with waveform |
+| 7B - Post-processing modes | 🔄 PARALLEL | Other team: Normal/Coding/Markdown/Prompt modes |
 
 ---
 
 ## Current Task Context
 
-### Active Sprint: Sprint 7B - Post-processing Modes
+### Active Sprint: Sprint 7A - Real-time Streaming Transcription + HUD Redesign
 
-**Implementation Plan:** See `docs/SPRINT7B-PLAN.md` for detailed breakdown.
+**Implementation Plan:** See `docs/SPRINT7A-ISSUES.md` for detailed breakdown (12 issues).
 
-**Note:** Sprint 7A (Streaming) is being developed in parallel by another team.
+**Note:** Sprint 7B (Post-processing Modes) is being developed in parallel by another team.
 
 ### Decision Made:
-- **Sprint 7B: Post-processing Modes** — this team
-- **Sprint 7A: Streaming Transcription** — parallel team
+- **Sprint 7A: Streaming Transcription + HUD Redesign** — this team
+- **Sprint 7B: Post-processing Modes** — parallel team
 - Both features can be combined after completion
 
-### Sprint 7B Phases:
-1. ⬜ Mode Selection Infrastructure - ProcessingMode enum, state, tray menu
-2. ⬜ Processing Engines - Coding, Markdown, Prompt processors
-3. ⬜ Pipeline Integration - Post-processing after transcription
-4. ⬜ UI Integration - Mode indicator in HUD, selector in Debug panel
-5. ⬜ Prompt Configuration (stretch) - Custom prompt storage
+### Sprint 7A Architecture:
+```
+Audio Pipeline (Dual-Stream):
+┌─────────────┐
+│ CPAL Input  │ ──┬──▶ WAV File (existing, for fallback)
+└─────────────┘   │
+                  ├──▶ Waveform Buffer (new, for UI visualization)
+                  │
+                  └──▶ WebSocket Stream (new, for real-time transcription)
+                              │
+                              ▼
+                      OpenAI Realtime API → Partial Transcripts → HUD
+```
 
-### Modes to Implement:
-| Mode | Description | Processing |
-|------|-------------|------------|
-| Normal | Raw transcription, no changes | Passthrough |
-| Coding | snake_case, remove fillers | Local regex |
-| Markdown | Format as lists/structure | Local parsing |
-| Prompt | Custom LLM transformation | OpenAI Chat API |
+### Sprint 7A Issues (12 total):
+**Backend (Rust/Tauri):**
+1. ⬜ 7A.1 - WebSocket Infrastructure (OpenAI Realtime API connection)
+2. ⬜ 7A.2 - Audio Streaming Pipeline (48kHz→24kHz, chunking, encoding)
+3. ⬜ 7A.3 - Transcript Reception & Aggregation (delta parsing)
+4. ⬜ 7A.4 - State Machine Integration (PartialDelta events)
+5. ⬜ 7A.5 - Waveform Data Buffer (ring buffer, visualization)
 
-### Acceptance Criteria (from ISSUES-v1.0.0.md):
-- [ ] Mode selection works via tray menu and Debug panel
-- [ ] Coding mode produces valid identifiers (snake_case)
-- [ ] Markdown mode formats list items correctly
-- [ ] Prompt mode calls Chat API and falls back gracefully
-- [ ] HUD shows current mode indicator
+**Frontend (React/TypeScript):**
+6. ⬜ 7A.6 - HUD Component Scaffolding (Control Pill + Transcript Panel)
+7. ⬜ 7A.7 - Microphone Button States (icons, colors, animations)
+8. ⬜ 7A.8 - Waveform Visualization Component (64 bars, 20 FPS)
+9. ⬜ 7A.9 - Transcript Panel with Fade Scroll
+10. ⬜ 7A.10 - Pill Content States (timer, status, waveform)
+
+**Final:**
+11. ⬜ 7A.11 - Integration Testing
+12. ⬜ 7A.12 - Documentation & Polish
+
+### New HUD Design:
+```
+┌─────────────────────────────┐   ┌───────────────────┐
+│ [Mic] │ Waveform + Timer    │   │ Transcript Panel  │
+│ Button│ (or status message) │   │ (fade-scrolling)  │
+└─────────────────────────────┘   └───────────────────┘
+         Control Pill                   300px wide
+         300px × 64px                   150px tall
+```
+
+### Mic Button State Colors:
+| State | Color | Animation |
+|-------|-------|-----------|
+| Idle | Gray #6b7280 | None |
+| Arming | Amber #f59e0b | Pulse |
+| Recording | Red #ef4444 | Subtle pulse |
+| Stopping | Amber #f59e0b | None |
+| Transcribing | Blue #3b82f6 | Rotate (spinner) |
+| Done | Green #22c55e | Brief glow |
+| Error | Red #ef4444 | Shake |
+
+### Key Decisions:
+1. **Dual-Stream Architecture** — Stream to WebSocket AND record WAV for fallback
+2. **Per-Recording WebSocket** — Connect on record start, disconnect on done
+3. **Parallel Effect Track** — Streaming handled in effects, minimal state machine changes
+4. **Trust-Final Strategy** — Show partials for UX, use batch result for clipboard accuracy
 
 ### Sprint 6 Status (Paused):
 - Phases 1-5 complete
@@ -142,7 +181,9 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 | Purpose | File |
 |---------|------|
 | Main documentation | README.md |
-| Sprint definitions | docs/ISSUES-v1.0.0.md |
+| Sprint definitions (0-6) | docs/ISSUES-v1.0.0.md |
+| Sprint 7A issues | docs/SPRINT7A-ISSUES.md |
+| Sprint 7B plan | docs/SPRINT7B-PLAN.md |
 | Technical gotchas | docs/tauri-gotchas.md |
 | Setup instructions | docs/notes.md |
 | This work log | docs/WORKLOG.md |
@@ -150,6 +191,67 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 ---
 
 ## Session Notes
+
+### Session 2026-01-24 (Sprint 7A Planning - Streaming + HUD Redesign)
+**Created comprehensive Sprint 7A planning documentation:**
+
+**Scope Definition:**
+- Real-time streaming transcription using OpenAI Realtime API
+- Completely redesigned HUD with Control Pill and Transcript Panel
+- Waveform visualization during recording
+- Fade-scrolling transcript panel showing partial text
+
+**Architecture Decisions:**
+1. **Dual-Stream Audio** — Stream to WebSocket AND record WAV simultaneously
+   - Provides fallback to batch transcription if streaming fails
+   - Reuses existing CPAL → hound pipeline
+
+2. **Per-Recording WebSocket** — Connect when recording starts, disconnect when done
+   - Avoids quota waste from persistent connections
+   - Matches state machine's single-cycle philosophy
+
+3. **Parallel Effect Track** — Streaming in effects layer, minimal state machine changes
+   - Add only `partial_text` field to Recording state
+   - Use existing `PartialDelta` event (already reserved)
+
+4. **Trust-Final Strategy** — Show partials for UX, use batch result for clipboard
+   - Best accuracy for final output
+   - Graceful fallback if streaming fails
+
+**New Module Structure:**
+```
+src-tauri/src/streaming/    # NEW
+├── mod.rs                  # Public interface
+├── websocket.rs            # WebSocket connection
+├── audio_streamer.rs       # Audio buffer → WebSocket
+├── transcript_aggregator.rs # Delta text handling
+└── realtime_api.rs         # OpenAI protocol types
+```
+
+**Frontend Component Structure:**
+```
+src/components/HUD/         # NEW
+├── index.tsx               # Main layout
+├── ControlPill.tsx         # Mic button + content
+├── MicButton.tsx           # State-aware icons
+├── Waveform.tsx            # 64-bar visualization
+├── TranscriptPanel.tsx     # Fade-scroll text
+└── PillContent.tsx         # Timer/status/waveform
+```
+
+**Documents Created:**
+- `docs/SPRINT7A-ISSUES.md` — 12 detailed issues with acceptance criteria
+  - Issues 7A.1-7A.5: Backend (WebSocket, audio streaming, state machine)
+  - Issues 7A.6-7A.10: Frontend (HUD redesign, waveform, transcript)
+  - Issues 7A.11-7A.12: Integration testing, documentation
+
+**Risk Mitigations:**
+- OpenAI API quota → Graceful fallback to batch
+- WebSocket instability → WAV backup, reconnection logic
+- UI performance → requestAnimationFrame, CSS transforms
+- Memory leaks → Ring buffers, proper cleanup
+
+---
 
 ### Session 2026-01-24 (Sprint 7B Planning)
 **Analyzed options and created Sprint 7B plan:**
