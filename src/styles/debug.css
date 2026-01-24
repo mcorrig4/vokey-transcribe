@@ -4,8 +4,9 @@
   font-size: 13px;
   background: #1a1a2e;
   color: #eee;
-  min-height: 100vh;
+  height: 100%;
   box-sizing: border-box;
+  overflow-y: auto;
 }
 
 .debug-container h3 {
