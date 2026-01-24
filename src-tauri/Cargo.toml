@@ -34,5 +34,8 @@ tokio-util = { version = "0.7" }
 cpal = "0.15"
 hound = "3.5"
 
+# Clipboard (Sprint 4)
+arboard = "3"
+
 # XDG paths
 dirs = "5"
