@@ -170,3 +170,100 @@
   padding: 2px 0;
   border-bottom: 1px solid #2d3748;
 }
+
+/* Metrics Summary Styles (Sprint 6) */
+.metrics-summary .metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.metrics-summary .metric-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metrics-summary .metric-label {
+  font-size: 10px;
+  color: #a0aec0;
+  text-transform: uppercase;
+}
+
+.metrics-summary .metric-value {
+  font-size: 14px;
+  font-weight: bold;
+  color: #48bb78;
+}
+
+.metrics-summary .metric-value.error-count {
+  color: #fc8181;
+}
+
+/* Cycle History Table */
+.cycle-history .history-table-container {
+  margin-top: 8px;
+  overflow-x: auto;
+}
+
+.cycle-history .history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.cycle-history .history-table th,
+.cycle-history .history-table td {
+  padding: 4px 6px;
+  text-align: left;
+  border-bottom: 1px solid #2d3748;
+}
+
+.cycle-history .history-table th {
+  color: #a0aec0;
+  font-weight: normal;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+
+.cycle-history .history-table td {
+  font-family: monospace;
+  color: #eee;
+}
+
+.cycle-history .history-table .failed-row {
+  background: rgba(229, 62, 62, 0.1);
+}
+
+.cycle-history .history-table .failed-row td {
+  color: #fc8181;
+}
+
+/* Error History */
+.error-history .error-list {
+  margin-top: 8px;
+}
+
+.error-history .error-entry {
+  padding: 4px 0;
+  border-left: 3px solid #e53e3e;
+  padding-left: 8px;
+  margin-bottom: 6px;
+  font-size: 11px;
+}
+
+.error-history .error-time {
+  color: #a0aec0;
+  margin-right: 8px;
+}
+
+.error-history .error-type {
+  color: #d69e2e;
+  margin-right: 8px;
+  font-weight: bold;
+}
+
+.error-history .error-msg {
+  color: #fc8181;
+}

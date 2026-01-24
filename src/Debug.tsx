@@ -34,12 +34,57 @@ type TranscriptionStatus = {
   api_provider: string
 }
 
+// Metrics types matching Rust backend (Sprint 6)
+type CycleMetrics = {
+  cycle_id: string
+  started_at: number
+  recording_duration_ms: number
+  audio_file_size_bytes: number
+  transcription_duration_ms: number
+  transcript_length_chars: number
+  total_cycle_ms: number
+  success: boolean
+  error_message: string | null
+}
+
+type MetricsSummary = {
+  total_cycles: number
+  successful_cycles: number
+  failed_cycles: number
+  avg_recording_duration_ms: number
+  avg_transcription_duration_ms: number
+  avg_total_cycle_ms: number
+  last_error: ErrorRecord | null
+}
+
+type ErrorRecord = {
+  timestamp: number
+  error_type: string
+  message: string
+  cycle_id: string | null
+}
+
+// Helper functions for formatting
+function formatMs(ms: number): string {
+  if (ms < 1000) return `${ms}ms`
+  return `${(ms / 1000).toFixed(1)}s`
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
+}
+
 function Debug() {
   const [uiState, setUiState] = useState<UiState>({ status: 'idle' })
   const [log, setLog] = useState<string[]>([])
   const [hotkeyStatus, setHotkeyStatus] = useState<HotkeyStatus | null>(null)
   const [audioStatus, setAudioStatus] = useState<AudioStatus | null>(null)
   const [transcriptionStatus, setTranscriptionStatus] = useState<TranscriptionStatus | null>(null)
+  const [metricsSummary, setMetricsSummary] = useState<MetricsSummary | null>(null)
+  const [metricsHistory, setMetricsHistory] = useState<CycleMetrics[]>([])
+  const [errorHistory, setErrorHistory] = useState<ErrorRecord[]>([])
 
   useEffect(() => {
     const unlisten = listen<UiState>('state-update', (event) => {
@@ -93,6 +138,25 @@ function Debug() {
     }
     loadTranscriptionStatus()
   }, [])
+
+  // Load metrics data on mount and after state changes
+  useEffect(() => {
+    const loadMetrics = async () => {
+      try {
+        const [summary, history, errors] = await Promise.all([
+          invoke<MetricsSummary>('get_metrics_summary'),
+          invoke<CycleMetrics[]>('get_metrics_history'),
+          invoke<ErrorRecord[]>('get_error_history'),
+        ])
+        setMetricsSummary(summary)
+        setMetricsHistory(history)
+        setErrorHistory(errors)
+      } catch (e) {
+        console.error('Failed to get metrics:', e)
+      }
+    }
+    loadMetrics()
+  }, [uiState]) // Reload when state changes
 
   const simulateRecordStart = async () => {
     try {
@@ -202,6 +266,92 @@ function Debug() {
         {uiState.status === 'error' && `: ${uiState.message}`}
         {uiState.status === 'done' && `: "${uiState.text}"`}
       </div>
+
+      {/* Metrics Summary */}
+      {metricsSummary && (
+        <div className="debug-section metrics-summary">
+          <strong>Performance Metrics:</strong>
+          <div className="metrics-grid">
+            <div className="metric-item">
+              <span className="metric-label">Total Cycles:</span>
+              <span className="metric-value">{metricsSummary.total_cycles}</span>
+            </div>
+            <div className="metric-item">
+              <span className="metric-label">Success Rate:</span>
+              <span className="metric-value">
+                {metricsSummary.total_cycles > 0
+                  ? Math.round((metricsSummary.successful_cycles / metricsSummary.total_cycles) * 100)
+                  : 0}%
+              </span>
+            </div>
+            <div className="metric-item">
+              <span className="metric-label">Avg Recording:</span>
+              <span className="metric-value">{metricsSummary.avg_recording_duration_ms}ms</span>
+            </div>
+            <div className="metric-item">
+              <span className="metric-label">Avg Transcription:</span>
+              <span className="metric-value">{metricsSummary.avg_transcription_duration_ms}ms</span>
+            </div>
+            <div className="metric-item">
+              <span className="metric-label">Avg Total:</span>
+              <span className="metric-value">{metricsSummary.avg_total_cycle_ms}ms</span>
+            </div>
+            <div className="metric-item">
+              <span className="metric-label">Failed:</span>
+              <span className="metric-value error-count">{metricsSummary.failed_cycles}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Recent Cycles */}
+      {metricsHistory.length > 0 && (
+        <div className="debug-section cycle-history">
+          <strong>Recent Cycles:</strong>
+          <div className="history-table-container">
+            <table className="history-table">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Record</th>
+                  <th>Transcribe</th>
+                  <th>Total</th>
+                  <th>Size</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {metricsHistory.slice(0, 10).map((cycle) => (
+                  <tr key={cycle.cycle_id} className={cycle.success ? '' : 'failed-row'}>
+                    <td>{new Date(cycle.started_at * 1000).toLocaleTimeString()}</td>
+                    <td>{formatMs(cycle.recording_duration_ms)}</td>
+                    <td>{formatMs(cycle.transcription_duration_ms)}</td>
+                    <td>{formatMs(cycle.total_cycle_ms)}</td>
+                    <td>{formatBytes(cycle.audio_file_size_bytes)}</td>
+                    <td>{cycle.success ? '✓' : '✗'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Error History */}
+      {errorHistory.length > 0 && (
+        <div className="debug-section error-history">
+          <strong>Recent Errors:</strong>
+          <div className="error-list">
+            {errorHistory.slice(0, 5).map((err, i) => (
+              <div key={i} className="error-entry">
+                <span className="error-time">{new Date(err.timestamp * 1000).toLocaleTimeString()}</span>
+                <span className="error-type">[{err.error_type}]</span>
+                <span className="error-msg">{err.message}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="debug-buttons">
         <button onClick={simulateRecordStart}>Simulate Recording</button>
