@@ -2,6 +2,7 @@
 
 Target: Real-time transcription feedback via OpenAI Realtime API with redesigned HUD
 
+**Master Tracking Issue:** #52
 **Parent Issue:** #9 (Sprint 7 Phase 2: Streaming or post-processing)
 
 ---
@@ -28,7 +29,7 @@ CPAL Input → Ring Buffer → WebSocket → OpenAI Realtime API
 
 ---
 
-## Phase 1: Core Streaming Infrastructure
+## Phase 1: Core Streaming Infrastructure — #53
 
 **Goal:** Add WebSocket dependencies and create the audio streaming buffer infrastructure.
 
@@ -75,7 +76,7 @@ pub struct AudioChunk {
 
 ---
 
-## Phase 2: OpenAI Realtime Client
+## Phase 2: OpenAI Realtime Client — #54
 
 **Goal:** Implement WebSocket client for OpenAI Realtime API with audio streaming and transcript receiving.
 
@@ -137,7 +138,7 @@ wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17
 
 ---
 
-## Phase 3: State Machine Integration
+## Phase 3: State Machine Integration — #55
 
 **Goal:** Integrate streaming into the existing state machine without breaking current flow.
 
@@ -195,7 +196,7 @@ struct PartialTranscriptPayload {
 
 ---
 
-## Phase 4: Waveform Data Extraction
+## Phase 4: Waveform Data Extraction — #56
 
 **Goal:** Extract audio level data for real-time waveform visualization in the HUD.
 
@@ -243,7 +244,7 @@ pub struct WaveformData {
 
 ---
 
-## Phase 5: Error Handling & Fallback
+## Phase 5: Error Handling & Fallback — #57
 
 **Goal:** Ensure graceful degradation when streaming fails.
 
@@ -282,7 +283,7 @@ pub struct WaveformData {
 
 ---
 
-## Phase 6: Backend Testing
+## Phase 6: Backend Testing — #58
 
 **Goal:** Comprehensive testing of streaming infrastructure.
 
@@ -312,7 +313,7 @@ pub struct WaveformData {
 
 ---
 
-## Phase UI-1: HUD Layout Restructure
+## Phase UI-1: HUD Layout Restructure — #59
 
 **Goal:** Redesign HUD layout with mic button and status pill.
 
@@ -358,7 +359,7 @@ pub struct WaveformData {
 
 ---
 
-## Phase UI-2: MicButton State Styling
+## Phase UI-2: MicButton State Styling — #60
 
 **Goal:** Implement state-based colors and icons for the mic button.
 
@@ -400,7 +401,7 @@ pub struct WaveformData {
 
 ---
 
-## Phase UI-3: Waveform Display
+## Phase UI-3: Waveform Display — #61
 
 **Goal:** Create animated waveform visualization for recording state.
 
@@ -444,7 +445,7 @@ interface WaveformData {
 
 ---
 
-## Phase UI-4: Transcript Panel
+## Phase UI-4: Transcript Panel — #62
 
 **Goal:** Create floating transcript panel with streaming text display.
 
@@ -492,7 +493,7 @@ interface WaveformData {
 
 ---
 
-## Phase UI-5: Waveform Event Wiring
+## Phase UI-5: Waveform Event Wiring — #63
 
 **Goal:** Connect React WaveformDisplay to Rust waveform events.
 
@@ -519,7 +520,7 @@ interface WaveformData {
 
 ---
 
-## Phase UI-6: Transcript Event Wiring
+## Phase UI-6: Transcript Event Wiring — #64
 
 **Goal:** Connect React TranscriptPanel to Rust partial transcript events.
 
@@ -548,7 +549,7 @@ interface WaveformData {
 
 ---
 
-## Phase UI-7: Transcript Animations
+## Phase UI-7: Transcript Animations — #65
 
 **Goal:** Implement fade and scroll animations for transcript lines.
 
@@ -593,7 +594,7 @@ interface WaveformData {
 
 ---
 
-## Phase UI-8: Polish & Integration
+## Phase UI-8: Polish & Integration — #66
 
 **Goal:** Final polish and end-to-end integration testing.
 
@@ -621,35 +622,40 @@ interface WaveformData {
 
 ### Dependency Graph
 ```
-Phase 1 (Buffer) ──┬──→ Phase 2 (WebSocket) ──→ Phase 3 (State Machine)
-                   │                                      │
-                   └──→ Phase 4 (Waveform) ───────────────┤
-                                                          │
-Phase 5 (Fallback) ◄──────────────────────────────────────┤
-                                                          │
-Phase 6 (Testing) ◄───────────────────────────────────────┘
+#53 (Buffer) ──┬──→ #54 (WebSocket) ──→ #55 (State Machine)
+               │                                │
+               └──→ #56 (Waveform) ─────────────┤
+                                                │
+#57 (Fallback) ◄────────────────────────────────┤
+                                                │
+#58 (Testing) ◄─────────────────────────────────┘
 
-Phase UI-1 (Layout) ──→ UI-2 (MicButton) ──→ UI-3 (Waveform) ──→ UI-5 (Wire)
-                   └──→ UI-4 (Transcript) ──→ UI-6 (Wire) ──→ UI-7 (Animate)
-                                                                    │
-Phase UI-8 (Polish) ◄───────────────────────────────────────────────┘
+#59 (Layout) ──┬──→ #60 (MicButton) ──→ #61 (Waveform) ──→ #63 (Wire)
+               │                                                  │
+               └──→ #62 (Transcript) ──→ #64 (Wire) ──→ #65 (Animate)
+                                                              │
+#66 (Polish) ◄────────────────────────────────────────────────┘
 ```
 
-### GitHub Issues to Create
-1. **Sprint 7A: Core streaming infrastructure (Phase 1)**
-2. **Sprint 7A: OpenAI Realtime WebSocket client (Phase 2)**
-3. **Sprint 7A: State machine streaming integration (Phase 3)**
-4. **Sprint 7A: Waveform data extraction (Phase 4)**
-5. **Sprint 7A: Error handling & fallback (Phase 5)**
-6. **Sprint 7A: Backend testing (Phase 6)**
-7. **Sprint 7A: HUD layout restructure (UI-1)**
-8. **Sprint 7A: MicButton state styling (UI-2)**
-9. **Sprint 7A: Waveform display component (UI-3)**
-10. **Sprint 7A: Transcript panel component (UI-4)**
-11. **Sprint 7A: Waveform event wiring (UI-5)**
-12. **Sprint 7A: Transcript event wiring (UI-6)**
-13. **Sprint 7A: Transcript animations (UI-7)**
-14. **Sprint 7A: Polish & integration (UI-8)**
+### GitHub Issues
+
+| Issue | Phase | Title |
+|-------|-------|-------|
+| #52 | Master | Sprint 7A: Streaming Transcription (Master Tracking) |
+| #53 | Phase 1 | Core streaming infrastructure |
+| #54 | Phase 2 | OpenAI Realtime WebSocket client |
+| #55 | Phase 3 | State machine streaming integration |
+| #56 | Phase 4 | Waveform data extraction |
+| #57 | Phase 5 | Error handling & fallback |
+| #58 | Phase 6 | Backend testing |
+| #59 | UI-1 | HUD layout restructure |
+| #60 | UI-2 | MicButton state styling |
+| #61 | UI-3 | Waveform display component |
+| #62 | UI-4 | Transcript panel component |
+| #63 | UI-5 | Waveform event wiring |
+| #64 | UI-6 | Transcript event wiring |
+| #65 | UI-7 | Transcript animations |
+| #66 | UI-8 | Polish & integration |
 
 ### Success Metrics
 - Partial transcript latency < 500ms
