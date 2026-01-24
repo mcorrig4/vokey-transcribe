@@ -387,12 +387,15 @@ pub fn run() {
                                     return;
                                 }
                                 log::info!("Opening logs folder: {:?}", logs_dir);
-                                if let Err(e) = std::process::Command::new("xdg-open")
-                                    .arg(&logs_dir)
-                                    .spawn()
-                                {
-                                    log::error!("Failed to open logs folder: {}", e);
-                                }
+                                // Spawn in separate thread to avoid blocking UI event loop
+                                std::thread::spawn(move || {
+                                    if let Err(e) = std::process::Command::new("xdg-open")
+                                        .arg(&logs_dir)
+                                        .spawn()
+                                    {
+                                        log::error!("Failed to open logs folder: {}", e);
+                                    }
+                                });
                             }
                             Err(e) => {
                                 log::error!("Could not determine logs directory: {}", e);
