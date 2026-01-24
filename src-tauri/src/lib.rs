@@ -275,6 +275,15 @@ pub fn run() {
                         if let Some(window) = app.get_webview_window("debug") {
                             let _ = window.show();
                             let _ = window.set_focus();
+                            // Workaround for Wayland: trigger a resize to fix window control hit-testing
+                            // This forces the compositor to recalculate the window's input regions
+                            if let Ok(size) = window.outer_size() {
+                                let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize {
+                                    width: size.width + 1,
+                                    height: size.height,
+                                }));
+                                let _ = window.set_size(tauri::Size::Physical(size));
+                            }
                         }
                     }
                     "quit" => {
