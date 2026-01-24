@@ -1,4 +1,4 @@
-# Sprint 7 — Phase 2 Features
+# Sprint 7B — Post-processing Modes
 
 **Goal:** Add one "wow" upgrade to VoKey Transcribe.
 
@@ -57,7 +57,7 @@
 
 ## Recommendation
 
-**Start with Option B (Post-processing Modes)** for Sprint 7:
+**Start with Option B (Post-processing Modes)** for Sprint 7B:
 
 1. Lower risk — builds on proven batch transcription
 2. Faster delivery — can complete in 1-2 weeks
@@ -66,7 +66,7 @@
 
 ---
 
-## Sprint 7 Implementation Plan
+## Sprint 7B Implementation Plan
 
 ### Phase 1: Mode Selection Infrastructure
 
@@ -695,9 +695,9 @@ regex = "1"
 
 ---
 
-## Future: Sprint 8 — Streaming Transcription
+## Parallel Work: Sprint 7A — Streaming Transcription
 
-After Sprint 7, consider adding Option A (Streaming) as Sprint 8:
+Sprint 7A (parallel team) is implementing Option A (Streaming):
 
 1. Use OpenAI Realtime API transcription-only mode
 2. WebSocket connection during recording
@@ -705,7 +705,7 @@ After Sprint 7, consider adding Option A (Streaming) as Sprint 8:
 4. Finalize with full batch transcription on stop
 5. Combine with post-processing modes
 
-The post-processing pipeline from Sprint 7 will work with streaming output.
+The post-processing pipeline from Sprint 7B will work with Sprint 7A's streaming output.
 
 ---
 

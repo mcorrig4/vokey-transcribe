@@ -6,7 +6,7 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Current Status
 
-**Phase:** Sprint 7 PLANNING — Post-processing modes
+**Phase:** Sprint 7B PLANNING — Post-processing modes
 **Target:** Kubuntu with KDE Plasma 6.4 on Wayland
 **Branch:** `claude/plan-sprint-7-70hjz`
 **Last Updated:** 2026-01-24
@@ -43,21 +43,25 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 | 4 - OpenAI transcription + clipboard | ✅ COMPLETE | OpenAI Whisper API, arboard clipboard, tested on real hardware |
 | 5 - Full flow polish + tray controls | 🧪 UAT | Tray menu with Toggle/Cancel/Open Logs, HUD timer, auto-dismiss |
 | 6 - Hardening + UX polish | ⏸️ PAUSED | Phases 1-5 done; Phase 6 (50-cycle stability) needs real hardware |
-| 7 - Post-processing modes | 📋 PLANNING | Option B chosen: Normal/Coding/Markdown/Prompt modes |
+| 7A - Streaming transcription | 🔄 PARALLEL | Separate team implementing Option A (Realtime API) |
+| 7B - Post-processing modes | 📋 PLANNING | Option B chosen: Normal/Coding/Markdown/Prompt modes |
 
 ---
 
 ## Current Task Context
 
-### Active Sprint: Sprint 7 - Post-processing Modes
+### Active Sprint: Sprint 7B - Post-processing Modes
 
-**Implementation Plan:** See `docs/SPRINT7-PLAN.md` for detailed breakdown.
+**Implementation Plan:** See `docs/SPRINT7B-PLAN.md` for detailed breakdown.
+
+**Note:** Sprint 7A (Streaming) is being developed in parallel by another team.
 
 ### Decision Made:
-- **Option B: Post-processing Modes** selected over Option A (Streaming)
-- Rationale: Lower complexity, builds on existing batch flow, high developer value
+- **Sprint 7B: Post-processing Modes** — this team
+- **Sprint 7A: Streaming Transcription** — parallel team
+- Both features can be combined after completion
 
-### Sprint 7 Phases:
+### Sprint 7B Phases:
 1. ⬜ Mode Selection Infrastructure - ProcessingMode enum, state, tray menu
 2. ⬜ Processing Engines - Coding, Markdown, Prompt processors
 3. ⬜ Pipeline Integration - Post-processing after transcription
@@ -147,8 +151,8 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Session Notes
 
-### Session 2026-01-24 (Sprint 7 Planning)
-**Analyzed options and created Sprint 7 plan:**
+### Session 2026-01-24 (Sprint 7B Planning)
+**Analyzed options and created Sprint 7B plan:**
 
 **Options Evaluated:**
 - **Option A: Streaming Partial Transcript** — Use OpenAI Realtime API for live transcription
@@ -161,16 +165,16 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
   - Cons: No real-time feedback, extra API call for Prompt mode
   - Effort: Medium (2-3 phases)
 
-**Decision: Option B (Post-processing Modes)**
+**Decision: Sprint 7B (Post-processing Modes)** — parallel with Sprint 7A (Streaming)
 
-**Rationale:**
-1. Lower risk — builds on proven batch transcription
-2. Faster delivery — can complete in 1-2 weeks
-3. High developer value — Coding mode for variable names is killer feature
-4. Future-ready — Can add streaming in Sprint 8
+**Rationale for splitting:**
+1. Both features are valuable and independent
+2. Parallel development speeds up delivery
+3. Post-processing (7B) builds on existing batch flow
+4. Streaming (7A) can use 7B's post-processing pipeline
 
 **Planning Documents Created:**
-- `docs/SPRINT7-PLAN.md` — Comprehensive implementation plan
+- `docs/SPRINT7B-PLAN.md` — Comprehensive implementation plan
   - Phase 1: Mode Selection Infrastructure
   - Phase 2: Processing Engines (Coding, Markdown, Prompt)
   - Phase 3: Pipeline Integration
