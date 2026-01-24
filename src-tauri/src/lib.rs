@@ -241,6 +241,37 @@ fn get_transcription_status() -> TranscriptionStatusResponse {
     }
 }
 
+/// Internal implementation for opening the settings window with Wayland workaround
+///
+/// This handles the full window open sequence including a workaround for the
+/// TAO CSD bug (tao#1046, tauri#12685) where window control buttons don't work
+/// on KDE Plasma/Wayland until a maximize/unmaximize cycle occurs.
+async fn open_settings_window_impl(app: &AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("debug") {
+        window.show().map_err(|e| e.to_string())?;
+        window.set_focus().map_err(|e| e.to_string())?;
+
+        // Workaround for Wayland CSD bug (tao#1046): window control buttons
+        // don't work until a maximize/unmaximize cycle fixes hit-testing.
+        // We need a delay between maximize and unmaximize because Wayland
+        // window operations are asynchronous.
+        window.maximize().map_err(|e| e.to_string())?;
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        window.unmaximize().map_err(|e| e.to_string())?;
+
+        Ok(())
+    } else {
+        Err("Settings window not found".to_string())
+    }
+}
+
+/// Tauri command to open the settings window (called from frontend)
+#[tauri::command]
+async fn open_settings_window(app: AppHandle) -> Result<(), String> {
+    log::info!("Opening settings window from frontend");
+    open_settings_window_impl(&app).await
+}
+
 // ============================================================================
 // Application entry point
 // ============================================================================
@@ -325,16 +356,14 @@ pub fn run() {
                         }
                     }
                     "settings" => {
-                        log::info!("Settings/Debug clicked");
-                        // Open or focus the debug window
-                        if let Some(window) = app.get_webview_window("debug") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                            // Workaround for Wayland CSD bug (tao#1046): window control buttons
-                            // don't work until maximize/unmaximize cycle fixes hit-testing
-                            let _ = window.maximize();
-                            let _ = window.unmaximize();
-                        }
+                        log::info!("Settings/Debug clicked from tray");
+                        // Spawn async task to open settings with Wayland workaround
+                        let app_handle = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            if let Err(e) = open_settings_window_impl(&app_handle).await {
+                                log::error!("Failed to open settings window: {}", e);
+                            }
+                        });
                     }
                     "quit" => {
                         log::info!("Quit clicked");
@@ -405,6 +434,7 @@ pub fn run() {
             get_hotkey_status,
             get_audio_status,
             get_transcription_status,
+            open_settings_window,
         ])
         .on_window_event(|window, event| {
             // Hide windows instead of closing them (except for quit)
