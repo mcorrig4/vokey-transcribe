@@ -344,14 +344,19 @@ pub fn run() {
                     }
                     "open_logs" => {
                         log::info!("Open Logs Folder clicked");
-                        // Open logs folder using xdg-open (Linux)
-                        if let Some(data_dir) = dirs::data_dir() {
-                            let logs_dir = data_dir.join("vokey-transcribe").join("logs");
-                            if let Err(e) = std::process::Command::new("xdg-open")
-                                .arg(&logs_dir)
-                                .spawn()
-                            {
-                                log::error!("Failed to open logs folder: {}", e);
+                        // Use Tauri's path resolver for correct app log directory
+                        match app.path().app_log_dir() {
+                            Ok(logs_dir) => {
+                                log::info!("Opening logs folder: {:?}", logs_dir);
+                                if let Err(e) = std::process::Command::new("xdg-open")
+                                    .arg(&logs_dir)
+                                    .spawn()
+                                {
+                                    log::error!("Failed to open logs folder: {}", e);
+                                }
+                            }
+                            Err(e) => {
+                                log::error!("Could not determine logs directory: {}", e);
                             }
                         }
                     }
