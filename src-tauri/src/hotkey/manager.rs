@@ -1,6 +1,9 @@
 //! Hotkey manager - coordinates device monitoring and event aggregation
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use evdev::{Device, InputEventKind, Key};
 use tokio::sync::mpsc;
@@ -8,6 +11,52 @@ use tokio_util::sync::CancellationToken;
 
 use super::{detector::HotkeyDetector, Hotkey};
 use crate::state_machine::Event;
+
+/// Debounce duration to prevent rapid hotkey spam
+const DEBOUNCE_MS: u64 = 300;
+
+/// Shared state for debouncing across all device monitors
+struct DebounceState {
+    /// Timestamp of last trigger in milliseconds since start
+    last_trigger_ms: AtomicU64,
+    /// Start time for calculating elapsed time
+    start: Instant,
+}
+
+impl DebounceState {
+    fn new() -> Self {
+        Self {
+            last_trigger_ms: AtomicU64::new(0),
+            start: Instant::now(),
+        }
+    }
+
+    /// Check if we should trigger and update the last trigger time
+    /// Returns true if trigger should proceed (not debounced)
+    fn should_trigger(&self) -> bool {
+        let now_ms = self.start.elapsed().as_millis() as u64;
+        let last = self.last_trigger_ms.load(Ordering::SeqCst);
+
+        if now_ms.saturating_sub(last) >= DEBOUNCE_MS {
+            // Try to claim this trigger - only proceed if we win the CAS
+            match self.last_trigger_ms.compare_exchange(
+                last,
+                now_ms,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            ) {
+                Ok(_) => true, // We won, trigger the event
+                Err(_) => {
+                    log::trace!("Hotkey debounce: another device won the race");
+                    false // Another thread beat us, they'll handle it
+                }
+            }
+        } else {
+            log::trace!("Hotkey debounced ({}ms since last trigger)", now_ms.saturating_sub(last));
+            false
+        }
+    }
+}
 
 /// Find all keyboard devices on the system
 pub fn find_keyboards() -> Vec<(PathBuf, Device)> {
@@ -71,6 +120,8 @@ pub struct HotkeyStatus {
 pub struct HotkeyManager {
     cancel_token: CancellationToken,
     status: HotkeyStatus,
+    #[allow(dead_code)]
+    debounce: Arc<DebounceState>,
 }
 
 impl HotkeyManager {
@@ -92,20 +143,25 @@ impl HotkeyManager {
             .unwrap_or_else(|| "None".to_string());
 
         log::info!(
-            "Starting hotkey monitoring on {} device(s), hotkey: {}",
+            "Starting hotkey monitoring on {} device(s), hotkey: {}, debounce: {}ms",
             device_count,
-            hotkey_display
+            hotkey_display,
+            DEBOUNCE_MS
         );
+
+        // Create shared debounce state
+        let debounce = Arc::new(DebounceState::new());
 
         // Spawn a task for each keyboard
         for (path, device) in keyboards {
             let tx = event_tx.clone();
             let hotkeys = hotkeys.clone();
             let cancel = cancel_token.clone();
+            let debounce = debounce.clone();
             let path_str = path.to_string_lossy().to_string();
 
             tauri::async_runtime::spawn(async move {
-                Self::monitor_device(path_str, device, hotkeys, tx, cancel).await;
+                Self::monitor_device(path_str, device, hotkeys, tx, cancel, debounce).await;
             });
         }
 
@@ -117,6 +173,7 @@ impl HotkeyManager {
                 hotkey: hotkey_display,
                 error: None,
             },
+            debounce,
         })
     }
 
@@ -132,6 +189,7 @@ impl HotkeyManager {
         hotkeys: Vec<Hotkey>,
         tx: mpsc::Sender<Event>,
         cancel: CancellationToken,
+        debounce: Arc<DebounceState>,
     ) {
         let name = device.name().unwrap_or("Unknown").to_string();
         log::info!("Monitoring keyboard device: {} ({})", path, name);
@@ -163,11 +221,14 @@ impl HotkeyManager {
                             // Only process key events
                             if let InputEventKind::Key(key) = ev.kind() {
                                 if let Some(hotkey) = detector.process_key(key, ev.value()) {
-                                    log::info!("Hotkey triggered: {}", hotkey);
+                                    // Apply debounce to prevent rapid triggering
+                                    if debounce.should_trigger() {
+                                        log::info!("Hotkey triggered: {}", hotkey);
 
-                                    if let Err(e) = tx.send(Event::HotkeyToggle).await {
-                                        log::error!("Failed to send HotkeyToggle event: {}", e);
-                                        break;
+                                        if let Err(e) = tx.send(Event::HotkeyToggle).await {
+                                            log::error!("Failed to send HotkeyToggle event: {}", e);
+                                            break;
+                                        }
                                     }
                                 }
                             }

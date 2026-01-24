@@ -258,9 +258,38 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
                 EmitUi,
             ],
         ),
-        // Tick during recording - just update UI with new elapsed time
-        (Recording { recording_id, .. }, RecordingTick { id }) if *recording_id == id => {
-            (state.clone(), vec![EmitUi])
+        // Tick during recording - update UI and check for max duration
+        (
+            Recording {
+                recording_id,
+                wav_path,
+                started_at,
+            },
+            RecordingTick { id },
+        ) if *recording_id == id => {
+            let elapsed = started_at.elapsed();
+
+            // Auto-stop at 2 minutes (120s) to prevent runaway recordings
+            if elapsed >= Duration::from_secs(120) {
+                log::warn!(
+                    "Recording {} auto-stopped after {:?} (max duration reached)",
+                    recording_id,
+                    elapsed
+                );
+                (
+                    Stopping {
+                        recording_id: *recording_id,
+                        wav_path: wav_path.clone(),
+                    },
+                    vec![StopAudio { id: *recording_id }, EmitUi],
+                )
+            } else {
+                // Normal tick - just update UI
+                if elapsed.as_secs() == 30 {
+                    log::info!("Recording {} at 30 seconds (consider stopping soon)", recording_id);
+                }
+                (state.clone(), vec![EmitUi])
+            }
         }
 
         // -----------------

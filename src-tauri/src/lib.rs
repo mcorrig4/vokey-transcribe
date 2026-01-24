@@ -102,13 +102,17 @@ async fn run_state_loop(
     effect_runner: Arc<dyn EffectRunner>,
 ) {
     let mut state = State::default();
+    let mut state_entered_at = std::time::Instant::now();
 
     // Emit initial state
     emit_ui_state(&app, &state);
     log::info!("State loop started");
 
     while let Some(event) = rx.recv().await {
-        log::debug!("Received event: {:?}", event);
+        // Skip logging for tick events to reduce noise
+        if !matches!(event, Event::RecordingTick { .. }) {
+            log::debug!("Received event: {:?}", event);
+        }
 
         // Handle Exit at the edge
         if matches!(event, Event::Exit) {
@@ -117,12 +121,19 @@ async fn run_state_loop(
         }
 
         let old_discriminant = std::mem::discriminant(&state);
-        let (next, effects) = reduce(&state, event);
+        let (next, effects) = reduce(&state, event.clone());
         let new_discriminant = std::mem::discriminant(&next);
 
-        // Log state transitions
+        // Log state transitions with timing
         if old_discriminant != new_discriminant {
-            log::info!("State transition: {:?} -> {:?}", state, next);
+            let duration = state_entered_at.elapsed();
+            log::info!(
+                "State transition: {:?} -> {:?} (in previous state for {:?})",
+                std::mem::discriminant(&state),
+                std::mem::discriminant(&next),
+                duration
+            );
+            state_entered_at = std::time::Instant::now();
         }
 
         state = next;

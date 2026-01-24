@@ -195,6 +195,14 @@ impl MetricsCollector {
         }
     }
 
+    /// Get the current recording duration in milliseconds (if recording just stopped)
+    pub fn get_current_recording_duration_ms(&self) -> Option<u64> {
+        self.current_cycle
+            .as_ref()
+            .and_then(|c| c.recording_duration)
+            .map(|d| d.as_millis() as u64)
+    }
+
     /// Mark that transcription has started
     pub fn transcription_started(&mut self) {
         if let Some(ref mut cycle) = self.current_cycle {

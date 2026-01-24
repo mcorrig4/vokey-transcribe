@@ -168,9 +168,27 @@ impl EffectRunner for AudioEffectRunner {
                                     };
 
                                     // Track recording stopped in metrics
-                                    {
+                                    let recording_duration_ms = {
                                         let mut m = metrics.lock().await;
                                         m.recording_stopped(file_size);
+                                        // Get duration from metrics for logging
+                                        m.get_current_recording_duration_ms()
+                                    };
+
+                                    // Log warning for very short recordings
+                                    if let Some(duration_ms) = recording_duration_ms {
+                                        if duration_ms < 500 {
+                                            log::warn!(
+                                                "Very short recording detected: {}ms - transcription may be empty",
+                                                duration_ms
+                                            );
+                                        } else {
+                                            log::info!(
+                                                "Recording stopped: {}ms, {} bytes",
+                                                duration_ms,
+                                                file_size
+                                            );
+                                        }
                                     }
 
                                     let _ = tx.send(Event::AudioStopOk { id }).await;
