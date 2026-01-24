@@ -323,23 +323,21 @@ pub fn run() {
                     "toggle" => {
                         log::info!("Toggle Recording clicked");
                         if let Some(state) = app.try_state::<StateLoopHandle>() {
-                            let tx = state.tx.clone();
-                            tauri::async_runtime::spawn(async move {
-                                if let Err(e) = tx.send(Event::HotkeyToggle).await {
-                                    log::error!("Failed to send toggle event: {}", e);
-                                }
-                            });
+                            if let Err(e) = state.tx.try_send(Event::HotkeyToggle) {
+                                log::error!("Failed to send toggle event: {}", e);
+                            }
+                        } else {
+                            log::warn!("StateLoopHandle not available for toggle event");
                         }
                     }
                     "cancel" => {
                         log::info!("Cancel clicked");
                         if let Some(state) = app.try_state::<StateLoopHandle>() {
-                            let tx = state.tx.clone();
-                            tauri::async_runtime::spawn(async move {
-                                if let Err(e) = tx.send(Event::Cancel).await {
-                                    log::error!("Failed to send cancel event: {}", e);
-                                }
-                            });
+                            if let Err(e) = state.tx.try_send(Event::Cancel) {
+                                log::error!("Failed to send cancel event: {}", e);
+                            }
+                        } else {
+                            log::warn!("StateLoopHandle not available for cancel event");
                         }
                     }
                     "open_logs" => {
@@ -347,6 +345,11 @@ pub fn run() {
                         // Use Tauri's path resolver for correct app log directory
                         match app.path().app_log_dir() {
                             Ok(logs_dir) => {
+                                // Ensure directory exists (may not exist if no logs written yet)
+                                if let Err(e) = std::fs::create_dir_all(&logs_dir) {
+                                    log::error!("Failed to create logs directory: {}", e);
+                                    return;
+                                }
                                 log::info!("Opening logs folder: {:?}", logs_dir);
                                 if let Err(e) = std::process::Command::new("xdg-open")
                                     .arg(&logs_dir)
