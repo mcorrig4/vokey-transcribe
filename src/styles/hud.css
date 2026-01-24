@@ -1,4 +1,5 @@
 .hud-container {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -25,6 +26,33 @@
   font-weight: 400;
   margin-top: 4px;
   opacity: 0.9;
+}
+
+.hud-settings-btn {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  transition: color 0.2s ease, background-color 0.2s ease;
+  /* Prevent dragging on the button */
+  -webkit-app-region: no-drag;
+}
+
+.hud-settings-btn:hover {
+  color: rgba(255, 255, 255, 1);
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+.hud-settings-btn svg {
+  display: block;
 }
 
 /* Pulse animation for recording state */
