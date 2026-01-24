@@ -6,10 +6,12 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Current Status
 
-**Phase:** Sprint 6 IN PROGRESS — Hardening + UX polish
+**Phase:** Sprint 7 PLANNING — Post-processing modes
 **Target:** Kubuntu with KDE Plasma 6.4 on Wayland
-**Branch:** `claude/plan-next-sprint-JNzkH`
+**Branch:** `claude/plan-sprint-7-70hjz`
 **Last Updated:** 2026-01-24
+
+**Sprint 6 Status:** Phases 1-5 complete, Phase 6 (Stability Testing) needs real hardware
 
 ---
 
@@ -40,34 +42,46 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 | 3 - Audio capture (CPAL + Hound) | ✅ COMPLETE | CPAL capture, hound WAV writing, XDG paths |
 | 4 - OpenAI transcription + clipboard | ✅ COMPLETE | OpenAI Whisper API, arboard clipboard, tested on real hardware |
 | 5 - Full flow polish + tray controls | 🧪 UAT | Tray menu with Toggle/Cancel/Open Logs, HUD timer, auto-dismiss |
-| 6 - Hardening + UX polish | 🔄 IN PROGRESS | Metrics, timing logs, edge cases, stability testing |
-| 7 - Phase 2 (streaming or post-processing) | Not started | |
+| 6 - Hardening + UX polish | ⏸️ PAUSED | Phases 1-5 done; Phase 6 (50-cycle stability) needs real hardware |
+| 7 - Post-processing modes | 📋 PLANNING | Option B chosen: Normal/Coding/Markdown/Prompt modes |
 
 ---
 
 ## Current Task Context
 
-### Active Sprint: Sprint 6 - Hardening + UX polish
+### Active Sprint: Sprint 7 - Post-processing Modes
 
-**Implementation Plan:** See `docs/SPRINT6-PLAN.md` for detailed breakdown.
+**Implementation Plan:** See `docs/SPRINT7-PLAN.md` for detailed breakdown.
 
-### Sprint 6 Phases:
-1. ✅ Metrics Infrastructure - `metrics.rs` module, timing/file size tracking
-2. ✅ Timing Logs - State transition timing, short recording warnings
-3. ✅ Enhanced Diagnostics UI - Metrics table, error history in Debug panel
-4. ✅ Edge Case Handling - Auto-stop at 120s, 300ms hotkey debounce
-5. ✅ Bug Fixes (partial) - #23, #24, #25 fixed; #15, #43 need real hardware
-6. ⬜ Stability Testing - 50 cycles without restart
+### Decision Made:
+- **Option B: Post-processing Modes** selected over Option A (Streaming)
+- Rationale: Lower complexity, builds on existing batch flow, high developer value
 
-### Current Task:
-Phase 6 - Stability Testing (requires real hardware)
+### Sprint 7 Phases:
+1. ⬜ Mode Selection Infrastructure - ProcessingMode enum, state, tray menu
+2. ⬜ Processing Engines - Coding, Markdown, Prompt processors
+3. ⬜ Pipeline Integration - Post-processing after transcription
+4. ⬜ UI Integration - Mode indicator in HUD, selector in Debug panel
+5. ⬜ Prompt Configuration (stretch) - Custom prompt storage
+
+### Modes to Implement:
+| Mode | Description | Processing |
+|------|-------------|------------|
+| Normal | Raw transcription, no changes | Passthrough |
+| Coding | snake_case, remove fillers | Local regex |
+| Markdown | Format as lists/structure | Local parsing |
+| Prompt | Custom LLM transformation | OpenAI Chat API |
 
 ### Acceptance Criteria (from ISSUES-v1.0.0.md):
-- [ ] 50 record/transcribe cycles without restart
-- [ ] Cancel works during transcribing
-- [ ] Errors recover without restart
-- [ ] Logs show durations/timings
-- [ ] Very short recording (<0.5s) handled gracefully
+- [ ] Mode selection works via tray menu and Debug panel
+- [ ] Coding mode produces valid identifiers (snake_case)
+- [ ] Markdown mode formats list items correctly
+- [ ] Prompt mode calls Chat API and falls back gracefully
+- [ ] HUD shows current mode indicator
+
+### Sprint 6 Status (Paused):
+- Phases 1-5 complete
+- Phase 6 (Stability Testing) requires real hardware for 50-cycle test
 
 ### Blockers:
 - Cannot build/test in headless environment (missing GTK libs - expected)
@@ -132,6 +146,44 @@ Phase 6 - Stability Testing (requires real hardware)
 ---
 
 ## Session Notes
+
+### Session 2026-01-24 (Sprint 7 Planning)
+**Analyzed options and created Sprint 7 plan:**
+
+**Options Evaluated:**
+- **Option A: Streaming Partial Transcript** — Use OpenAI Realtime API for live transcription
+  - Pros: Wow factor, immediate feedback, modern UX
+  - Cons: Complex WebSocket handling, significant refactoring, higher API costs
+  - Effort: High (3-4 phases)
+
+- **Option B: Post-processing Modes** — Transform transcription based on mode
+  - Pros: Builds on existing flow, high developer value, lower complexity
+  - Cons: No real-time feedback, extra API call for Prompt mode
+  - Effort: Medium (2-3 phases)
+
+**Decision: Option B (Post-processing Modes)**
+
+**Rationale:**
+1. Lower risk — builds on proven batch transcription
+2. Faster delivery — can complete in 1-2 weeks
+3. High developer value — Coding mode for variable names is killer feature
+4. Future-ready — Can add streaming in Sprint 8
+
+**Planning Documents Created:**
+- `docs/SPRINT7-PLAN.md` — Comprehensive implementation plan
+  - Phase 1: Mode Selection Infrastructure
+  - Phase 2: Processing Engines (Coding, Markdown, Prompt)
+  - Phase 3: Pipeline Integration
+  - Phase 4: UI Integration
+  - Phase 5: Prompt Configuration (stretch)
+
+**Technical Highlights:**
+- Coding mode: Remove fillers ("um", "uh"), convert to snake_case
+- Markdown mode: Detect list items, add structure
+- Prompt mode: OpenAI Chat Completions API with fallback
+- New `processing/` module with 5 files
+
+---
 
 ### Session 2026-01-24 (Sprint 6 Start - Hardening)
 **Sprint 5 in UAT, started Sprint 6 Phase 1:**
