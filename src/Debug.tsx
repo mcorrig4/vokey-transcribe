@@ -10,7 +10,7 @@ type UiState =
   | { status: 'recording'; elapsedSecs: number }
   | { status: 'stopping' }
   | { status: 'transcribing' }
-  | { status: 'noSpeech'; message: string }
+  | { status: 'noSpeech'; source: string; message: string }
   | { status: 'done'; text: string }
   | { status: 'error'; message: string; lastText: string | null }
 
@@ -33,6 +33,11 @@ type AudioStatus = {
 type TranscriptionStatus = {
   api_key_configured: boolean
   api_provider: string
+}
+
+type AppSettings = {
+  min_transcribe_ms: number
+  short_clip_vad_enabled: boolean
 }
 
 // Metrics types matching Rust backend (Sprint 6)
@@ -84,7 +89,7 @@ function formatUiStateForLog(state: UiState): string {
     case 'done':
       return `done: "${state.text}"`
     case 'noSpeech':
-      return `noSpeech: ${state.message}`
+      return `noSpeech (${state.source}): ${state.message}`
     case 'recording':
       return `recording (${state.elapsedSecs}s)`
     default:
@@ -98,6 +103,9 @@ function Debug() {
   const [hotkeyStatus, setHotkeyStatus] = useState<HotkeyStatus | null>(null)
   const [audioStatus, setAudioStatus] = useState<AudioStatus | null>(null)
   const [transcriptionStatus, setTranscriptionStatus] = useState<TranscriptionStatus | null>(null)
+  const [settings, setSettings] = useState<AppSettings | null>(null)
+  const [settingsError, setSettingsError] = useState<string | null>(null)
+  const [settingsSaving, setSettingsSaving] = useState(false)
   const [metricsSummary, setMetricsSummary] = useState<MetricsSummary | null>(null)
   const [metricsHistory, setMetricsHistory] = useState<CycleMetrics[]>([])
   const [errorHistory, setErrorHistory] = useState<ErrorRecord[]>([])
@@ -154,6 +162,35 @@ function Debug() {
     }
     loadTranscriptionStatus()
   }, [])
+
+  // Load settings on mount
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const s = await invoke<AppSettings>('get_settings')
+        setSettings(s)
+        setSettingsError(null)
+      } catch (e) {
+        console.error('Failed to get settings:', e)
+        setSettingsError(String(e))
+      }
+    }
+    loadSettings()
+  }, [])
+
+  const saveSettings = async (next: AppSettings) => {
+    setSettingsSaving(true)
+    try {
+      await invoke('set_settings', { settings: next })
+      setSettings(next)
+      setSettingsError(null)
+    } catch (e) {
+      console.error('Failed to save settings:', e)
+      setSettingsError(String(e))
+    } finally {
+      setSettingsSaving(false)
+    }
+  }
 
   // Load metrics data on mount and after state changes
   useEffect(() => {
@@ -289,6 +326,47 @@ function Debug() {
           <div className="api-key-hint">
             Set <code>OPENAI_API_KEY</code> environment variable
           </div>
+        )}
+      </div>
+
+      <div className="debug-section">
+        <strong>No-Speech Filters:</strong>
+        {settings ? (
+          <div className="settings-controls">
+            <label className="settings-row">
+              <span className="settings-label">Min duration to send to OpenAI (ms)</span>
+              <input
+                className="settings-input"
+                type="number"
+                min={0}
+                step={50}
+                value={settings.min_transcribe_ms}
+                onChange={(e) => setSettings({ ...settings, min_transcribe_ms: Number(e.target.value) })}
+                disabled={settingsSaving}
+              />
+            </label>
+            <label className="settings-row">
+              <span className="settings-label">Short-clip speech check (VAD)</span>
+              <input
+                type="checkbox"
+                checked={settings.short_clip_vad_enabled}
+                onChange={(e) => setSettings({ ...settings, short_clip_vad_enabled: e.target.checked })}
+                disabled={settingsSaving}
+              />
+            </label>
+            <div className="settings-hint">
+              VAD runs only for clips shorter than the threshold above; it reads the WAV once and blocks OpenAI calls when no
+              speech is detected.
+            </div>
+            <div className="settings-actions">
+              <button onClick={() => saveSettings(settings)} disabled={settingsSaving}>
+                {settingsSaving ? 'Saving...' : 'Save Settings'}
+              </button>
+              {settingsError && <span className="settings-error">Save failed: {settingsError}</span>}
+            </div>
+          </div>
+        ) : (
+          <span>Loading...</span>
         )}
       </div>
 

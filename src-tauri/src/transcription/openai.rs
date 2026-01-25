@@ -34,7 +34,10 @@ impl std::fmt::Display for TranscriptionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TranscriptionError::MissingApiKey => {
-                write!(f, "OpenAI API key not configured. Set OPENAI_API_KEY environment variable.")
+                write!(
+                    f,
+                    "OpenAI API key not configured. Set OPENAI_API_KEY environment variable."
+                )
             }
             TranscriptionError::FileReadError(e) => write!(f, "Failed to read audio file: {}", e),
             TranscriptionError::NetworkError(e) => write!(f, "Network error: {}", e),
@@ -50,8 +53,16 @@ impl std::error::Error for TranscriptionError {}
 
 /// OpenAI Whisper API response
 #[derive(Debug, Deserialize)]
-struct WhisperResponse {
+struct WhisperVerboseResponse {
     text: String,
+    #[serde(default)]
+    segments: Vec<WhisperSegment>,
+}
+
+#[derive(Debug, Deserialize)]
+struct WhisperSegment {
+    #[serde(default)]
+    no_speech_prob: Option<f32>,
 }
 
 /// OpenAI API error response
@@ -85,6 +96,23 @@ pub fn is_api_key_configured() -> bool {
     get_api_key().is_some()
 }
 
+#[derive(Debug, Clone)]
+pub struct TranscriptionResult {
+    pub text: String,
+    pub openai_no_speech_prob: Option<f32>,
+}
+
+fn max_no_speech_prob(segments: &[WhisperSegment]) -> Option<f32> {
+    let mut max: Option<f32> = None;
+    for segment in segments {
+        let Some(p) = segment.no_speech_prob else {
+            continue;
+        };
+        max = Some(max.map_or(p, |m| m.max(p)));
+    }
+    max
+}
+
 /// Transcribe an audio file using OpenAI Whisper API
 ///
 /// # Arguments
@@ -93,7 +121,7 @@ pub fn is_api_key_configured() -> bool {
 /// # Returns
 /// * `Ok(String)` - The transcribed text
 /// * `Err(TranscriptionError)` - Error details
-pub async fn transcribe_audio(wav_path: &Path) -> Result<String, TranscriptionError> {
+pub async fn transcribe_audio(wav_path: &Path) -> Result<TranscriptionResult, TranscriptionError> {
     let api_key = get_api_key().ok_or(TranscriptionError::MissingApiKey)?;
 
     // Read the audio file
@@ -122,7 +150,9 @@ pub async fn transcribe_audio(wav_path: &Path) -> Result<String, TranscriptionEr
 
     let form = Form::new()
         .part("file", file_part)
-        .text("model", "whisper-1");
+        .text("model", "whisper-1")
+        .text("response_format", "verbose_json")
+        .text("temperature", "0");
 
     // Make API request using shared client
     let response = get_http_client()
@@ -137,27 +167,32 @@ pub async fn transcribe_audio(wav_path: &Path) -> Result<String, TranscriptionEr
 
     if status.is_success() {
         // Parse successful response
-        let whisper_response: WhisperResponse = response
+        let whisper_response: WhisperVerboseResponse = response
             .json()
             .await
             .map_err(|e| TranscriptionError::ParseError(e.to_string()))?;
 
+        let openai_no_speech_prob = max_no_speech_prob(&whisper_response.segments);
         log::info!(
-            "Transcription successful: {} chars",
-            whisper_response.text.len()
+            "Transcription successful: {} chars (openai_no_speech_prob={:?})",
+            whisper_response.text.len(),
+            openai_no_speech_prob
         );
 
-        Ok(whisper_response.text)
+        Ok(TranscriptionResult {
+            text: whisper_response.text,
+            openai_no_speech_prob,
+        })
     } else {
         // Parse error response
         let error_text = response.text().await.unwrap_or_default();
 
-        let message = if let Ok(error_response) = serde_json::from_str::<ApiErrorResponse>(&error_text)
-        {
-            error_response.error.message
-        } else {
-            error_text
-        };
+        let message =
+            if let Ok(error_response) = serde_json::from_str::<ApiErrorResponse>(&error_text) {
+                error_response.error.message
+            } else {
+                error_text
+            };
 
         log::error!("OpenAI API error ({}): {}", status.as_u16(), message);
 

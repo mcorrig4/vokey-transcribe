@@ -109,10 +109,7 @@ mod mock_tests {
     fn mock_error_display_formats_correctly() {
         // Test all error variants format correctly for user display
         let errors = vec![
-            (
-                TranscriptionError::MissingApiKey,
-                "OPENAI_API_KEY",
-            ),
+            (TranscriptionError::MissingApiKey, "OPENAI_API_KEY"),
             (
                 TranscriptionError::FileReadError("file not found".to_string()),
                 "file not found",
@@ -163,7 +160,10 @@ mod mock_tests {
 
         // Could be ApiError (OpenAI rejects it) or ParseError (invalid WAV)
         assert!(
-            matches!(err, TranscriptionError::ApiError { .. } | TranscriptionError::NetworkError(_)),
+            matches!(
+                err,
+                TranscriptionError::ApiError { .. } | TranscriptionError::NetworkError(_)
+            ),
             "Expected ApiError or NetworkError for empty file, got: {:?}",
             err
         );
@@ -235,7 +235,7 @@ mod integration_tests {
             result.err()
         );
 
-        let text = result.unwrap();
+        let text = result.unwrap().text;
         assert!(
             !text.is_empty(),
             "Transcribed text should not be empty for speech audio"
@@ -261,7 +261,7 @@ mod integration_tests {
             result.err()
         );
 
-        let text = result.unwrap();
+        let text = result.unwrap().text;
         println!("Silence transcription result: '{}'", text);
 
         // Whisper often returns empty string or whitespace for silence
@@ -281,17 +281,14 @@ mod integration_tests {
         // Very short audio may succeed with empty text or fail
         // We mainly want to verify it doesn't panic
         match result {
-            Ok(text) => {
-                println!("Very short audio transcription: '{}'", text);
+            Ok(result) => {
+                println!("Very short audio transcription: '{}'", result.text);
             }
             Err(e) => {
                 println!("Very short audio error (may be expected): {}", e);
                 // Some errors are acceptable for very short audio
                 assert!(
-                    matches!(
-                        e,
-                        TranscriptionError::ApiError { .. }
-                    ),
+                    matches!(e, TranscriptionError::ApiError { .. }),
                     "Unexpected error type for very short audio: {:?}",
                     e
                 );

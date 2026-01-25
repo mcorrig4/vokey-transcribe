@@ -8,6 +8,23 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 
+#[derive(Debug, Clone)]
+pub enum NoSpeechSource {
+    DurationThreshold,
+    ShortClipVad,
+    OpenAiNoSpeechProb,
+}
+
+impl NoSpeechSource {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            NoSpeechSource::DurationThreshold => "duration",
+            NoSpeechSource::ShortClipVad => "vad",
+            NoSpeechSource::OpenAiNoSpeechProb => "openai",
+        }
+    }
+}
+
 /// Internal state of the recording workflow.
 /// This is the authoritative state - all transitions go through the reducer.
 #[derive(Debug, Clone)]
@@ -32,6 +49,7 @@ pub enum State {
     NoSpeech {
         recording_id: Uuid,
         wav_path: PathBuf,
+        source: NoSpeechSource,
         message: String,
     },
     Done {
@@ -89,6 +107,7 @@ pub enum Event {
     // No-speech detection events
     NoSpeechDetected {
         id: Uuid,
+        source: NoSpeechSource,
         message: String,
     },
 
@@ -298,7 +317,10 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             } else {
                 // Normal tick - just update UI
                 if elapsed.as_secs() == 30 {
-                    log::info!("Recording {} at 30 seconds (consider stopping soon)", recording_id);
+                    log::info!(
+                        "Recording {} at 30 seconds (consider stopping soon)",
+                        recording_id
+                    );
                 }
                 (state.clone(), vec![EmitUi])
             }
@@ -331,11 +353,16 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
                 recording_id,
                 wav_path,
             },
-            NoSpeechDetected { id, message },
+            NoSpeechDetected {
+                id,
+                source,
+                message,
+            },
         ) if *recording_id == id => (
             NoSpeech {
                 recording_id: *recording_id,
                 wav_path: wav_path.clone(),
+                source,
                 message,
             },
             vec![
@@ -391,6 +418,27 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
                 recording_id,
                 wav_path,
             },
+            NoSpeechDetected { id, source, message },
+        ) if *recording_id == id => (
+            NoSpeech {
+                recording_id: *recording_id,
+                wav_path: wav_path.clone(),
+                source,
+                message,
+            },
+            vec![
+                StartDoneTimeout {
+                    id: *recording_id,
+                    duration: Duration::from_secs(3),
+                },
+                EmitUi,
+            ],
+        ),
+        (
+            Transcribing {
+                recording_id,
+                wav_path,
+            },
             TranscribeFail { id, err },
         ) if *recording_id == id => (
             Error {
@@ -401,6 +449,31 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
                 Cleanup {
                     id: *recording_id,
                     wav_path: Some(wav_path.clone()),
+                },
+                EmitUi,
+            ],
+        ),
+        (
+            Transcribing {
+                recording_id,
+                wav_path,
+            },
+            NoSpeechDetected {
+                id,
+                source,
+                message,
+            },
+        ) if *recording_id == id => (
+            NoSpeech {
+                recording_id: *recording_id,
+                wav_path: wav_path.clone(),
+                source,
+                message,
+            },
+            vec![
+                StartDoneTimeout {
+                    id: *recording_id,
+                    duration: Duration::from_secs(3),
                 },
                 EmitUi,
             ],
@@ -436,7 +509,14 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
                 EmitUi,
             ],
         ),
-        (NoSpeech { recording_id, wav_path, .. }, DoneTimeout { id }) if *recording_id == id => (
+        (
+            NoSpeech {
+                recording_id,
+                wav_path,
+                ..
+            },
+            DoneTimeout { id },
+        ) if *recording_id == id => (
             Idle,
             vec![
                 Cleanup {

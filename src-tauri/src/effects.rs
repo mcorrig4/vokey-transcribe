@@ -13,10 +13,12 @@ use uuid::Uuid;
 
 use crate::audio::{cleanup_old_recordings, AudioRecorder};
 use crate::metrics::MetricsCollector;
+use crate::settings::AppSettings;
 use crate::state_machine::{Effect, Event};
 use crate::transcription;
 
-const MIN_RECORDING_MS_FOR_TRANSCRIPTION: u64 = 500;
+const OPENAI_NO_SPEECH_PROB_THRESHOLD: f32 = 0.8;
+const OPENAI_NO_SPEECH_MAX_TEXT_LEN: usize = 12;
 
 /// Trait for running effects asynchronously.
 /// Completion events are sent back via the provided channel.
@@ -37,12 +39,16 @@ pub struct AudioEffectRunner {
     recorder: Arc<Mutex<Option<AudioRecorder>>>,
     active_recordings: Arc<Mutex<HashMap<Uuid, ActiveRecording>>>,
     metrics: Arc<Mutex<MetricsCollector>>,
+    settings: Arc<Mutex<AppSettings>>,
 }
 
 impl AudioEffectRunner {
     /// Create a new AudioEffectRunner with metrics collection.
     /// Returns Ok even if audio device isn't available - errors happen at record time.
-    pub fn new(metrics: Arc<Mutex<MetricsCollector>>) -> Arc<Self> {
+    pub fn new(
+        metrics: Arc<Mutex<MetricsCollector>>,
+        settings: Arc<Mutex<AppSettings>>,
+    ) -> Arc<Self> {
         // Try to create the recorder now, but don't fail if we can't
         let recorder = match AudioRecorder::new() {
             Ok(r) => {
@@ -59,6 +65,7 @@ impl AudioEffectRunner {
             recorder: Arc::new(Mutex::new(recorder)),
             active_recordings: Arc::new(Mutex::new(HashMap::new())),
             metrics,
+            settings,
         })
     }
 }
@@ -98,13 +105,11 @@ impl EffectRunner for AudioEffectRunner {
                         } else {
                             Ok(())
                         }
-                        .and_then(|_| {
-                            match recorder_guard.as_ref() {
-                                Some(rec) => rec.start(id).map_err(|e| e.to_string()),
-                                None => {
-                                    log::error!("Audio recorder is unavailable after retry");
-                                    Err("Audio recorder unavailable".to_string())
-                                }
+                        .and_then(|_| match recorder_guard.as_ref() {
+                            Some(rec) => rec.start(id).map_err(|e| e.to_string()),
+                            None => {
+                                log::error!("Audio recorder is unavailable after retry");
+                                Err("Audio recorder unavailable".to_string())
                             }
                         })
                     }; // recorder_guard dropped here
@@ -139,9 +144,7 @@ impl EffectRunner for AudioEffectRunner {
                                 let mut m = metrics.lock().await;
                                 m.cycle_failed(err.clone());
                             }
-                            let _ = tx
-                                .send(Event::AudioStartFail { id, err })
-                                .await;
+                            let _ = tx.send(Event::AudioStartFail { id, err }).await;
                         }
                     }
                 });
@@ -150,85 +153,160 @@ impl EffectRunner for AudioEffectRunner {
             Effect::StopAudio { id } => {
                 let active = self.active_recordings.clone();
                 let metrics = self.metrics.clone();
+                let settings = self.settings.clone();
 
                 tokio::spawn(async move {
-                    let mut active_guard = active.lock().await;
+                    let handle = {
+                        let mut active_guard = active.lock().await;
+                        active_guard
+                            .remove(&id)
+                            .and_then(|mut recording| recording.handle.take())
+                    };
 
-                    if let Some(mut recording) = active_guard.remove(&id) {
-                        if let Some(handle) = recording.handle.take() {
-                            match handle.stop() {
-                                Ok(path) => {
-                                    log::info!("Audio recording stopped: {:?}", path);
+                    let Some(handle) = handle else {
+                        log::warn!("StopAudio: no active handle for id={}", id);
+                        let _ = tx.send(Event::AudioStopOk { id }).await;
+                        return;
+                    };
 
-                                    // Get file size for metrics (use async fs to avoid blocking)
-                                    let file_size = match tokio::fs::metadata(&path).await {
-                                        Ok(m) => m.len(),
-                                        Err(e) => {
-                                            log::warn!("Failed to get file size for {:?}: {}", path, e);
-                                            0
-                                        }
-                                    };
+                    match handle.stop() {
+                        Ok(path) => {
+                            log::info!("Audio recording stopped: {:?}", path);
 
-                                    // Track recording stopped in metrics
-                                    let recording_duration_ms = {
-                                        let mut m = metrics.lock().await;
-                                        m.recording_stopped(file_size);
-                                        // Get duration from metrics for logging
-                                        m.get_current_recording_duration_ms()
-                                    };
-
-                                    // Log warning for very short recordings
-                                    if let Some(duration_ms) = recording_duration_ms {
-                                        if duration_ms < MIN_RECORDING_MS_FOR_TRANSCRIPTION {
-                                            log::info!(
-                                                "Skipping transcription: recording too short ({}ms < {}ms)",
-                                                duration_ms,
-                                                MIN_RECORDING_MS_FOR_TRANSCRIPTION
-                                            );
-                                            let _ = tx
-                                                .send(Event::NoSpeechDetected {
-                                                    id,
-                                                    message: format!(
-                                                        "Recording too short: {}ms (< {}ms). Skipped transcription.",
-                                                        duration_ms, MIN_RECORDING_MS_FOR_TRANSCRIPTION
-                                                    ),
-                                                })
-                                                .await;
-                                            return;
-                                        }
-
-                                        log::info!(
-                                            "Recording stopped: {}ms, {} bytes",
-                                            duration_ms,
-                                            file_size
-                                        );
-                                    }
-
-                                    let _ = tx.send(Event::AudioStopOk { id }).await;
-                                }
+                            // Get file size for metrics (use async fs to avoid blocking)
+                            let file_size = match tokio::fs::metadata(&path).await {
+                                Ok(m) => m.len(),
                                 Err(e) => {
-                                    log::error!("Failed to stop audio recording: {}", e);
-                                    // Record error in metrics
-                                    {
-                                        let mut m = metrics.lock().await;
-                                        m.cycle_failed(e.to_string());
-                                    }
-                                    let _ = tx
-                                        .send(Event::AudioStopFail {
-                                            id,
-                                            err: e.to_string(),
+                                    log::warn!("Failed to get file size for {:?}: {}", path, e);
+                                    0
+                                }
+                            };
+
+                            // Track recording stopped in metrics
+                            let recording_duration_ms = {
+                                let mut m = metrics.lock().await;
+                                m.recording_stopped(file_size);
+                                // Get duration from metrics for logging
+                                m.get_current_recording_duration_ms()
+                            };
+
+                            let (min_transcribe_ms, short_clip_vad_enabled) = {
+                                let s = settings.lock().await;
+                                (s.min_transcribe_ms, s.short_clip_vad_enabled)
+                            };
+
+                            if let Some(duration_ms) = recording_duration_ms {
+                                if duration_ms < min_transcribe_ms {
+                                    if short_clip_vad_enabled {
+                                        let path_for_vad = path.clone();
+                                        let vad_stats = tokio::task::spawn_blocking(move || {
+                                            crate::audio::vad::analyze_wav_for_speech(&path_for_vad)
                                         })
                                         .await;
+
+                                        match vad_stats {
+                                            Ok(Ok(stats)) => {
+                                                let speech_detected = stats.speech_frames >= 2;
+                                                if !speech_detected {
+                                                    log::info!(
+                                                        "Short-clip VAD: no speech detected ({}/{} frames)",
+                                                        stats.speech_frames,
+                                                        stats.total_frames
+                                                    );
+                                                    let _ = tx
+                                                        .send(Event::NoSpeechDetected {
+                                                            id,
+                                                            source: crate::state_machine::NoSpeechSource::ShortClipVad,
+                                                            message: format!(
+                                                                "Short clip ({}ms < {}ms): VAD no-speech ({}/{} frames). Skipped transcription.",
+                                                                duration_ms,
+                                                                min_transcribe_ms,
+                                                                stats.speech_frames,
+                                                                stats.total_frames
+                                                            ),
+                                                        })
+                                                        .await;
+                                                    return;
+                                                }
+
+                                                log::info!(
+                                                    "Short-clip VAD: speech detected ({}/{} frames), proceeding",
+                                                    stats.speech_frames,
+                                                    stats.total_frames
+                                                );
+                                            }
+                                            Ok(Err(err)) => {
+                                                log::warn!("Short-clip VAD failed: {}", err);
+                                                let _ = tx
+                                                    .send(Event::NoSpeechDetected {
+                                                        id,
+                                                        source: crate::state_machine::NoSpeechSource::ShortClipVad,
+                                                        message: format!(
+                                                            "Short clip ({}ms < {}ms): VAD failed ({}). Skipped transcription.",
+                                                            duration_ms, min_transcribe_ms, err
+                                                        ),
+                                                    })
+                                                    .await;
+                                                return;
+                                            }
+                                            Err(e) => {
+                                                log::warn!("Short-clip VAD task failed: {}", e);
+                                                let _ = tx
+                                                    .send(Event::NoSpeechDetected {
+                                                        id,
+                                                        source: crate::state_machine::NoSpeechSource::ShortClipVad,
+                                                        message: format!(
+                                                            "Short clip ({}ms < {}ms): VAD task failed ({}). Skipped transcription.",
+                                                            duration_ms, min_transcribe_ms, e
+                                                        ),
+                                                    })
+                                                    .await;
+                                                return;
+                                            }
+                                        }
+                                    } else {
+                                        log::info!(
+                                            "Skipping transcription: recording too short ({}ms < {}ms)",
+                                            duration_ms,
+                                            min_transcribe_ms
+                                        );
+                                        let _ = tx
+                                            .send(Event::NoSpeechDetected {
+                                                id,
+                                                source: crate::state_machine::NoSpeechSource::DurationThreshold,
+                                                message: format!(
+                                                    "Recording too short: {}ms (< {}ms). Skipped transcription.",
+                                                    duration_ms, min_transcribe_ms
+                                                ),
+                                            })
+                                            .await;
+                                        return;
+                                    }
                                 }
+
+                                log::info!(
+                                    "Recording stopped: {}ms, {} bytes",
+                                    duration_ms,
+                                    file_size
+                                );
                             }
-                        } else {
-                            log::warn!("StopAudio: no active handle for id={}", id);
+
                             let _ = tx.send(Event::AudioStopOk { id }).await;
                         }
-                    } else {
-                        log::warn!("StopAudio: no recording found for id={}", id);
-                        // Still send OK to allow state machine to proceed
-                        let _ = tx.send(Event::AudioStopOk { id }).await;
+                        Err(e) => {
+                            log::error!("Failed to stop audio recording: {}", e);
+                            // Record error in metrics
+                            {
+                                let mut m = metrics.lock().await;
+                                m.cycle_failed(e.to_string());
+                            }
+                            let _ = tx
+                                .send(Event::AudioStopFail {
+                                    id,
+                                    err: e.to_string(),
+                                })
+                                .await;
+                        }
                     }
                 });
             }
@@ -248,7 +326,8 @@ impl EffectRunner for AudioEffectRunner {
                     let start_time = Instant::now();
 
                     match transcription::transcribe_audio(&wav_path).await {
-                        Ok(text) => {
+                        Ok(result) => {
+                            let text = result.text;
                             let duration = start_time.elapsed();
                             log::info!(
                                 "Transcription successful: {} chars in {:?} for {:?}",
@@ -261,6 +340,33 @@ impl EffectRunner for AudioEffectRunner {
                             {
                                 let mut m = metrics.lock().await;
                                 m.transcription_completed(text.len());
+                            }
+
+                            let trimmed = text.trim();
+                            let openai_no_speech_prob = result.openai_no_speech_prob;
+                            if trimmed.is_empty()
+                                || openai_no_speech_prob.is_some_and(|p| {
+                                    p >= OPENAI_NO_SPEECH_PROB_THRESHOLD
+                                        && trimmed.len() <= OPENAI_NO_SPEECH_MAX_TEXT_LEN
+                                })
+                            {
+                                log::info!(
+                                    "Treating transcription as no-speech (openai_no_speech_prob={:?}, text_len={})",
+                                    openai_no_speech_prob,
+                                    trimmed.len()
+                                );
+                                let _ = tx
+                                    .send(Event::NoSpeechDetected {
+                                        id,
+                                        source: crate::state_machine::NoSpeechSource::OpenAiNoSpeechProb,
+                                        message: format!(
+                                            "OpenAI indicates no speech (no_speech_prob={:?}, text=\"{}\"). Skipped clipboard copy.",
+                                            openai_no_speech_prob,
+                                            trimmed
+                                        ),
+                                    })
+                                    .await;
+                                return;
                             }
 
                             let _ = tx.send(Event::TranscribeOk { id, text }).await;
@@ -298,7 +404,8 @@ impl EffectRunner for AudioEffectRunner {
                         let mut clipboard = arboard::Clipboard::new()
                             .map_err(|e| format!("Clipboard access failed: {}", e))?;
 
-                        clipboard.set_text(&text_clone)
+                        clipboard
+                            .set_text(&text_clone)
                             .map_err(|e| format!("Clipboard set failed: {}", e))?;
 
                         log::info!("Copied {} chars to clipboard", text_clone.len());
@@ -375,7 +482,10 @@ impl EffectRunner for AudioEffectRunner {
                             guard.contains_key(&id)
                         };
                         if !is_active {
-                            log::debug!("Recording tick stopping - recording {} no longer active", id);
+                            log::debug!(
+                                "Recording tick stopping - recording {} no longer active",
+                                id
+                            );
                             break;
                         }
                         // Send tick event

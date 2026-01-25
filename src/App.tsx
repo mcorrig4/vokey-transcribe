@@ -12,7 +12,7 @@ type UiState =
   | { status: 'recording'; elapsedSecs: number }
   | { status: 'stopping' }
   | { status: 'transcribing' }
-  | { status: 'noSpeech'; message: string }
+  | { status: 'noSpeech'; source: string; message: string }
   | { status: 'done'; text: string }
   | { status: 'error'; message: string; lastText: string | null }
 
@@ -56,7 +56,7 @@ function App() {
       case 'transcribing':
         return 'Transcribing...'
       case 'noSpeech':
-        return 'No speech detected'
+        return `No speech (${state.source})`
       case 'done':
         return 'Copied — paste now'
       case 'error':

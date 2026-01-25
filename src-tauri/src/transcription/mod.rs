@@ -4,4 +4,6 @@
 
 mod openai;
 
-pub use openai::{is_api_key_configured, transcribe_audio, TranscriptionError};
+pub use openai::{
+    is_api_key_configured, transcribe_audio, TranscriptionError, TranscriptionResult,
+};
