@@ -10,6 +10,7 @@ type UiState =
   | { status: 'recording'; elapsedSecs: number }
   | { status: 'stopping' }
   | { status: 'transcribing' }
+  | { status: 'noSpeech'; message: string }
   | { status: 'done'; text: string }
   | { status: 'error'; message: string; lastText: string | null }
 
@@ -76,6 +77,21 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
 }
 
+function formatUiStateForLog(state: UiState): string {
+  switch (state.status) {
+    case 'error':
+      return `error: ${state.message}`
+    case 'done':
+      return `done: "${state.text}"`
+    case 'noSpeech':
+      return `noSpeech: ${state.message}`
+    case 'recording':
+      return `recording (${state.elapsedSecs}s)`
+    default:
+      return state.status
+  }
+}
+
 function Debug() {
   const [uiState, setUiState] = useState<UiState>({ status: 'idle' })
   const [log, setLog] = useState<string[]>([])
@@ -91,7 +107,7 @@ function Debug() {
       setUiState(event.payload)
       setLog((prev) => [
         ...prev.slice(-9), // Keep last 10 entries
-        `${new Date().toLocaleTimeString()}: ${event.payload.status}`,
+        `${new Date().toLocaleTimeString()}: ${formatUiStateForLog(event.payload)}`,
       ])
     })
 
@@ -288,6 +304,7 @@ function Debug() {
         <strong>Current State:</strong> {uiState.status}
         {uiState.status === 'recording' && ` (${uiState.elapsedSecs}s)`}
         {uiState.status === 'error' && `: ${uiState.message}`}
+        {uiState.status === 'noSpeech' && `: ${uiState.message}`}
         {uiState.status === 'done' && `: "${uiState.text}"`}
       </div>
 

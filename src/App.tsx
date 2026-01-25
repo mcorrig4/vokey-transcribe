@@ -12,6 +12,7 @@ type UiState =
   | { status: 'recording'; elapsedSecs: number }
   | { status: 'stopping' }
   | { status: 'transcribing' }
+  | { status: 'noSpeech'; message: string }
   | { status: 'done'; text: string }
   | { status: 'error'; message: string; lastText: string | null }
 
@@ -38,6 +39,7 @@ function App() {
     stopping: '#d69e2e',    // amber (processing)
     transcribing: '#3182ce', // blue
     done: '#38a169',        // green
+    noSpeech: '#805ad5',    // purple
     error: '#e53e3e',       // red
   }
 
@@ -53,6 +55,8 @@ function App() {
         return 'Stopping...'
       case 'transcribing':
         return 'Transcribing...'
+      case 'noSpeech':
+        return 'No speech detected'
       case 'done':
         return 'Copied — paste now'
       case 'error':
@@ -62,6 +66,9 @@ function App() {
 
   const getMessage = (state: UiState): string | null => {
     if (state.status === 'error') {
+      return state.message
+    }
+    if (state.status === 'noSpeech') {
       return state.message
     }
     return null

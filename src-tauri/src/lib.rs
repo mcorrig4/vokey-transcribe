@@ -39,6 +39,9 @@ pub enum UiState {
     },
     Stopping,
     Transcribing,
+    NoSpeech {
+        message: String,
+    },
     Done {
         text: String,
     },
@@ -59,6 +62,9 @@ fn state_to_ui(state: &State) -> UiState {
         },
         State::Stopping { .. } => UiState::Stopping,
         State::Transcribing { .. } => UiState::Transcribing,
+        State::NoSpeech { message, .. } => UiState::NoSpeech {
+            message: message.clone(),
+        },
         State::Done { text, .. } => UiState::Done { text: text.clone() },
         State::Error {
             message,

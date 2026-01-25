@@ -16,6 +16,8 @@ use crate::metrics::MetricsCollector;
 use crate::state_machine::{Effect, Event};
 use crate::transcription;
 
+const MIN_RECORDING_MS_FOR_TRANSCRIPTION: u64 = 500;
+
 /// Trait for running effects asynchronously.
 /// Completion events are sent back via the provided channel.
 pub trait EffectRunner: Send + Sync + 'static {
@@ -177,18 +179,29 @@ impl EffectRunner for AudioEffectRunner {
 
                                     // Log warning for very short recordings
                                     if let Some(duration_ms) = recording_duration_ms {
-                                        if duration_ms < 500 {
-                                            log::warn!(
-                                                "Very short recording detected: {}ms - transcription may be empty",
-                                                duration_ms
-                                            );
-                                        } else {
+                                        if duration_ms < MIN_RECORDING_MS_FOR_TRANSCRIPTION {
                                             log::info!(
-                                                "Recording stopped: {}ms, {} bytes",
+                                                "Skipping transcription: recording too short ({}ms < {}ms)",
                                                 duration_ms,
-                                                file_size
+                                                MIN_RECORDING_MS_FOR_TRANSCRIPTION
                                             );
+                                            let _ = tx
+                                                .send(Event::NoSpeechDetected {
+                                                    id,
+                                                    message: format!(
+                                                        "Recording too short: {}ms (< {}ms). Skipped transcription.",
+                                                        duration_ms, MIN_RECORDING_MS_FOR_TRANSCRIPTION
+                                                    ),
+                                                })
+                                                .await;
+                                            return;
                                         }
+
+                                        log::info!(
+                                            "Recording stopped: {}ms, {} bytes",
+                                            duration_ms,
+                                            file_size
+                                        );
                                     }
 
                                     let _ = tx.send(Event::AudioStopOk { id }).await;

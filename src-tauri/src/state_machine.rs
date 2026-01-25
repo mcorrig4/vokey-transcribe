@@ -29,6 +29,11 @@ pub enum State {
         recording_id: Uuid,
         wav_path: PathBuf,
     },
+    NoSpeech {
+        recording_id: Uuid,
+        wav_path: PathBuf,
+        message: String,
+    },
     Done {
         recording_id: Uuid,
         text: String,
@@ -79,6 +84,12 @@ pub enum Event {
     AudioStopFail {
         id: Uuid,
         err: String,
+    },
+
+    // No-speech detection events
+    NoSpeechDetected {
+        id: Uuid,
+        message: String,
     },
 
     // Transcription events
@@ -167,6 +178,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
         Recording { recording_id, .. } => Some(*recording_id),
         Stopping { recording_id, .. } => Some(*recording_id),
         Transcribing { recording_id, .. } => Some(*recording_id),
+        NoSpeech { recording_id, .. } => Some(*recording_id),
         Done { recording_id, .. } => Some(*recording_id),
         Error { .. } => None,
     };
@@ -319,6 +331,26 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
                 recording_id,
                 wav_path,
             },
+            NoSpeechDetected { id, message },
+        ) if *recording_id == id => (
+            NoSpeech {
+                recording_id: *recording_id,
+                wav_path: wav_path.clone(),
+                message,
+            },
+            vec![
+                StartDoneTimeout {
+                    id: *recording_id,
+                    duration: Duration::from_secs(3),
+                },
+                EmitUi,
+            ],
+        ),
+        (
+            Stopping {
+                recording_id,
+                wav_path,
+            },
             AudioStopFail { id, err },
         ) if *recording_id == id => (
             Error {
@@ -404,10 +436,24 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
                 EmitUi,
             ],
         ),
+        (NoSpeech { recording_id, wav_path, .. }, DoneTimeout { id }) if *recording_id == id => (
+            Idle,
+            vec![
+                Cleanup {
+                    id: *recording_id,
+                    wav_path: Some(wav_path.clone()),
+                },
+                EmitUi,
+            ],
+        ),
         // Stale DoneTimeout (id doesn't match) - ignore
         (Done { .. }, DoneTimeout { .. }) => (state.clone(), vec![]),
         (Done { .. }, HotkeyToggle) => {
             // Start new recording immediately
+            let id = Uuid::new_v4();
+            (Arming { recording_id: id }, vec![StartAudio { id }, EmitUi])
+        }
+        (NoSpeech { .. }, HotkeyToggle) => {
             let id = Uuid::new_v4();
             (Arming { recording_id: id }, vec![StartAudio { id }, EmitUi])
         }
@@ -439,6 +485,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
         (_, AudioStartFail { id, .. }) if is_stale(id) => (state.clone(), vec![]),
         (_, AudioStopOk { id }) if is_stale(id) => (state.clone(), vec![]),
         (_, AudioStopFail { id, .. }) if is_stale(id) => (state.clone(), vec![]),
+        (_, NoSpeechDetected { id, .. }) if is_stale(id) => (state.clone(), vec![]),
         (_, TranscribeOk { id, .. }) if is_stale(id) => (state.clone(), vec![]),
         (_, TranscribeFail { id, .. }) if is_stale(id) => (state.clone(), vec![]),
 
