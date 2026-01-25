@@ -290,9 +290,29 @@ pub fn run() {
             }
 
             // Build tray menu
+            let toggle_item =
+                MenuItem::with_id(app, "toggle", "Toggle Recording", true, None::<&str>)?;
+            let cancel_item = MenuItem::with_id(app, "cancel", "Cancel", true, None::<&str>)?;
+            let logs_item =
+                MenuItem::with_id(app, "open_logs", "Open Logs Folder", true, None::<&str>)?;
             let settings_item = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&settings_item, &quit_item])?;
+
+            let separator1 = tauri::menu::PredefinedMenuItem::separator(app)?;
+            let separator2 = tauri::menu::PredefinedMenuItem::separator(app)?;
+
+            let menu = Menu::with_items(
+                app,
+                &[
+                    &toggle_item,
+                    &cancel_item,
+                    &separator1,
+                    &logs_item,
+                    &settings_item,
+                    &separator2,
+                    &quit_item,
+                ],
+            )?;
 
             // Create tray icon
             let _tray = TrayIconBuilder::with_id("main")
@@ -300,6 +320,49 @@ pub fn run() {
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
+                    "toggle" => {
+                        log::info!("Toggle Recording clicked");
+                        if let Some(state) = app.try_state::<StateLoopHandle>() {
+                            if let Err(e) = state.tx.try_send(Event::HotkeyToggle) {
+                                log::error!("Failed to send toggle event: {}", e);
+                            }
+                        } else {
+                            log::warn!("StateLoopHandle not available for toggle event");
+                        }
+                    }
+                    "cancel" => {
+                        log::info!("Cancel clicked");
+                        if let Some(state) = app.try_state::<StateLoopHandle>() {
+                            if let Err(e) = state.tx.try_send(Event::Cancel) {
+                                log::error!("Failed to send cancel event: {}", e);
+                            }
+                        } else {
+                            log::warn!("StateLoopHandle not available for cancel event");
+                        }
+                    }
+                    "open_logs" => {
+                        log::info!("Open Logs Folder clicked");
+                        // Use Tauri's path resolver for correct app log directory
+                        match app.path().app_log_dir() {
+                            Ok(logs_dir) => {
+                                // Ensure directory exists (may not exist if no logs written yet)
+                                if let Err(e) = std::fs::create_dir_all(&logs_dir) {
+                                    log::error!("Failed to create logs directory: {}", e);
+                                    return;
+                                }
+                                log::info!("Opening logs folder: {:?}", logs_dir);
+                                if let Err(e) = std::process::Command::new("xdg-open")
+                                    .arg(&logs_dir)
+                                    .spawn()
+                                {
+                                    log::error!("Failed to open logs folder: {}", e);
+                                }
+                            }
+                            Err(e) => {
+                                log::error!("Could not determine logs directory: {}", e);
+                            }
+                        }
+                    }
                     "settings" => {
                         log::info!("Settings/Debug clicked from tray");
                         // Spawn async task to open settings with Wayland workaround

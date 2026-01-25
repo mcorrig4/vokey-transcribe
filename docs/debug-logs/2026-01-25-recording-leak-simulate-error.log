@@ -1,0 +1,279 @@
+[2026-01-25][00:23:16][app_lib][INFO] State transition: Transcribing { recording_id: 7f86d5be-8098-40e5-952c-c2b8003fdaac, wav_path: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300584_7f86d5be-8098-40e5-952c-c2b8003fdaac.wav" } -> Done { recording_id: 7f86d5be-8098-40e5-952c-c2b8003fdaac, text: "I started my recording and now I can transcribe it and I'm going to talk to the LLMs a lot faster this way" }
+[2026-01-25][00:23:16][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"done\",\"text\":\"I started my recording and now I can transcribe it and I'm going to talk to the LLMs a lot faster this way\"}")
+[2026-01-25][00:23:16][app_lib::effects][INFO] Copied 106 chars to clipboard
+[2026-01-25][00:23:19][app_lib::effects][DEBUG] Done timeout elapsed for id=7f86d5be-8098-40e5-952c-c2b8003fdaac
+[2026-01-25][00:23:19][app_lib][DEBUG] Received event: DoneTimeout { id: 7f86d5be-8098-40e5-952c-c2b8003fdaac }
+[2026-01-25][00:23:19][app_lib][INFO] State transition: Done { recording_id: 7f86d5be-8098-40e5-952c-c2b8003fdaac, text: "I started my recording and now I can transcribe it and I'm going to talk to the LLMs a lot faster this way" } -> Idle
+[2026-01-25][00:23:19][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"idle\"}")
+[2026-01-25][00:23:19][app_lib::audio::paths][DEBUG] Cleaned up old recording: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769226344_275ba65a-1524-41d3-829a-d6a150b9c8d2.wav"
+[2026-01-25][00:23:19][app_lib::effects][INFO] Cleaned up 1 old recordings
+[2026-01-25][00:23:46][app_lib::effects][DEBUG] Clipboard thread exiting after 30.076672863s
+[2026-01-25][00:23:46][arboard::platform::linux::x11][WARN] Could not hand the clipboard contents over to the clipboard manager. The request timed out.
+[2026-01-25][00:25:02][app_lib][INFO] Open Logs Folder clicked
+[2026-01-25][00:25:02][app_lib][INFO] Opening logs folder: "/home/chaintail/.local/share/com.vokey.transcribe/logs"
+[2026-01-25][00:25:41][app_lib::hotkey::manager][INFO] Hotkey triggered: Ctrl+Alt+Space
+[2026-01-25][00:25:41][app_lib][DEBUG] Received event: HotkeyToggle
+[2026-01-25][00:25:41][app_lib][INFO] State transition: Idle -> Arming { recording_id: ea552fed-b413-44d8-8c3d-3d5c6623e68f }
+[2026-01-25][00:25:41][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"arming\"}")
+[2026-01-25][00:25:41][app_lib::audio::recorder][INFO] Recording started: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300741_ea552fed-b413-44d8-8c3d-3d5c6623e68f.wav"
+[2026-01-25][00:25:41][app_lib::effects][INFO] Audio recording started: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300741_ea552fed-b413-44d8-8c3d-3d5c6623e68f.wav"
+[2026-01-25][00:25:41][app_lib][DEBUG] Received event: AudioStartOk { id: ea552fed-b413-44d8-8c3d-3d5c6623e68f, wav_path: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300741_ea552fed-b413-44d8-8c3d-3d5c6623e68f.wav" }
+[2026-01-25][00:25:41][app_lib][INFO] State transition: Arming { recording_id: ea552fed-b413-44d8-8c3d-3d5c6623e68f } -> Recording { recording_id: ea552fed-b413-44d8-8c3d-3d5c6623e68f, wav_path: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300741_ea552fed-b413-44d8-8c3d-3d5c6623e68f.wav", started_at: Instant { tv_sec: 85139, tv_nsec: 738815949 } }
+[2026-01-25][00:25:41][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":0}")
+[2026-01-25][00:25:41][app_lib][DEBUG] Received event: RecordingTick { id: ea552fed-b413-44d8-8c3d-3d5c6623e68f }
+[2026-01-25][00:25:41][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":0}")
+[2026-01-25][00:25:42][app_lib][DEBUG] Received event: RecordingTick { id: ea552fed-b413-44d8-8c3d-3d5c6623e68f }
+[2026-01-25][00:25:42][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":1}")
+[2026-01-25][00:25:43][app_lib][DEBUG] Received event: RecordingTick { id: ea552fed-b413-44d8-8c3d-3d5c6623e68f }
+[2026-01-25][00:25:43][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":2}")
+[2026-01-25][00:25:44][app_lib][DEBUG] Received event: RecordingTick { id: ea552fed-b413-44d8-8c3d-3d5c6623e68f }
+[2026-01-25][00:25:44][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":3}")
+[2026-01-25][00:25:45][app_lib][DEBUG] Received event: RecordingTick { id: ea552fed-b413-44d8-8c3d-3d5c6623e68f }
+[2026-01-25][00:25:45][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":4}")
+[2026-01-25][00:25:46][app_lib][DEBUG] Received event: RecordingTick { id: ea552fed-b413-44d8-8c3d-3d5c6623e68f }
+[2026-01-25][00:25:46][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":5}")
+[2026-01-25][00:25:47][app_lib][DEBUG] Received event: RecordingTick { id: ea552fed-b413-44d8-8c3d-3d5c6623e68f }
+[2026-01-25][00:25:47][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":6}")
+[2026-01-25][00:25:48][app_lib][DEBUG] Received event: RecordingTick { id: ea552fed-b413-44d8-8c3d-3d5c6623e68f }
+[2026-01-25][00:25:48][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":7}")
+[2026-01-25][00:25:49][app_lib][DEBUG] Received event: RecordingTick { id: ea552fed-b413-44d8-8c3d-3d5c6623e68f }
+[2026-01-25][00:25:49][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":8}")
+[2026-01-25][00:25:50][app_lib][DEBUG] Received event: RecordingTick { id: ea552fed-b413-44d8-8c3d-3d5c6623e68f }
+[2026-01-25][00:25:50][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":9}")
+[2026-01-25][00:25:51][app_lib][DEBUG] Received event: RecordingTick { id: ea552fed-b413-44d8-8c3d-3d5c6623e68f }
+[2026-01-25][00:25:51][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":10}")
+[2026-01-25][00:25:52][app_lib][DEBUG] Received event: RecordingTick { id: ea552fed-b413-44d8-8c3d-3d5c6623e68f }
+[2026-01-25][00:25:52][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":11}")
+[2026-01-25][00:25:53][app_lib][DEBUG] Received event: RecordingTick { id: ea552fed-b413-44d8-8c3d-3d5c6623e68f }
+[2026-01-25][00:25:53][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":12}")
+[2026-01-25][00:25:54][app_lib][DEBUG] Received event: RecordingTick { id: ea552fed-b413-44d8-8c3d-3d5c6623e68f }
+[2026-01-25][00:25:54][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":13}")
+[2026-01-25][00:25:55][app_lib][DEBUG] Received event: RecordingTick { id: ea552fed-b413-44d8-8c3d-3d5c6623e68f }
+[2026-01-25][00:25:55][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":14}")
+[2026-01-25][00:25:56][app_lib][DEBUG] Received event: RecordingTick { id: ea552fed-b413-44d8-8c3d-3d5c6623e68f }
+[2026-01-25][00:25:56][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":15}")
+[2026-01-25][00:25:56][app_lib::hotkey::manager][INFO] Hotkey triggered: Ctrl+Alt+Space
+[2026-01-25][00:25:56][app_lib][DEBUG] Received event: HotkeyToggle
+[2026-01-25][00:25:56][app_lib][INFO] State transition: Recording { recording_id: ea552fed-b413-44d8-8c3d-3d5c6623e68f, wav_path: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300741_ea552fed-b413-44d8-8c3d-3d5c6623e68f.wav", started_at: Instant { tv_sec: 85139, tv_nsec: 738815949 } } -> Stopping { recording_id: ea552fed-b413-44d8-8c3d-3d5c6623e68f, wav_path: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300741_ea552fed-b413-44d8-8c3d-3d5c6623e68f.wav" }
+[2026-01-25][00:25:56][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"stopping\"}")
+[2026-01-25][00:25:56][app_lib::audio::recorder][INFO] Recording stopped, WAV finalized: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300741_ea552fed-b413-44d8-8c3d-3d5c6623e68f.wav"
+[2026-01-25][00:25:56][app_lib::effects][INFO] Audio recording stopped: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300741_ea552fed-b413-44d8-8c3d-3d5c6623e68f.wav"
+[2026-01-25][00:25:56][app_lib][DEBUG] Received event: AudioStopOk { id: ea552fed-b413-44d8-8c3d-3d5c6623e68f }
+[2026-01-25][00:25:56][app_lib][INFO] State transition: Stopping { recording_id: ea552fed-b413-44d8-8c3d-3d5c6623e68f, wav_path: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300741_ea552fed-b413-44d8-8c3d-3d5c6623e68f.wav" } -> Transcribing { recording_id: ea552fed-b413-44d8-8c3d-3d5c6623e68f, wav_path: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300741_ea552fed-b413-44d8-8c3d-3d5c6623e68f.wav" }
+[2026-01-25][00:25:56][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"transcribing\"}")
+[2026-01-25][00:25:56][app_lib::effects][INFO] Starting transcription for "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300741_ea552fed-b413-44d8-8c3d-3d5c6623e68f.wav"
+[2026-01-25][00:25:56][app_lib::transcription::openai][INFO] Transcribing audio file: 1769300741_ea552fed-b413-44d8-8c3d-3d5c6623e68f.wav (1474636 bytes)
+[2026-01-25][00:25:56][reqwest::connect][DEBUG] starting new connection: https://api.openai.com/
+[2026-01-25][00:25:57][app_lib::effects][DEBUG] Recording tick stopping - recording ea552fed-b413-44d8-8c3d-3d5c6623e68f no longer active
+[2026-01-25][00:26:02][app_lib::transcription::openai][INFO] Transcription successful: 120 chars
+[2026-01-25][00:26:02][app_lib::effects][INFO] Transcription successful: 120 chars for "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300741_ea552fed-b413-44d8-8c3d-3d5c6623e68f.wav"
+[2026-01-25][00:26:02][app_lib][DEBUG] Received event: TranscribeOk { id: ea552fed-b413-44d8-8c3d-3d5c6623e68f, text: "Why are the logs so short? It looks like it's only doing my most recent transcription? No, it has stuff. I don't get it." }
+[2026-01-25][00:26:02][app_lib][INFO] State transition: Transcribing { recording_id: ea552fed-b413-44d8-8c3d-3d5c6623e68f, wav_path: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300741_ea552fed-b413-44d8-8c3d-3d5c6623e68f.wav" } -> Done { recording_id: ea552fed-b413-44d8-8c3d-3d5c6623e68f, text: "Why are the logs so short? It looks like it's only doing my most recent transcription? No, it has stuff. I don't get it." }
+[2026-01-25][00:26:02][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"done\",\"text\":\"Why are the logs so short? It looks like it's only doing my most recent transcription? No, it has stuff. I don't get it.\"}")
+[2026-01-25][00:26:02][app_lib::effects][INFO] Copied 120 chars to clipboard
+[2026-01-25][00:26:04][app_lib][INFO] Cancel clicked
+[2026-01-25][00:26:04][app_lib][DEBUG] Received event: Cancel
+[2026-01-25][00:26:05][app_lib::effects][DEBUG] Done timeout elapsed for id=ea552fed-b413-44d8-8c3d-3d5c6623e68f
+[2026-01-25][00:26:05][app_lib][DEBUG] Received event: DoneTimeout { id: ea552fed-b413-44d8-8c3d-3d5c6623e68f }
+[2026-01-25][00:26:05][app_lib][INFO] State transition: Done { recording_id: ea552fed-b413-44d8-8c3d-3d5c6623e68f, text: "Why are the logs so short? It looks like it's only doing my most recent transcription? No, it has stuff. I don't get it." } -> Idle
+[2026-01-25][00:26:05][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"idle\"}")
+[2026-01-25][00:26:05][app_lib::audio::paths][DEBUG] Cleaned up old recording: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769299833_90eb88b7-25fc-49ce-9912-f4f7f7cc2686.wav"
+[2026-01-25][00:26:05][app_lib::effects][INFO] Cleaned up 1 old recordings
+[2026-01-25][00:26:09][app_lib::hotkey::manager][INFO] Hotkey triggered: Ctrl+Alt+Space
+[2026-01-25][00:26:09][app_lib][DEBUG] Received event: HotkeyToggle
+[2026-01-25][00:26:09][app_lib][INFO] State transition: Idle -> Arming { recording_id: f4b2e39f-7857-4209-b916-2d73f8d64ec8 }
+[2026-01-25][00:26:09][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"arming\"}")
+[2026-01-25][00:26:09][app_lib::audio::recorder][INFO] Recording started: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300769_f4b2e39f-7857-4209-b916-2d73f8d64ec8.wav"
+[2026-01-25][00:26:09][app_lib::effects][INFO] Audio recording started: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300769_f4b2e39f-7857-4209-b916-2d73f8d64ec8.wav"
+[2026-01-25][00:26:09][app_lib][DEBUG] Received event: AudioStartOk { id: f4b2e39f-7857-4209-b916-2d73f8d64ec8, wav_path: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300769_f4b2e39f-7857-4209-b916-2d73f8d64ec8.wav" }
+[2026-01-25][00:26:09][app_lib][INFO] State transition: Arming { recording_id: f4b2e39f-7857-4209-b916-2d73f8d64ec8 } -> Recording { recording_id: f4b2e39f-7857-4209-b916-2d73f8d64ec8, wav_path: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300769_f4b2e39f-7857-4209-b916-2d73f8d64ec8.wav", started_at: Instant { tv_sec: 85167, tv_nsec: 410033091 } }
+[2026-01-25][00:26:09][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":0}")
+[2026-01-25][00:26:09][app_lib][DEBUG] Received event: RecordingTick { id: f4b2e39f-7857-4209-b916-2d73f8d64ec8 }
+[2026-01-25][00:26:09][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":0}")
+[2026-01-25][00:26:10][app_lib][DEBUG] Received event: RecordingTick { id: f4b2e39f-7857-4209-b916-2d73f8d64ec8 }
+[2026-01-25][00:26:10][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":1}")
+[2026-01-25][00:26:11][app_lib][DEBUG] Received event: RecordingTick { id: f4b2e39f-7857-4209-b916-2d73f8d64ec8 }
+[2026-01-25][00:26:11][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":2}")
+[2026-01-25][00:26:12][app_lib][DEBUG] Received event: RecordingTick { id: f4b2e39f-7857-4209-b916-2d73f8d64ec8 }
+[2026-01-25][00:26:12][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":3}")
+[2026-01-25][00:26:13][app_lib][DEBUG] Received event: RecordingTick { id: f4b2e39f-7857-4209-b916-2d73f8d64ec8 }
+[2026-01-25][00:26:13][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":4}")
+[2026-01-25][00:26:14][app_lib][DEBUG] Received event: RecordingTick { id: f4b2e39f-7857-4209-b916-2d73f8d64ec8 }
+[2026-01-25][00:26:14][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":5}")
+[2026-01-25][00:26:15][app_lib][INFO] Toggle Recording clicked
+[2026-01-25][00:26:15][app_lib][DEBUG] Received event: HotkeyToggle
+[2026-01-25][00:26:15][app_lib][INFO] State transition: Recording { recording_id: f4b2e39f-7857-4209-b916-2d73f8d64ec8, wav_path: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300769_f4b2e39f-7857-4209-b916-2d73f8d64ec8.wav", started_at: Instant { tv_sec: 85167, tv_nsec: 410033091 } } -> Stopping { recording_id: f4b2e39f-7857-4209-b916-2d73f8d64ec8, wav_path: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300769_f4b2e39f-7857-4209-b916-2d73f8d64ec8.wav" }
+[2026-01-25][00:26:15][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"stopping\"}")
+[2026-01-25][00:26:15][app_lib::audio::recorder][INFO] Recording stopped, WAV finalized: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300769_f4b2e39f-7857-4209-b916-2d73f8d64ec8.wav"
+[2026-01-25][00:26:15][app_lib::effects][INFO] Audio recording stopped: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300769_f4b2e39f-7857-4209-b916-2d73f8d64ec8.wav"
+[2026-01-25][00:26:15][app_lib][DEBUG] Received event: AudioStopOk { id: f4b2e39f-7857-4209-b916-2d73f8d64ec8 }
+[2026-01-25][00:26:15][app_lib][INFO] State transition: Stopping { recording_id: f4b2e39f-7857-4209-b916-2d73f8d64ec8, wav_path: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300769_f4b2e39f-7857-4209-b916-2d73f8d64ec8.wav" } -> Transcribing { recording_id: f4b2e39f-7857-4209-b916-2d73f8d64ec8, wav_path: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300769_f4b2e39f-7857-4209-b916-2d73f8d64ec8.wav" }
+[2026-01-25][00:26:15][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"transcribing\"}")
+[2026-01-25][00:26:15][app_lib::effects][INFO] Starting transcription for "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300769_f4b2e39f-7857-4209-b916-2d73f8d64ec8.wav"
+[2026-01-25][00:26:15][app_lib::transcription::openai][INFO] Transcribing audio file: 1769300769_f4b2e39f-7857-4209-b916-2d73f8d64ec8.wav (573562 bytes)
+[2026-01-25][00:26:15][app_lib::effects][DEBUG] Recording tick stopping - recording f4b2e39f-7857-4209-b916-2d73f8d64ec8 no longer active
+[2026-01-25][00:26:16][app_lib][INFO] Cancel clicked
+[2026-01-25][00:26:16][app_lib][DEBUG] Received event: Cancel
+[2026-01-25][00:26:16][app_lib][INFO] State transition: Transcribing { recording_id: f4b2e39f-7857-4209-b916-2d73f8d64ec8, wav_path: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300769_f4b2e39f-7857-4209-b916-2d73f8d64ec8.wav" } -> Idle
+[2026-01-25][00:26:16][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"idle\"}")
+[2026-01-25][00:26:16][app_lib::audio::paths][DEBUG] Cleaned up old recording: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300435_76a530b7-852f-4a95-bab7-648bea4ab736.wav"
+[2026-01-25][00:26:16][app_lib::effects][INFO] Cleaned up 1 old recordings
+[2026-01-25][00:26:16][app_lib::effects][DEBUG] Recording file retained: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300769_f4b2e39f-7857-4209-b916-2d73f8d64ec8.wav"
+[2026-01-25][00:26:17][app_lib::transcription::openai][INFO] Transcription successful: 58 chars
+[2026-01-25][00:26:17][app_lib::effects][INFO] Transcription successful: 58 chars for "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300769_f4b2e39f-7857-4209-b916-2d73f8d64ec8.wav"
+[2026-01-25][00:26:17][app_lib][DEBUG] Received event: TranscribeOk { id: f4b2e39f-7857-4209-b916-2d73f8d64ec8, text: "I start the recording, but I want to cancel it and then..." }
+[2026-01-25][00:26:32][app_lib::effects][DEBUG] Clipboard thread exiting after 30.04365746s
+[2026-01-25][00:26:32][arboard::platform::linux::x11][WARN] Could not hand the clipboard contents over to the clipboard manager. The request timed out.
+[2026-01-25][00:26:49][app_lib][INFO] Settings/Debug clicked from tray
+[2026-01-25][00:26:54][app_lib::hotkey::manager][INFO] Hotkey triggered: Ctrl+Alt+Space
+[2026-01-25][00:26:54][app_lib][DEBUG] Received event: HotkeyToggle
+[2026-01-25][00:26:54][app_lib][INFO] State transition: Idle -> Arming { recording_id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:26:54][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"arming\"}")
+[2026-01-25][00:26:54][app_lib::audio::recorder][INFO] Recording started: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300814_26d2a171-04cc-40a3-9310-12915972ebdd.wav"
+[2026-01-25][00:26:54][app_lib::effects][INFO] Audio recording started: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300814_26d2a171-04cc-40a3-9310-12915972ebdd.wav"
+[2026-01-25][00:26:54][app_lib][DEBUG] Received event: AudioStartOk { id: 26d2a171-04cc-40a3-9310-12915972ebdd, wav_path: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300814_26d2a171-04cc-40a3-9310-12915972ebdd.wav" }
+[2026-01-25][00:26:54][app_lib][INFO] State transition: Arming { recording_id: 26d2a171-04cc-40a3-9310-12915972ebdd } -> Recording { recording_id: 26d2a171-04cc-40a3-9310-12915972ebdd, wav_path: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300814_26d2a171-04cc-40a3-9310-12915972ebdd.wav", started_at: Instant { tv_sec: 85212, tv_nsec: 853118718 } }
+[2026-01-25][00:26:54][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":0}")
+[2026-01-25][00:26:54][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:26:54][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":0}")
+[2026-01-25][00:26:55][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:26:55][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":1}")
+[2026-01-25][00:26:56][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:26:56][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":2}")
+[2026-01-25][00:26:57][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:26:57][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":3}")
+[2026-01-25][00:26:58][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:26:58][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":4}")
+[2026-01-25][00:26:58][app_lib][INFO] Simulate: error
+[2026-01-25][00:26:58][app_lib][DEBUG] Received event: ForceError { message: "Simulated error for testing" }
+[2026-01-25][00:26:58][app_lib][INFO] State transition: Recording { recording_id: 26d2a171-04cc-40a3-9310-12915972ebdd, wav_path: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300814_26d2a171-04cc-40a3-9310-12915972ebdd.wav", started_at: Instant { tv_sec: 85212, tv_nsec: 853118718 } } -> Error { message: "Simulated error for testing", last_good_text: None }
+[2026-01-25][00:26:58][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"error\",\"message\":\"Simulated error for testing\",\"lastText\":null}")
+[2026-01-25][00:26:59][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:00][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:01][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:02][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:03][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:04][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:05][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:06][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:07][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:08][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:09][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:10][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:11][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:12][app_lib::hotkey::manager][INFO] Hotkey triggered: Ctrl+Alt+Space
+[2026-01-25][00:27:12][app_lib][DEBUG] Received event: HotkeyToggle
+[2026-01-25][00:27:12][app_lib][INFO] State transition: Error { message: "Simulated error for testing", last_good_text: None } -> Arming { recording_id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:12][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"arming\"}")
+[2026-01-25][00:27:12][app_lib::audio::recorder][INFO] Recording stopped, WAV finalized: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300814_26d2a171-04cc-40a3-9310-12915972ebdd.wav"
+[2026-01-25][00:27:12][app_lib::audio::recorder][INFO] Recording started: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300832_3f91b441-081d-4d7d-93f7-bfa7b62c3a2c.wav"
+[2026-01-25][00:27:12][app_lib::effects][INFO] Audio recording started: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300832_3f91b441-081d-4d7d-93f7-bfa7b62c3a2c.wav"
+[2026-01-25][00:27:12][app_lib][DEBUG] Received event: AudioStartOk { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c, wav_path: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300832_3f91b441-081d-4d7d-93f7-bfa7b62c3a2c.wav" }
+[2026-01-25][00:27:12][app_lib][INFO] State transition: Arming { recording_id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c } -> Recording { recording_id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c, wav_path: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300832_3f91b441-081d-4d7d-93f7-bfa7b62c3a2c.wav", started_at: Instant { tv_sec: 85230, tv_nsec: 688589827 } }
+[2026-01-25][00:27:12][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":0}")
+[2026-01-25][00:27:12][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:12][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":0}")
+[2026-01-25][00:27:12][app_lib][INFO] Simulate: error
+[2026-01-25][00:27:12][app_lib][DEBUG] Received event: ForceError { message: "Simulated error for testing" }
+[2026-01-25][00:27:12][app_lib][INFO] State transition: Recording { recording_id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c, wav_path: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300832_3f91b441-081d-4d7d-93f7-bfa7b62c3a2c.wav", started_at: Instant { tv_sec: 85230, tv_nsec: 688589827 } } -> Error { message: "Simulated error for testing", last_good_text: None }
+[2026-01-25][00:27:12][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"error\",\"message\":\"Simulated error for testing\",\"lastText\":null}")
+[2026-01-25][00:27:12][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:13][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:13][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:14][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:14][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:15][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:15][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:16][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:16][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:17][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:17][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:18][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:18][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:19][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:19][app_lib::hotkey::manager][INFO] Hotkey triggered: Ctrl+Alt+Space
+[2026-01-25][00:27:19][app_lib][DEBUG] Received event: HotkeyToggle
+[2026-01-25][00:27:19][app_lib][INFO] State transition: Error { message: "Simulated error for testing", last_good_text: None } -> Arming { recording_id: 3d5a318d-242c-4e60-b7ff-2c2a8d153210 }
+[2026-01-25][00:27:19][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"arming\"}")
+[2026-01-25][00:27:19][app_lib::audio::recorder][INFO] Recording stopped, WAV finalized: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300832_3f91b441-081d-4d7d-93f7-bfa7b62c3a2c.wav"
+[2026-01-25][00:27:19][app_lib::audio::recorder][INFO] Recording started: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300839_3d5a318d-242c-4e60-b7ff-2c2a8d153210.wav"
+[2026-01-25][00:27:19][app_lib::effects][INFO] Audio recording started: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300839_3d5a318d-242c-4e60-b7ff-2c2a8d153210.wav"
+[2026-01-25][00:27:19][app_lib][DEBUG] Received event: AudioStartOk { id: 3d5a318d-242c-4e60-b7ff-2c2a8d153210, wav_path: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300839_3d5a318d-242c-4e60-b7ff-2c2a8d153210.wav" }
+[2026-01-25][00:27:19][app_lib][INFO] State transition: Arming { recording_id: 3d5a318d-242c-4e60-b7ff-2c2a8d153210 } -> Recording { recording_id: 3d5a318d-242c-4e60-b7ff-2c2a8d153210, wav_path: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300839_3d5a318d-242c-4e60-b7ff-2c2a8d153210.wav", started_at: Instant { tv_sec: 85237, tv_nsec: 793515115 } }
+[2026-01-25][00:27:19][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":0}")
+[2026-01-25][00:27:19][app_lib][DEBUG] Received event: RecordingTick { id: 3d5a318d-242c-4e60-b7ff-2c2a8d153210 }
+[2026-01-25][00:27:19][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"recording\",\"elapsedSecs\":0}")
+[2026-01-25][00:27:19][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:19][app_lib][INFO] Simulate: error
+[2026-01-25][00:27:19][app_lib][DEBUG] Received event: ForceError { message: "Simulated error for testing" }
+[2026-01-25][00:27:19][app_lib][INFO] State transition: Recording { recording_id: 3d5a318d-242c-4e60-b7ff-2c2a8d153210, wav_path: "/home/chaintail/.local/share/vokey-transcribe/temp/audio/1769300839_3d5a318d-242c-4e60-b7ff-2c2a8d153210.wav", started_at: Instant { tv_sec: 85237, tv_nsec: 793515115 } } -> Error { message: "Simulated error for testing", last_good_text: None }
+[2026-01-25][00:27:19][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"error\",\"message\":\"Simulated error for testing\",\"lastText\":null}")
+[2026-01-25][00:27:20][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:20][app_lib][DEBUG] Received event: RecordingTick { id: 3d5a318d-242c-4e60-b7ff-2c2a8d153210 }
+[2026-01-25][00:27:20][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:21][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:21][app_lib][DEBUG] Received event: RecordingTick { id: 3d5a318d-242c-4e60-b7ff-2c2a8d153210 }
+[2026-01-25][00:27:21][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:22][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:22][app_lib][DEBUG] Received event: RecordingTick { id: 3d5a318d-242c-4e60-b7ff-2c2a8d153210 }
+[2026-01-25][00:27:22][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:23][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:23][app_lib][DEBUG] Received event: RecordingTick { id: 3d5a318d-242c-4e60-b7ff-2c2a8d153210 }
+[2026-01-25][00:27:23][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:24][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:24][app_lib][DEBUG] Received event: RecordingTick { id: 3d5a318d-242c-4e60-b7ff-2c2a8d153210 }
+[2026-01-25][00:27:24][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:25][app_lib][INFO] Simulate: cancel
+[2026-01-25][00:27:25][app_lib][DEBUG] Received event: Cancel
+[2026-01-25][00:27:25][app_lib][INFO] State transition: Error { message: "Simulated error for testing", last_good_text: None } -> Idle
+[2026-01-25][00:27:25][app_lib][DEBUG] Emitting UI state: Ok("{\"status\":\"idle\"}")
+[2026-01-25][00:27:25][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:25][app_lib][DEBUG] Received event: RecordingTick { id: 3d5a318d-242c-4e60-b7ff-2c2a8d153210 }
+[2026-01-25][00:27:25][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:26][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:26][app_lib][DEBUG] Received event: RecordingTick { id: 3d5a318d-242c-4e60-b7ff-2c2a8d153210 }
+[2026-01-25][00:27:26][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:27][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:27][app_lib][DEBUG] Received event: RecordingTick { id: 3d5a318d-242c-4e60-b7ff-2c2a8d153210 }
+[2026-01-25][00:27:27][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:28][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:28][app_lib][DEBUG] Received event: RecordingTick { id: 3d5a318d-242c-4e60-b7ff-2c2a8d153210 }
+[2026-01-25][00:27:28][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:29][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:29][app_lib][DEBUG] Received event: RecordingTick { id: 3d5a318d-242c-4e60-b7ff-2c2a8d153210 }
+[2026-01-25][00:27:29][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:30][app_lib][INFO] Cancel clicked
+[2026-01-25][00:27:30][app_lib][DEBUG] Received event: Cancel
+[2026-01-25][00:27:30][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:30][app_lib][DEBUG] Received event: RecordingTick { id: 3d5a318d-242c-4e60-b7ff-2c2a8d153210 }
+[2026-01-25][00:27:30][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:31][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:31][app_lib][DEBUG] Received event: RecordingTick { id: 3d5a318d-242c-4e60-b7ff-2c2a8d153210 }
+[2026-01-25][00:27:31][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:32][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:32][app_lib][DEBUG] Received event: RecordingTick { id: 3d5a318d-242c-4e60-b7ff-2c2a8d153210 }
+[2026-01-25][00:27:32][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:33][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:33][app_lib][DEBUG] Received event: RecordingTick { id: 3d5a318d-242c-4e60-b7ff-2c2a8d153210 }
+[2026-01-25][00:27:33][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:34][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:34][app_lib][DEBUG] Received event: RecordingTick { id: 3d5a318d-242c-4e60-b7ff-2c2a8d153210 }
+[2026-01-25][00:27:34][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:35][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:35][app_lib][DEBUG] Received event: RecordingTick { id: 3d5a318d-242c-4e60-b7ff-2c2a8d153210 }
+[2026-01-25][00:27:35][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:36][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:36][app_lib][DEBUG] Received event: RecordingTick { id: 3d5a318d-242c-4e60-b7ff-2c2a8d153210 }
+[2026-01-25][00:27:36][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:37][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:37][app_lib][DEBUG] Received event: RecordingTick { id: 3d5a318d-242c-4e60-b7ff-2c2a8d153210 }
+[2026-01-25][00:27:37][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:38][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:38][app_lib][DEBUG] Received event: RecordingTick { id: 3d5a318d-242c-4e60-b7ff-2c2a8d153210 }
+[2026-01-25][00:27:38][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:39][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:39][app_lib][DEBUG] Received event: RecordingTick { id: 3d5a318d-242c-4e60-b7ff-2c2a8d153210 }
+[2026-01-25][00:27:39][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
+[2026-01-25][00:27:40][app_lib][DEBUG] Received event: RecordingTick { id: 3f91b441-081d-4d7d-93f7-bfa7b62c3a2c }
+[2026-01-25][00:27:40][app_lib][DEBUG] Received event: RecordingTick { id: 3d5a318d-242c-4e60-b7ff-2c2a8d153210 }
+[2026-01-25][00:27:40][app_lib][DEBUG] Received event: RecordingTick { id: 26d2a171-04cc-40a3-9310-12915972ebdd }
