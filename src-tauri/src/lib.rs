@@ -1,8 +1,11 @@
 mod audio;
 mod effects;
 mod hotkey;
+mod metrics;
 mod state_machine;
-mod transcription;
+
+// Public for integration tests
+pub mod transcription;
 
 use serde::Serialize;
 use std::sync::Arc;
@@ -11,11 +14,17 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager, WindowEvent,
 };
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 
 use effects::{AudioEffectRunner, EffectRunner};
 use hotkey::{Hotkey, HotkeyManager, HotkeyStatus};
+use metrics::{CycleMetrics, ErrorRecord, MetricsCollector, MetricsSummary};
 use state_machine::{reduce, Effect, Event, State};
+
+/// Thread-safe wrapper for metrics collector
+pub struct MetricsHandle {
+    collector: Arc<Mutex<MetricsCollector>>,
+}
 
 /// UI state sent to the frontend via Tauri events.
 /// Uses tagged union format: { "status": "idle" } or { "status": "recording", "elapsedSecs": 5 }
@@ -80,6 +89,11 @@ pub struct HotkeyStatusHolder {
     status: HotkeyStatus,
 }
 
+/// Holds cached audio status to avoid expensive re-initialization (Sprint 6 #25)
+pub struct AudioStatusHolder {
+    status: AudioStatusResponse,
+}
+
 impl StateLoopHandle {
     /// Send an event to the state machine
     pub async fn send(&self, event: Event) -> Result<(), mpsc::error::SendError<Event>> {
@@ -95,13 +109,17 @@ async fn run_state_loop(
     effect_runner: Arc<dyn EffectRunner>,
 ) {
     let mut state = State::default();
+    let mut state_entered_at = std::time::Instant::now();
 
     // Emit initial state
     emit_ui_state(&app, &state);
     log::info!("State loop started");
 
     while let Some(event) = rx.recv().await {
-        log::debug!("Received event: {:?}", event);
+        // Skip logging for tick events to reduce noise
+        if !matches!(event, Event::RecordingTick { .. }) {
+            log::debug!("Received event: {:?}", event);
+        }
 
         // Handle Exit at the edge
         if matches!(event, Event::Exit) {
@@ -110,12 +128,19 @@ async fn run_state_loop(
         }
 
         let old_discriminant = std::mem::discriminant(&state);
-        let (next, effects) = reduce(&state, event);
+        let (next, effects) = reduce(&state, event.clone());
         let new_discriminant = std::mem::discriminant(&next);
 
-        // Log state transitions
+        // Log state transitions with timing
         if old_discriminant != new_discriminant {
-            log::info!("State transition: {:?} -> {:?}", state, next);
+            let duration = state_entered_at.elapsed();
+            log::info!(
+                "State transition: {:?} -> {:?} (in previous state for {:?})",
+                std::mem::discriminant(&state),
+                std::mem::discriminant(&next),
+                duration
+            );
+            state_entered_at = std::time::Instant::now();
         }
 
         state = next;
@@ -199,8 +224,8 @@ pub struct AudioStatusResponse {
     error: Option<String>,
 }
 
-#[tauri::command]
-fn get_audio_status() -> AudioStatusResponse {
+/// Check audio availability and return status (used for initialization)
+fn check_audio_status() -> AudioStatusResponse {
     // Check if we can initialize an audio recorder
     match audio::AudioRecorder::new() {
         Ok(_) => {
@@ -226,6 +251,12 @@ fn get_audio_status() -> AudioStatusResponse {
     }
 }
 
+#[tauri::command]
+fn get_audio_status(handle: tauri::State<'_, AudioStatusHolder>) -> AudioStatusResponse {
+    // Return cached status (Sprint 6 #25: avoid expensive re-initialization)
+    handle.status.clone()
+}
+
 /// Transcription status for debug panel
 #[derive(Clone, serde::Serialize)]
 pub struct TranscriptionStatusResponse {
@@ -239,6 +270,63 @@ fn get_transcription_status() -> TranscriptionStatusResponse {
         api_key_configured: transcription::is_api_key_configured(),
         api_provider: "OpenAI Whisper".to_string(),
     }
+}
+
+// ============================================================================
+// Metrics Commands (Sprint 6)
+// ============================================================================
+
+/// Get metrics summary (totals, averages, last error)
+#[tauri::command]
+async fn get_metrics_summary(handle: tauri::State<'_, MetricsHandle>) -> Result<MetricsSummary, String> {
+    let collector = handle.collector.lock().await;
+    Ok(collector.get_summary())
+}
+
+/// Get recent cycle history (newest first)
+#[tauri::command]
+async fn get_metrics_history(handle: tauri::State<'_, MetricsHandle>) -> Result<Vec<CycleMetrics>, String> {
+    let collector = handle.collector.lock().await;
+    Ok(collector.get_history())
+}
+
+/// Get recent error history (newest first)
+#[tauri::command]
+async fn get_error_history(handle: tauri::State<'_, MetricsHandle>) -> Result<Vec<ErrorRecord>, String> {
+    let collector = handle.collector.lock().await;
+    Ok(collector.get_errors())
+}
+
+// ============================================================================
+// Folder Access Commands
+// ============================================================================
+
+/// Open the application logs folder in the system file manager
+#[tauri::command]
+async fn open_logs_folder(app: tauri::AppHandle) -> Result<(), String> {
+    let logs_dir = app.path().app_log_dir()
+        .map_err(|e| format!("Could not determine logs directory: {}", e))?;
+    std::fs::create_dir_all(&logs_dir)
+        .map_err(|e| format!("Failed to create logs directory: {}", e))?;
+    log::info!("Opening logs folder: {:?}", logs_dir);
+    std::process::Command::new("xdg-open")
+        .arg(&logs_dir)
+        .spawn()
+        .map_err(|e| format!("Failed to open logs folder: {}", e))?;
+    Ok(())
+}
+
+/// Open the recordings folder in the system file manager
+#[tauri::command]
+async fn open_recordings_folder() -> Result<(), String> {
+    let recordings_dir = audio::create_temp_audio_dir()
+        .map_err(|e| format!("Failed to create recordings directory: {}", e))?;
+    log::info!("Opening recordings folder: {:?}", recordings_dir);
+    std::process::Command::new("xdg-open")
+        .arg(&recordings_dir)
+        .spawn()
+        .map_err(|e| format!("Failed to open recordings folder: {}", e))?;
+    Ok(())
 }
 
 /// Internal implementation for opening the settings window with Wayland workaround
@@ -315,8 +403,12 @@ pub fn run() {
             )?;
 
             // Create tray icon
+            let tray_icon = app
+                .default_window_icon()
+                .ok_or("No default window icon configured")?
+                .clone();
             let _tray = TrayIconBuilder::with_id("main")
-                .icon(app.default_window_icon().unwrap().clone())
+                .icon(tray_icon)
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
@@ -402,8 +494,15 @@ pub fn run() {
             let state_handle = StateLoopHandle { tx: tx.clone() };
             app.manage(state_handle);
 
+            // Create metrics collector (Sprint 6)
+            let metrics_collector = Arc::new(Mutex::new(MetricsCollector::new()));
+            app.manage(MetricsHandle {
+                collector: metrics_collector.clone(),
+            });
+
             // Create effect runner (real audio capture as of Sprint 3)
-            let effect_runner = AudioEffectRunner::new();
+            // Pass metrics collector for tracking (Sprint 6)
+            let effect_runner = AudioEffectRunner::new(metrics_collector);
 
             // Spawn the state loop
             let app_handle = app.handle().clone();
@@ -431,6 +530,17 @@ pub fn run() {
                 status: hotkey_status,
             });
 
+            // Cache audio status at startup (Sprint 6 #25)
+            let audio_status = check_audio_status();
+            log::info!(
+                "Audio status cached: available={}, temp_dir={}",
+                audio_status.available,
+                audio_status.temp_dir
+            );
+            app.manage(AudioStatusHolder {
+                status: audio_status,
+            });
+
             log::info!("VoKey Transcribe started");
             Ok(())
         })
@@ -442,6 +552,11 @@ pub fn run() {
             get_hotkey_status,
             get_audio_status,
             get_transcription_status,
+            get_metrics_summary,
+            get_metrics_history,
+            get_error_history,
+            open_logs_folder,
+            open_recordings_folder,
             open_settings_window,
         ])
         .on_window_event(|window, event| {

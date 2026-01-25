@@ -6,10 +6,12 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Current Status
 
-**Phase:** Sprint 5 IN PROGRESS — Full flow polish + tray controls
+**Phase:** Sprint 7B PLANNING — Post-processing modes
 **Target:** Kubuntu with KDE Plasma 6.4 on Wayland
-**Branch:** `claude/plan-next-steps-NNuBc`
+**Branch:** `claude/plan-sprint-7-70hjz`
 **Last Updated:** 2026-01-24
+
+**Sprint 6 Status:** Phases 1-5 complete, Phase 6 (Stability Testing) needs real hardware
 
 ---
 
@@ -39,35 +41,51 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 | 2 - Global hotkey (evdev) | ✅ COMPLETE | evdev module implemented, needs testing on real hardware |
 | 3 - Audio capture (CPAL + Hound) | ✅ COMPLETE | CPAL capture, hound WAV writing, XDG paths |
 | 4 - OpenAI transcription + clipboard | ✅ COMPLETE | OpenAI Whisper API, arboard clipboard, tested on real hardware |
-| 5 - Full flow polish + tray controls | 🔄 IN PROGRESS | Tray menu enhanced, existing HUD features verified |
-| 6 - Hardening + UX polish | Not started | |
-| 7 - Phase 2 (streaming or post-processing) | Not started | |
+| 5 - Full flow polish + tray controls | 🧪 UAT | Tray menu with Toggle/Cancel/Open Logs, HUD timer, auto-dismiss |
+| 6 - Hardening + UX polish | ⏸️ PAUSED | Phases 1-5 done; Phase 6 (50-cycle stability) needs real hardware |
+| 7A - Streaming transcription | 🔄 PARALLEL | Separate team implementing Option A (Realtime API) |
+| 7B - Post-processing modes | 📋 PLANNING | Option B chosen: Normal/Coding/Markdown/Prompt modes |
 
 ---
 
 ## Current Task Context
 
-### Active Sprint: Sprint 5 - Full flow polish + tray controls
+### Active Sprint: Sprint 7B - Post-processing Modes
 
-### Completed Tasks:
-1. ✅ Added tray menu items: Toggle Recording, Cancel, Open Logs Folder
-2. ✅ Verified existing features already implemented:
-   - Recording duration timer (MM:SS) in HUD
-   - HUD auto-dismiss (3-second timeout after Done)
-   - Error recovery on next hotkey press (Error → Arming)
+**Implementation Plan:** See `docs/SPRINT7B-PLAN.md` for detailed breakdown.
 
-### Next Steps:
-1. Test full flow end-to-end via hotkey on real hardware
-2. Test full flow end-to-end via tray menu
-3. Test Cancel during recording and transcribing states
-4. Verify HUD states are clear and self-explanatory
-5. Create PR and merge
+**Note:** Sprint 7A (Streaming) is being developed in parallel by another team.
 
-### Acceptance Criteria (from Issue #7):
-- [ ] Full flow works end-to-end via hotkey
-- [ ] Full flow works end-to-end via tray menu
-- [ ] Cancel works during recording and transcribing
-- [ ] HUD states are clear and self-explanatory
+### Decision Made:
+- **Sprint 7B: Post-processing Modes** — this team
+- **Sprint 7A: Streaming Transcription** — parallel team
+- Both features can be combined after completion
+
+### Sprint 7B Phases:
+1. ⬜ Mode Selection Infrastructure - ProcessingMode enum, state, tray menu
+2. ⬜ Processing Engines - Coding, Markdown, Prompt processors
+3. ⬜ Pipeline Integration - Post-processing after transcription
+4. ⬜ UI Integration - Mode indicator in HUD, selector in Debug panel
+5. ⬜ Prompt Configuration (stretch) - Custom prompt storage
+
+### Modes to Implement:
+| Mode | Description | Processing |
+|------|-------------|------------|
+| Normal | Raw transcription, no changes | Passthrough |
+| Coding | snake_case, remove fillers | Local regex |
+| Markdown | Format as lists/structure | Local parsing |
+| Prompt | Custom LLM transformation | OpenAI Chat API |
+
+### Acceptance Criteria (from ISSUES-v1.0.0.md):
+- [ ] Mode selection works via tray menu and Debug panel
+- [ ] Coding mode produces valid identifiers (snake_case)
+- [ ] Markdown mode formats list items correctly
+- [ ] Prompt mode calls Chat API and falls back gracefully
+- [ ] HUD shows current mode indicator
+
+### Sprint 6 Status (Paused):
+- Phases 1-5 complete
+- Phase 6 (Stability Testing) requires real hardware for 50-cycle test
 
 ### Blockers:
 - Cannot build/test in headless environment (missing GTK libs - expected)
@@ -78,7 +96,10 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 - Sprint 2: https://github.com/mcorrig4/vokey-transcribe/issues/4 (DONE)
 - Sprint 3: https://github.com/mcorrig4/vokey-transcribe/issues/5 (DONE)
 - Sprint 4: https://github.com/mcorrig4/vokey-transcribe/issues/6 (DONE)
-- Sprint 5: https://github.com/mcorrig4/vokey-transcribe/issues/7 (IN PROGRESS)
+- Sprint 5: https://github.com/mcorrig4/vokey-transcribe/issues/7 (DONE)
+- Sprint 6: https://github.com/mcorrig4/vokey-transcribe/issues/8
+- Sprint 7 (umbrella): https://github.com/mcorrig4/vokey-transcribe/issues/9
+- Sprint 7B: https://github.com/mcorrig4/vokey-transcribe/issues/51 ← **ACTIVE**
 
 ---
 
@@ -131,6 +152,107 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 ---
 
 ## Session Notes
+
+### Session 2026-01-24 (Sprint 7B Planning)
+**Analyzed options and created Sprint 7B plan:**
+
+**Options Evaluated:**
+- **Option A: Streaming Partial Transcript** — Use OpenAI Realtime API for live transcription
+  - Pros: Wow factor, immediate feedback, modern UX
+  - Cons: Complex WebSocket handling, significant refactoring, higher API costs
+  - Effort: High (3-4 phases)
+
+- **Option B: Post-processing Modes** — Transform transcription based on mode
+  - Pros: Builds on existing flow, high developer value, lower complexity
+  - Cons: No real-time feedback, extra API call for Prompt mode
+  - Effort: Medium (2-3 phases)
+
+**Decision: Sprint 7B (Post-processing Modes)** — parallel with Sprint 7A (Streaming)
+
+**Rationale for splitting:**
+1. Both features are valuable and independent
+2. Parallel development speeds up delivery
+3. Post-processing (7B) builds on existing batch flow
+4. Streaming (7A) can use 7B's post-processing pipeline
+
+**Planning Documents Created:**
+- `docs/SPRINT7B-PLAN.md` — Comprehensive implementation plan
+  - Phase 1: Mode Selection Infrastructure
+  - Phase 2: Processing Engines (Coding, Markdown, Prompt)
+  - Phase 3: Pipeline Integration
+  - Phase 4: UI Integration
+  - Phase 5: Prompt Configuration (stretch)
+
+**Technical Highlights:**
+- Coding mode: Remove fillers ("um", "uh"), convert to snake_case
+- Markdown mode: Detect list items, add structure
+- Prompt mode: OpenAI Chat Completions API with fallback
+- New `processing/` module with 5 files
+
+---
+
+### Session 2026-01-24 (Sprint 6 Start - Hardening)
+**Sprint 5 in UAT, started Sprint 6 Phase 1:**
+
+**Sprint 6 Phase 1 - Metrics Infrastructure:**
+
+**New files created:**
+- `src-tauri/src/metrics.rs` — Full metrics collection module
+  - CycleMetrics: per-cycle timing, file size, transcript length
+  - MetricsSummary: totals, averages, success rate, last error
+  - ErrorRecord: error history with timestamps
+  - MetricsCollector: thread-safe collector (50 cycle, 20 error history)
+
+**Effects integration (src-tauri/src/effects.rs):**
+- Track cycle start/complete/fail/cancel at effect hook points
+- Collect file size from WAV recordings
+- Track transcription timing
+
+**Tauri commands (src-tauri/src/lib.rs):**
+- `get_metrics_summary`: totals and averages
+- `get_metrics_history`: recent cycle details
+- `get_error_history`: recent errors
+
+**Code review findings (3 parallel reviews):**
+- Correctness reviewer found 4 bugs, 4 risks
+- Performance reviewer found 1 critical, 2 medium issues
+- Rust idioms reviewer found 1 critical, 3 important issues
+
+**Critical bugs fixed:**
+1. Clipboard failures now correctly mark cycle as failed (was marking success unconditionally)
+2. start_cycle() handles in-progress cycles (logs warning, marks old as failed)
+3. Use async tokio::fs::metadata to avoid blocking runtime
+4. Removed unwrap() on tray icon (proper error handling)
+5. Changed metrics commands to return values directly (not Result<T, ()>)
+
+**Debug panel UI (src/Debug.tsx):**
+- Performance Metrics section: total cycles, success rate, avg durations
+- Recent Cycles table: last 10 cycles with timing breakdown
+- Error History list: recent errors with timestamps
+- Auto-refreshes on state changes
+
+**Planning document:**
+- Created `docs/SPRINT6-PLAN.md` with full 6-phase implementation plan
+
+**Sprint 6 Phase 2+4 - Timing Logs + Edge Cases:**
+
+**Phase 2 - Timing Logs:**
+- State transition timing in lib.rs run_state_loop
+- Short recording warnings (<500ms) in effects.rs
+- Added get_current_recording_duration_ms() to metrics.rs
+- Filtered RecordingTick events from debug logs
+
+**Phase 4 - Edge Case Handling:**
+- Auto-stop recordings at 120 seconds (state_machine.rs)
+- 30-second milestone warning for long recordings
+- 300ms hotkey debounce with atomic CAS (hotkey/manager.rs)
+- DebounceState struct with thread-safe should_trigger()
+
+**Code review findings:**
+- Fixed debounce race condition: was discarding CAS result
+- Fixed auto-stop boundary: use >= instead of > for exact timing
+
+---
 
 ### Session 2026-01-24 (Sprint 5 - Tray Controls)
 **Closed Sprint 4, started Sprint 5:**
