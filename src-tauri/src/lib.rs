@@ -278,23 +278,55 @@ fn get_transcription_status() -> TranscriptionStatusResponse {
 
 /// Get metrics summary (totals, averages, last error)
 #[tauri::command]
-async fn get_metrics_summary(handle: tauri::State<'_, MetricsHandle>) -> MetricsSummary {
+async fn get_metrics_summary(handle: tauri::State<'_, MetricsHandle>) -> Result<MetricsSummary, String> {
     let collector = handle.collector.lock().await;
-    collector.get_summary()
+    Ok(collector.get_summary())
 }
 
 /// Get recent cycle history (newest first)
 #[tauri::command]
-async fn get_metrics_history(handle: tauri::State<'_, MetricsHandle>) -> Vec<CycleMetrics> {
+async fn get_metrics_history(handle: tauri::State<'_, MetricsHandle>) -> Result<Vec<CycleMetrics>, String> {
     let collector = handle.collector.lock().await;
-    collector.get_history()
+    Ok(collector.get_history())
 }
 
 /// Get recent error history (newest first)
 #[tauri::command]
-async fn get_error_history(handle: tauri::State<'_, MetricsHandle>) -> Vec<ErrorRecord> {
+async fn get_error_history(handle: tauri::State<'_, MetricsHandle>) -> Result<Vec<ErrorRecord>, String> {
     let collector = handle.collector.lock().await;
-    collector.get_errors()
+    Ok(collector.get_errors())
+}
+
+// ============================================================================
+// Folder Access Commands
+// ============================================================================
+
+/// Open the application logs folder in the system file manager
+#[tauri::command]
+async fn open_logs_folder(app: tauri::AppHandle) -> Result<(), String> {
+    let logs_dir = app.path().app_log_dir()
+        .map_err(|e| format!("Could not determine logs directory: {}", e))?;
+    std::fs::create_dir_all(&logs_dir)
+        .map_err(|e| format!("Failed to create logs directory: {}", e))?;
+    log::info!("Opening logs folder: {:?}", logs_dir);
+    std::process::Command::new("xdg-open")
+        .arg(&logs_dir)
+        .spawn()
+        .map_err(|e| format!("Failed to open logs folder: {}", e))?;
+    Ok(())
+}
+
+/// Open the recordings folder in the system file manager
+#[tauri::command]
+async fn open_recordings_folder() -> Result<(), String> {
+    let recordings_dir = audio::create_temp_audio_dir()
+        .map_err(|e| format!("Failed to create recordings directory: {}", e))?;
+    log::info!("Opening recordings folder: {:?}", recordings_dir);
+    std::process::Command::new("xdg-open")
+        .arg(&recordings_dir)
+        .spawn()
+        .map_err(|e| format!("Failed to open recordings folder: {}", e))?;
+    Ok(())
 }
 
 /// Internal implementation for opening the settings window with Wayland workaround
@@ -523,6 +555,8 @@ pub fn run() {
             get_metrics_summary,
             get_metrics_history,
             get_error_history,
+            open_logs_folder,
+            open_recordings_folder,
             open_settings_window,
         ])
         .on_window_event(|window, event| {

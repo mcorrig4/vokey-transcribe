@@ -28,7 +28,7 @@ pub struct CycleMetrics {
     /// Transcription API call duration in milliseconds
     pub transcription_duration_ms: u64,
     /// Length of transcribed text in characters
-    pub transcript_length_chars: usize,
+    pub transcript_length_chars: u64,
     /// Total cycle time (from start to clipboard copy) in milliseconds
     pub total_cycle_ms: u64,
     /// Whether the cycle completed successfully
@@ -115,7 +115,7 @@ impl CycleInProgress {
                 .transcription_duration
                 .map(|d| d.as_millis() as u64)
                 .unwrap_or(0),
-            transcript_length_chars: self.transcript_length.unwrap_or(0),
+            transcript_length_chars: self.transcript_length.unwrap_or(0) as u64,
             total_cycle_ms: self.started_at.elapsed().as_millis() as u64,
             success,
             error_message,

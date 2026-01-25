@@ -190,6 +190,22 @@ function Debug() {
     }
   }
 
+  const openLogsFolder = async () => {
+    try {
+      await invoke('open_logs_folder')
+    } catch (e) {
+      console.error('Failed to open logs folder:', e)
+    }
+  }
+
+  const openRecordingsFolder = async () => {
+    try {
+      await invoke('open_recordings_folder')
+    } catch (e) {
+      console.error('Failed to open recordings folder:', e)
+    }
+  }
+
   return (
     <div className="debug-container">
       <h3>VoKey Debug Panel</h3>
@@ -258,6 +274,14 @@ function Debug() {
             Set <code>OPENAI_API_KEY</code> environment variable
           </div>
         )}
+      </div>
+
+      <div className="debug-section">
+        <strong>Folders:</strong>
+        <div className="folder-buttons">
+          <button onClick={openLogsFolder}>Open Logs Folder</button>
+          <button onClick={openRecordingsFolder}>Open Recordings Folder</button>
+        </div>
       </div>
 
       <div className="debug-status">
