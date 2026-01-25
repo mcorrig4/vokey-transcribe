@@ -6,10 +6,10 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Current Status
 
-**Phase:** Sprint 4 IN PROGRESS — OpenAI transcription + clipboard
+**Phase:** Sprint 5 UAT — User Acceptance Testing for PR #45
 **Target:** Kubuntu with KDE Plasma 6.4 on Wayland
-**Branch:** `claude/plan-next-priorities-WWH92`
-**Last Updated:** 2026-01-23
+**Testing PR:** #45 (Sprint 5: Add tray menu controls and close Sprint 4)
+**Last Updated:** 2026-01-25
 
 ---
 
@@ -36,54 +36,65 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 |--------|--------|-------|
 | 0 - Project skeleton + HUD + tray | ✅ COMPLETE | HUD shows "Ready", tray icon works, Quit exits cleanly |
 | 1 - State machine + UI wiring | ✅ COMPLETE | Full state machine, debug panel, simulate commands |
-| 2 - Global hotkey (evdev) | ✅ COMPLETE | evdev module implemented, needs testing on real hardware |
+| 2 - Global hotkey (evdev) | ✅ COMPLETE | evdev module implemented, tested on real hardware |
 | 3 - Audio capture (CPAL + Hound) | ✅ COMPLETE | CPAL capture, hound WAV writing, XDG paths |
-| 4 - OpenAI transcription + clipboard | 🔄 IN PROGRESS | OpenAI Whisper API, arboard clipboard, needs testing |
-| 5 - Full flow polish + tray controls | Not started | |
-| 6 - Hardening + UX polish | Not started | |
+| 4 - OpenAI transcription + clipboard | ✅ COMPLETE | OpenAI Whisper API, arboard clipboard, tested on hardware |
+| 5 - Full flow polish + tray controls | 🔄 UAT | PR #45 ready for user acceptance testing |
+| 6 - Hardening + UX polish | Not started | PRs #47, #49 have metrics/debug UI (pending #45 merge) |
 | 7 - Phase 2 (streaming or post-processing) | Not started | |
 
 ---
 
 ## Current Task Context
 
-### Active Sprint: Sprint 4 - OpenAI transcription + clipboard
+### Active: Sprint 5 UAT - User Acceptance Testing for PR #45
 
-### Completed Tasks:
-1. ✅ Added reqwest (HTTP client) and arboard (clipboard) dependencies
-2. ✅ Created transcription module (`src-tauri/src/transcription/`)
-3. ✅ Implemented OpenAI Whisper API client for speech-to-text
-4. ✅ Implemented real clipboard copy using arboard crate
-5. ✅ Replaced stubbed StartTranscription effect with real API call
-6. ✅ Added API key handling (OPENAI_API_KEY env var)
-7. ✅ Added `get_transcription_status` command for debug panel
-8. ✅ Updated Debug panel to show API key status
-9. ✅ TypeScript compiles successfully
+### Open PRs to Review:
+| PR | Branch | Status | Content |
+|----|--------|--------|---------|
+| **#45** | `claude/plan-next-steps-NNuBc` | 🔄 UAT | Tray menu controls, Sprint 4→5 transition |
+| #47 | `claude/plan-next-sprint-JNzkH` | Pending | Metrics system, debug UI (depends on #45) |
+| #49 | `claude/review-pr-47-feedback-K083f` | Pending | #47 + code review fixes (depends on #45) |
 
-### Next Steps:
-1. Test on real hardware with valid OpenAI API key
-2. Verify transcription produces correct text
-3. Verify clipboard copy works on Wayland
-4. Test error handling (missing key, network, API errors)
-5. Run manual validation checklist
-6. Create PR and merge
+### PR #45 Manual Testing Checklist:
+**Tray Menu - Toggle Recording:**
+- [ ] Click "Toggle Recording" → HUD shows "Starting..." then "● Recording"
+- [ ] Click "Toggle Recording" again → Recording stops, transcription begins
+- [ ] Transcribed text is copied to clipboard and pasteable
 
-### Reference Implementation:
-- API key from: `OPENAI_API_KEY` environment variable
-- Transcription endpoint: OpenAI Whisper (`https://api.openai.com/v1/audio/transcriptions`)
-- Clipboard: arboard crate (handles Wayland via wl-clipboard protocols)
-- HUD shows "Copied — paste now" when transcription completes
+**Tray Menu - Cancel:**
+- [ ] Start recording via tray, click "Cancel" → Returns to Idle
+- [ ] Start recording, click "Cancel" during "Transcribing..." → Returns to Idle
 
-### Blockers:
-- Cannot build/test in headless environment (missing GTK libs - expected)
-- Requires valid OpenAI API key for transcription testing
+**Tray Menu - Open Logs Folder:**
+- [ ] Click "Open Logs Folder" → File manager opens to log directory
+- [ ] Verify log files exist with recent entries
+
+**Hotkey Flow (verify still works):**
+- [ ] Press Ctrl+Alt+Space → Recording starts
+- [ ] Press Ctrl+Alt+Space again → Stops, transcribes, clipboard copy
+- [ ] Full flow works end-to-end
+
+**HUD States:**
+- [ ] Idle: "Ready" (gray)
+- [ ] Recording: "● Recording MM:SS" with timer (red, pulsing)
+- [ ] Transcribing: "Transcribing..." (blue)
+- [ ] Done: "Copied — paste now" (green), auto-dismisses after 3s
+- [ ] Error: Shows error message (red)
+
+**Settings Window (from merged PR #44):**
+- [ ] Open Settings from tray menu → Window control buttons work
+- [ ] Open Settings from HUD gear icon → Window control buttons work
+
+### After UAT Complete:
+1. Merge PR #45 to master
+2. Evaluate PRs #47/#49 - close as superseded or rebase for Sprint 6 metrics
+3. Close Sprint 5 issue, open Sprint 6
 
 ### GitHub Issues:
-- Sprint 0: https://github.com/mcorrig4/vokey-transcribe/issues/2 (DONE)
-- Sprint 1: https://github.com/mcorrig4/vokey-transcribe/issues/3 (DONE)
-- Sprint 2: https://github.com/mcorrig4/vokey-transcribe/issues/4 (DONE)
-- Sprint 3: https://github.com/mcorrig4/vokey-transcribe/issues/5 (DONE)
-- Sprint 4: https://github.com/mcorrig4/vokey-transcribe/issues/6 (IN PROGRESS)
+- Sprint 4: #6 (DONE - merged)
+- Sprint 5: #7 (IN PROGRESS - UAT for PR #45)
+- Sprint 6: #8 (Not started)
 
 ---
 
@@ -136,6 +147,25 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 ---
 
 ## Session Notes
+
+### Session 2026-01-25 (Sprint 5 UAT Preparation)
+**Reviewed open PRs and prepared for user acceptance testing:**
+
+**Open PRs analyzed:**
+- PR #45: Sprint 5 tray menu controls (Toggle Recording, Cancel, Open Logs)
+- PR #47: Metrics system + debug UI enhancements (Sprint 6 prep)
+- PR #49: Revised #47 with code review fixes
+
+**Recommended merge order:** PR #45 first (foundational Sprint 5 work)
+
+**PR #45 has:**
+- Manual testing checklist from claude-do comment
+- Code review feedback addressed (logs path fix, try_send, error handling)
+- 7 commits including fixes for Wayland settings window
+
+**Next:** Teleport chat to Kubuntu UAT environment to run through manual testing checklist.
+
+---
 
 ### Session 2026-01-23 (Sprint 4 Implementation)
 **Implemented OpenAI transcription and clipboard copy:**
