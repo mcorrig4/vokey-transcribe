@@ -190,7 +190,7 @@ tracing::debug!(
 | Level | Content |
 |-------|---------|
 | `ERROR` | API failures, audio device errors, unrecoverable states |
-| `WARN` | Very short recordings (<0.5s), cancellations, recoverable errors |
+| `WARN` | Recoverable errors, cancellations, unexpected edge cases |
 | `INFO` | Cycle metrics (duration, file size), successful completions |
 | `DEBUG` | State transitions, effect execution |
 | `TRACE` | Individual events, hotkey presses |
@@ -313,7 +313,12 @@ interface ErrorRecord {
 
 ### 4.1 Very Short Recordings (<0.5s)
 
-**Decision:** Warn but still attempt transcription (user might have said something short)
+**Decision:** Avoid overwriting the clipboard on silence/accidental taps by filtering short clips.
+
+Current behavior:
+- A configurable threshold (`min_transcribe_ms`, default `500`) defines what a “short clip” is.
+- For short clips, optionally run a fast local VAD check (`short_clip_vad_enabled`) to decide whether to send to OpenAI.
+- If the clip is treated as no-speech, the app shows `NoSpeech` and does not call OpenAI.
 
 **Modify:** `src-tauri/src/effects.rs`
 
@@ -321,21 +326,22 @@ interface ErrorRecord {
 async fn stop_audio(&mut self, recording_id: Uuid) -> Event {
     let (path, file_size, duration) = self.finalize_recording()?;
 
-    if duration < Duration::from_millis(500) {
-        tracing::warn!(
-            duration_ms = duration.as_millis(),
-            "Very short recording detected"
-        );
-        // Still proceed - let transcription decide
+    if duration < Duration::from_millis(min_transcribe_ms) {
+        if short_clip_vad_enabled && !vad_detects_speech(&path)? {
+            return Event::NoSpeechDetected { id: recording_id, source: "vad", message: "..." };
+        }
+        if !short_clip_vad_enabled {
+            return Event::NoSpeechDetected { id: recording_id, source: "duration", message: "..." };
+        }
     }
 
-    Event::AudioStopOk { recording_id, path, file_size }
+    Event::AudioStopOk { id: recording_id }
 }
 ```
 
 **Modify:** `src/App.tsx`
 
-- If transcription returns empty for short recording, show "Nothing detected" instead of "Error"
+- Render `NoSpeech` state distinctly (“No speech detected”) so users can tell the clip was intentionally ignored.
 
 ### 4.2 Very Long Recordings (>60s)
 
@@ -481,7 +487,7 @@ From ISSUES-v1.0.0.md acceptance criteria:
 - [ ] Cancel works during transcribing
 - [ ] Errors recover without restart
 - [ ] Logs show durations/timings
-- [ ] Very short recording (<0.5s) handled gracefully
+- [ ] Very short recording handled gracefully (NoSpeech; threshold configurable)
 - [ ] Rapid hotkey spam (30 presses in 10s) doesn't break state
 
 ---
