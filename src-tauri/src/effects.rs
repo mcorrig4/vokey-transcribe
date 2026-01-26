@@ -22,13 +22,49 @@ const OPENAI_NO_SPEECH_MAX_TEXT_LEN: usize = 12;
 const SHORT_CLIP_VAD_MIN_SPEECH_FRAMES: usize = 2;
 const SHORT_CLIP_MAX_CREST_FACTOR: f32 = 15.0;
 
-/// Determine if short-clip VAD stats indicate speech-like audio that should be transcribed.
-/// Returns `true` if the audio passes both checks:
-/// 1. At least `SHORT_CLIP_VAD_MIN_SPEECH_FRAMES` speech frames detected
-/// 2. Crest factor is below `SHORT_CLIP_MAX_CREST_FACTOR` (to filter transient noise)
+/// Result of evaluating VAD stats for short-clip transcription gating.
+/// Contains both the final decision and intermediate values for logging/debugging.
+#[derive(Debug, Clone)]
+struct VadDecision {
+    /// Final decision: should this clip be sent to OpenAI?
+    allows_transcription: bool,
+    /// Did we detect enough speech frames (>= SHORT_CLIP_VAD_MIN_SPEECH_FRAMES)?
+    speech_detected: bool,
+    /// Is the crest factor low enough to not be transient noise (<= SHORT_CLIP_MAX_CREST_FACTOR)?
+    heuristic_pass: bool,
+    /// Number of frames classified as speech by VAD
+    speech_frames: usize,
+    /// Total number of frames analyzed
+    total_frames: usize,
+    /// Computed crest factor (peak / RMS ratio)
+    crest_factor: f32,
+}
+
+/// Evaluate VAD stats to determine if a short clip should be transcribed.
+/// Returns a `VadDecision` containing the decision and all intermediate values.
+///
+/// A clip is allowed for transcription if:
+/// 1. At least `SHORT_CLIP_VAD_MIN_SPEECH_FRAMES` speech frames were detected
+/// 2. Crest factor is at or below `SHORT_CLIP_MAX_CREST_FACTOR` (filters transient noise like clicks)
+fn evaluate_short_clip_vad(stats: &crate::audio::vad::VadStats) -> VadDecision {
+    let speech_detected = stats.speech_frames >= SHORT_CLIP_VAD_MIN_SPEECH_FRAMES;
+    let crest_factor = stats.crest_factor();
+    let heuristic_pass = crest_factor <= SHORT_CLIP_MAX_CREST_FACTOR;
+
+    VadDecision {
+        allows_transcription: speech_detected && heuristic_pass,
+        speech_detected,
+        heuristic_pass,
+        speech_frames: stats.speech_frames,
+        total_frames: stats.total_frames,
+        crest_factor,
+    }
+}
+
+/// Convenience function that returns just the boolean decision.
+/// Used by tests and any code that only needs the final answer.
 fn short_clip_vad_allows_transcription(stats: &crate::audio::vad::VadStats) -> bool {
-    stats.speech_frames >= SHORT_CLIP_VAD_MIN_SPEECH_FRAMES
-        && stats.crest_factor() <= SHORT_CLIP_MAX_CREST_FACTOR
+    evaluate_short_clip_vad(stats).allows_transcription
 }
 
 /// Trait for running effects asynchronously.
@@ -272,33 +308,27 @@ impl EffectRunner for AudioEffectRunner {
 
                                         match vad_stats {
                                             Ok(Ok(stats)) => {
-                                                let speech_detected =
-                                                    stats.speech_frames >= SHORT_CLIP_VAD_MIN_SPEECH_FRAMES;
-                                                let crest_factor = stats.crest_factor();
-                                                let heuristic_pass =
-                                                    crest_factor <= SHORT_CLIP_MAX_CREST_FACTOR;
-                                                let allows_transcription =
-                                                    short_clip_vad_allows_transcription(&stats);
+                                                let decision = evaluate_short_clip_vad(&stats);
 
                                                 log::debug!(
                                                     "No-speech gate: VAD+heuristics speech_frames={}, total_frames={}, ratio={:.2}, rms={:.0}, peak_abs={}, crest_factor={:.1} (max {:.1}) => speech_detected={}, heuristic_pass={}, allows_transcription={}",
-                                                    stats.speech_frames,
-                                                    stats.total_frames,
+                                                    decision.speech_frames,
+                                                    decision.total_frames,
                                                     stats.speech_ratio(),
                                                     stats.rms,
                                                     stats.peak_abs,
-                                                    crest_factor,
+                                                    decision.crest_factor,
                                                     SHORT_CLIP_MAX_CREST_FACTOR,
-                                                    speech_detected,
-                                                    heuristic_pass,
-                                                    allows_transcription
+                                                    decision.speech_detected,
+                                                    decision.heuristic_pass,
+                                                    decision.allows_transcription
                                                 );
 
-                                                if !speech_detected {
+                                                if !decision.speech_detected {
                                                     log::info!(
                                                         "Short-clip VAD: no speech detected ({}/{} frames)",
-                                                        stats.speech_frames,
-                                                        stats.total_frames
+                                                        decision.speech_frames,
+                                                        decision.total_frames
                                                     );
                                                     let _ = tx
                                                         .send(Event::NoSpeechDetected {
@@ -308,18 +338,18 @@ impl EffectRunner for AudioEffectRunner {
                                                                 "Short clip ({}ms < {}ms): VAD no-speech ({}/{} frames). Skipped transcription.",
                                                                 duration_ms,
                                                                 vad_check_max_ms,
-                                                                stats.speech_frames,
-                                                                stats.total_frames
+                                                                decision.speech_frames,
+                                                                decision.total_frames
                                                             ),
                                                         })
                                                         .await;
                                                     return;
                                                 }
 
-                                                if !heuristic_pass {
+                                                if !decision.heuristic_pass {
                                                     log::info!(
                                                         "Short-clip heuristic: likely transient noise (crest_factor={:.1} > {:.1}), skipping",
-                                                        crest_factor,
+                                                        decision.crest_factor,
                                                         SHORT_CLIP_MAX_CREST_FACTOR
                                                     );
                                                     let _ = tx
@@ -330,7 +360,7 @@ impl EffectRunner for AudioEffectRunner {
                                                                 "Short clip ({}ms < {}ms): VAD speech but looks like transient noise (crest_factor={:.1}). Skipped transcription.",
                                                                 duration_ms,
                                                                 vad_check_max_ms,
-                                                                crest_factor
+                                                                decision.crest_factor
                                                             ),
                                                         })
                                                         .await;
