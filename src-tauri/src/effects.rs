@@ -195,9 +195,27 @@ impl EffectRunner for AudioEffectRunner {
                                 (s.min_transcribe_ms, s.short_clip_vad_enabled)
                             };
 
+                            log::debug!(
+                                "No-speech gate: id={}, duration_ms={:?}, file_size_bytes={}, min_transcribe_ms={}, short_clip_vad_enabled={}",
+                                id,
+                                recording_duration_ms,
+                                file_size,
+                                min_transcribe_ms,
+                                short_clip_vad_enabled
+                            );
+
                             if let Some(duration_ms) = recording_duration_ms {
                                 if duration_ms < min_transcribe_ms {
+                                    log::debug!(
+                                        "No-speech gate: short clip detected ({}ms < {}ms)",
+                                        duration_ms,
+                                        min_transcribe_ms
+                                    );
                                     if short_clip_vad_enabled {
+                                        log::debug!(
+                                            "No-speech gate: running short-clip VAD for {:?}",
+                                            path
+                                        );
                                         let path_for_vad = path.clone();
                                         let vad_stats = tokio::task::spawn_blocking(move || {
                                             crate::audio::vad::analyze_wav_for_speech(&path_for_vad)
@@ -206,7 +224,15 @@ impl EffectRunner for AudioEffectRunner {
 
                                         match vad_stats {
                                             Ok(Ok(stats)) => {
+                                                let speech_ratio = stats.speech_ratio();
                                                 let speech_detected = stats.speech_frames >= 2;
+                                                log::debug!(
+                                                    "No-speech gate: VAD result speech_frames={}, total_frames={}, ratio={:.2}, threshold_frames>=2 => speech_detected={}",
+                                                    stats.speech_frames,
+                                                    stats.total_frames,
+                                                    speech_ratio,
+                                                    speech_detected
+                                                );
                                                 if !speech_detected {
                                                     log::info!(
                                                         "Short-clip VAD: no speech detected ({}/{} frames)",
@@ -237,6 +263,9 @@ impl EffectRunner for AudioEffectRunner {
                                             }
                                             Ok(Err(err)) => {
                                                 log::warn!("Short-clip VAD failed: {}", err);
+                                                log::debug!(
+                                                    "No-speech gate: treating VAD failure as no-speech by policy"
+                                                );
                                                 let _ = tx
                                                     .send(Event::NoSpeechDetected {
                                                         id,
@@ -251,6 +280,9 @@ impl EffectRunner for AudioEffectRunner {
                                             }
                                             Err(e) => {
                                                 log::warn!("Short-clip VAD task failed: {}", e);
+                                                log::debug!(
+                                                    "No-speech gate: treating VAD task failure as no-speech by policy"
+                                                );
                                                 let _ = tx
                                                     .send(Event::NoSpeechDetected {
                                                         id,
@@ -270,6 +302,9 @@ impl EffectRunner for AudioEffectRunner {
                                             duration_ms,
                                             min_transcribe_ms
                                         );
+                                        log::debug!(
+                                            "No-speech gate: short-clip VAD disabled; blocking transcription by duration threshold"
+                                        );
                                         let _ = tx
                                             .send(Event::NoSpeechDetected {
                                                 id,
@@ -288,6 +323,10 @@ impl EffectRunner for AudioEffectRunner {
                                     "Recording stopped: {}ms, {} bytes",
                                     duration_ms,
                                     file_size
+                                );
+                            } else {
+                                log::debug!(
+                                    "No-speech gate: recording duration unavailable; skipping short-clip checks and proceeding"
                                 );
                             }
 

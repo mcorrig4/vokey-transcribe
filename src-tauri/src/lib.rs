@@ -582,6 +582,11 @@ pub fn run() {
 
             // Load and manage settings
             let loaded_settings = settings::load_settings(&app.handle());
+            log::info!(
+                "Settings loaded: min_transcribe_ms={}, short_clip_vad_enabled={}",
+                loaded_settings.min_transcribe_ms,
+                loaded_settings.short_clip_vad_enabled
+            );
             let settings_handle = Arc::new(Mutex::new(loaded_settings));
             app.manage(SettingsHandle {
                 settings: settings_handle.clone(),
