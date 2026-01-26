@@ -1,6 +1,6 @@
 {
   "name": "vokey-transcribe",
-  "version": "0.0.1",
+  "version": "0.2.0-dev",
   "description": "",
   "type": "module",
   "scripts": {

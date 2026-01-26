@@ -1,6 +1,6 @@
 [package]
 name = "vokey-transcribe"
-version = "0.1.0"
+version = "0.2.0-dev"
 description = "Voice-to-text transcription via global hotkey"
 authors = ["mcorrig4"]
 license = "AGPL-3.0-only"
