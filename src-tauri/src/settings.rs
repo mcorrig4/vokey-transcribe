@@ -82,8 +82,27 @@ pub fn save_settings(app: &AppHandle, settings: &AppSettings) -> Result<(), Stri
     let tmp_path = path.with_extension("json.tmp");
     std::fs::write(&tmp_path, &contents)
         .map_err(|e| format!("Write temp settings {:?}: {}", tmp_path, e))?;
-    std::fs::rename(&tmp_path, &path)
-        .map_err(|e| format!("Rename temp settings {:?} to {:?}: {}", tmp_path, path, e))?;
 
+    // On Unix, rename will atomically replace the destination. On Windows, rename
+    // fails if the destination exists, so we remove it first (ignoring NotFound).
+    if cfg!(windows) {
+        if path.exists() {
+            if let Err(e) = std::fs::remove_file(&path) {
+                if e.kind() != std::io::ErrorKind::NotFound {
+                    return Err(format!(
+                        "Remove existing settings file {:?}: {}",
+                        path, e
+                    ));
+                }
+            }
+        }
+    }
+
+    std::fs::rename(&tmp_path, &path).map_err(|e| {
+        format!(
+            "Rename temp settings {:?} to {:?}: {}",
+            tmp_path, path, e
+        )
+    })?;
     Ok(())
 }
