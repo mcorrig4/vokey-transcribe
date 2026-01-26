@@ -116,7 +116,7 @@ fn check_rule_installed(path: &PathBuf) -> bool {
     // Check if General section has our rule ID in the rules list
     if let Some(general) = sections.get("General") {
         if let Some(rules) = general.get("rules") {
-            if rules.contains(RULE_ID) {
+            if rules.split(',').any(|r| r.trim() == RULE_ID) {
                 // Also verify the rule section exists and has correct wmclass
                 if let Some(rule_section) = sections.get(RULE_ID) {
                     if let Some(wmclass) = rule_section.get("wmclass") {
@@ -152,10 +152,16 @@ fn install_rule(path: &PathBuf) -> Result<(), String> {
     // Update General section
     let general = sections.entry("General".to_string()).or_default();
 
-    // Get current rules list
+    // Get current rules list (filter empty strings to handle empty rules value)
     let mut rules_list: Vec<String> = general
         .get("rules")
-        .map(|r| r.split(',').map(|s| s.trim().to_string()).collect())
+        .map(|r| {
+            r.split(',')
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string())
+                .collect()
+        })
         .unwrap_or_default();
 
     // Add our rule if not present
@@ -209,12 +215,13 @@ fn remove_rule(path: &PathBuf) -> Result<(), String> {
 
     // Update General section
     if let Some(general) = sections.get_mut("General") {
-        // Remove our rule from the rules list
+        // Remove our rule from the rules list (filter empty strings for clean output)
         if let Some(rules) = general.get("rules") {
             let rules_list: Vec<String> = rules
                 .split(',')
-                .map(|s| s.trim().to_string())
-                .filter(|r| r != RULE_ID)
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty() && *s != RULE_ID)
+                .map(str::to_string)
                 .collect();
 
             general.insert("count".to_string(), rules_list.len().to_string());
@@ -433,5 +440,46 @@ aboverule=2
         assert!(output.contains("rules=test-rule"));
         assert!(output.contains("[test-rule]"));
         assert!(output.contains("Description=Test"));
+    }
+
+    #[test]
+    fn test_rule_id_exact_match_not_substring() {
+        // Ensure we don't false-positive on substring matches
+        // e.g., "my-vokey-hud-rule" should NOT match when looking for "vokey-hud-rule"
+        let rules_with_similar_name = "my-vokey-hud-rule,other-rule";
+
+        // Using split + exact match (our fix)
+        let has_exact_match = rules_with_similar_name
+            .split(',')
+            .any(|r| r.trim() == RULE_ID);
+        assert!(!has_exact_match, "Should not match substring 'my-vokey-hud-rule'");
+
+        // Verify it DOES match when exact rule is present
+        let rules_with_exact = "my-vokey-hud-rule,vokey-hud-rule,other-rule";
+        let has_exact = rules_with_exact.split(',').any(|r| r.trim() == RULE_ID);
+        assert!(has_exact, "Should match exact 'vokey-hud-rule'");
+    }
+
+    #[test]
+    fn test_empty_rules_string_handling() {
+        // When rules="" (empty string), splitting produces [""]
+        // We must filter this out to avoid malformed output like "rules=,vokey-hud-rule"
+        let empty_rules = "";
+
+        // Simulating the fixed install_rule logic
+        let rules_list: Vec<String> = empty_rules
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        assert!(rules_list.is_empty(), "Empty rules string should produce empty vec");
+
+        // After adding a rule, should be clean (no leading comma)
+        let mut rules_list = rules_list;
+        rules_list.push(RULE_ID.to_string());
+        let result = rules_list.join(",");
+        assert_eq!(result, RULE_ID, "Should be just the rule ID, no leading comma");
+        assert!(!result.starts_with(','), "Should not start with comma");
     }
 }
