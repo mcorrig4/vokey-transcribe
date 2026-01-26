@@ -458,31 +458,6 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
                 recording_id,
                 wav_path,
             },
-            NoSpeechDetected {
-                id,
-                source,
-                message,
-            },
-        ) if *recording_id == id => (
-            NoSpeech {
-                recording_id: *recording_id,
-                wav_path: wav_path.clone(),
-                source,
-                message,
-            },
-            vec![
-                StartDoneTimeout {
-                    id: *recording_id,
-                    duration: Duration::from_secs(3),
-                },
-                EmitUi,
-            ],
-        ),
-        (
-            Transcribing {
-                recording_id,
-                wav_path,
-            },
             Cancel,
         ) => (
             Idle,
