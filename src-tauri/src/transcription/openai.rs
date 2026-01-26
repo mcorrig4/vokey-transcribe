@@ -17,7 +17,7 @@ fn get_http_client() -> &'static Client {
         Client::builder()
             .timeout(Duration::from_secs(60))
             .build()
-            .expect("Failed to build HTTP client")
+            .expect("Failed to build HTTP client - TLS backend or system DNS may be unavailable")
     })
 }
 
