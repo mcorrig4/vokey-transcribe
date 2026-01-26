@@ -133,6 +133,8 @@ Current settings keys:
 
 These can be edited from the Settings/Debug window (tray menu → Settings, or the HUD gear icon).
 
+When you click **Save**, the backend writes the updated JSON file and logs the change (INFO) to the app log (Linux example: `~/.local/share/com.vokey.transcribe/logs/VoKey Transcribe.log`).
+
 **Behavior:**
 - Clips shorter than `min_transcribe_ms` are treated as “short clips”.
 - If `short_clip_vad_enabled` is on, short clips are analyzed locally and only sent to OpenAI if speech is detected.

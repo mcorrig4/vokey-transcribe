@@ -759,6 +759,17 @@ futures-util = "0.3"
 * After any state change, emit a compact "state snapshot" to React:
   * `{ status: "done", text: "...", error: null }`
 
+### Settings persistence (`AppSettings`)
+
+VoKey stores no-speech filter settings in a small JSON file under the per-user Tauri config directory (keyed by the app identifier).
+
+* **Load at startup:** `settings::load_settings()` reads `app_config_dir/settings.json`, falls back to defaults if missing/unparseable, and uses `#[serde(default)]` so missing keys get sensible defaults.
+* **In-memory storage:** Settings live in a `SettingsHandle` (`Arc<Mutex<AppSettings>>`) so they can be safely read by async tasks.
+* **Update flow:** the Settings/Debug window calls Tauri commands:
+  * `get_settings` → returns current settings
+  * `set_settings` → updates the in-memory settings and calls `settings::save_settings()` to write `settings.json`
+* **Immediate effect:** the effect runner reads the mutex when deciding whether to run short-clip VAD / skip OpenAI, so changes take effect without restarting the app.
+
 ## Where the Wayland gotchas plug in
 
 * Global hotkey runs in a dedicated thread reading from evdev (bypasses Wayland)
