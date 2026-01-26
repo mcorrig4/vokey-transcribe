@@ -19,7 +19,7 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ### 2026-01-25: No-speech filtering + settings (anti-hallucination)
 - [x] Added `NoSpeech` state so silence/very short clips don’t overwrite clipboard
-- [x] Added persisted settings (`min_transcribe_ms`, `short_clip_vad_enabled`)
+- [x] Added persisted settings (`min_transcribe_ms`, `vad_check_max_ms`, `vad_ignore_start_ms`, `short_clip_vad_enabled`)
 - [x] Added optional short-clip VAD check (reads the WAV once post-finalize)
 - [x] Parse OpenAI `verbose_json` response for `no_speech_prob` and treat as `NoSpeech` when appropriate
 

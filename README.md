@@ -30,8 +30,9 @@ A lightweight desktop tool that:
 3. Hotkey press again (toggle mode) triggers:
    - `Recording → Stopping`
    - WAV file is finalized, then one of:
-     - `Stopping → NoSpeech` (skips sending to OpenAI) if the clip is too short and local speech detection says "no speech"
-     - `Stopping → Transcribing` if the clip is long enough, or speech is detected in a short clip
+     - `Stopping → NoSpeech` (skips sending to OpenAI) if the clip is shorter than `min_transcribe_ms`
+     - `Stopping → NoSpeech` (skips sending to OpenAI) if the clip is in the VAD window and local VAD/heuristics say "no speech"
+     - `Stopping → Transcribing` if the clip is long enough, or local checks allow it
 
    This prevents spamming the hotkey from repeatedly overwriting the clipboard with hallucinated short tokens (common for silence).
 
@@ -48,8 +49,9 @@ A lightweight desktop tool that:
 
 ### No-speech filtering (anti-hallucination)
 VoKey has multiple safeguards to avoid overwriting your clipboard when you record silence or accidental hotkey taps:
-- **Duration threshold** (`min_transcribe_ms`): short clips can be skipped before any network call
-- **Short-clip VAD** (`short_clip_vad_enabled`): when enabled, short clips are analyzed locally and only sent to OpenAI if speech is detected
+- **Hard minimum duration** (`min_transcribe_ms`): clips shorter than this are never sent to OpenAI
+- **Short-clip VAD window** (`vad_check_max_ms`): when enabled, clips shorter than this are analyzed locally (VAD + heuristics) and only sent to OpenAI if the audio looks speech-like
+- **VAD start trimming** (`vad_ignore_start_ms`): ignore the first N ms when scoring VAD to reduce false positives from start-click/transients
 - **OpenAI no-speech signal**: for clips that are sent to OpenAI, the response is parsed for `no_speech_prob`; if it looks like no-speech, the app shows `NoSpeech` and does not copy to clipboard
 
 Settings are persisted to the Tauri app config directory (Linux example: `~/.config/com.vokey.transcribe/settings.json`) and can be edited from the Settings/Debug window.

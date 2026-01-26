@@ -127,6 +127,8 @@ Current settings keys:
 ```json
 {
   "min_transcribe_ms": 500,
+  "vad_check_max_ms": 1500,
+  "vad_ignore_start_ms": 80,
   "short_clip_vad_enabled": true
 }
 ```
@@ -136,8 +138,8 @@ These can be edited from the Settings/Debug window (tray menu → Settings, or t
 When you click **Save**, the backend writes the updated JSON file and logs the change (INFO) to the app log (Linux example: `~/.local/share/com.vokey.transcribe/logs/VoKey Transcribe.log`).
 
 **Behavior:**
-- Clips shorter than `min_transcribe_ms` are treated as “short clips”.
-- If `short_clip_vad_enabled` is on, short clips are analyzed locally and only sent to OpenAI if speech is detected.
+- Clips shorter than `min_transcribe_ms` are never sent to OpenAI.
+- If `short_clip_vad_enabled` is on, clips shorter than `vad_check_max_ms` are analyzed locally (VAD + heuristics) after ignoring the first `vad_ignore_start_ms`.
 - If OpenAI returns a strong “no speech” signal (`no_speech_prob`), VoKey shows `NoSpeech` and does not overwrite the clipboard.
 
 **Short-clip VAD limitations:** WebRTC VAD supports PCM 16-bit mono audio at 8/16/32/48kHz. (VoKey records 16-bit WAV and generally uses 48kHz.)

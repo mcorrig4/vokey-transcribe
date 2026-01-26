@@ -316,8 +316,9 @@ interface ErrorRecord {
 **Decision:** Avoid overwriting the clipboard on silence/accidental taps by filtering short clips.
 
 Current behavior:
-- A configurable threshold (`min_transcribe_ms`, default `500`) defines what a “short clip” is.
-- For short clips, optionally run a fast local VAD check (`short_clip_vad_enabled`) to decide whether to send to OpenAI.
+- A configurable hard minimum (`min_transcribe_ms`, default `500`) blocks OpenAI calls for very short clips.
+- For clips below a second configurable threshold (`vad_check_max_ms`, default `1500`), optionally run a fast local VAD/heuristics check (`short_clip_vad_enabled`) to decide whether to send to OpenAI.
+- Local VAD can ignore the first `vad_ignore_start_ms` to reduce start-click/transient false positives.
 - If the clip is treated as no-speech, the app shows `NoSpeech` and does not call OpenAI.
 
 **Modify:** `src-tauri/src/effects.rs`
@@ -327,11 +328,12 @@ async fn stop_audio(&mut self, recording_id: Uuid) -> Event {
     let (path, file_size, duration) = self.finalize_recording()?;
 
     if duration < Duration::from_millis(min_transcribe_ms) {
-        if short_clip_vad_enabled && !vad_detects_speech(&path)? {
+        return Event::NoSpeechDetected { id: recording_id, source: "duration", message: "..." };
+    }
+
+    if duration < Duration::from_millis(vad_check_max_ms) && short_clip_vad_enabled {
+        if !vad_and_heuristics_allow_transcribe(&path, vad_ignore_start_ms)? {
             return Event::NoSpeechDetected { id: recording_id, source: "vad", message: "..." };
-        }
-        if !short_clip_vad_enabled {
-            return Event::NoSpeechDetected { id: recording_id, source: "duration", message: "..." };
         }
     }
 

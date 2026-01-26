@@ -540,7 +540,9 @@ The effect runner spawns async work and posts completion events back to the queu
 6. **No-speech filtering** — decide whether to emit `AudioStopOk`/`TranscribeOk` or `NoSpeechDetected`
 
 For VoKey, no-speech filtering happens at two points:
-- **After StopAudio**: if the clip is shorter than `min_transcribe_ms`, optionally run short-clip VAD. If no speech is detected, emit `NoSpeechDetected` (source `duration` or `vad`) instead of `AudioStopOk`.
+- **After StopAudio**:
+  - If the clip is shorter than `min_transcribe_ms`, emit `NoSpeechDetected` (source `duration`) instead of `AudioStopOk` (never call OpenAI).
+  - If the clip is shorter than `vad_check_max_ms` and short-clip VAD is enabled, run local VAD/heuristics (optionally ignoring the first `vad_ignore_start_ms`) and emit `NoSpeechDetected` (source `vad`) when it looks like no-speech/transient noise.
 - **After OpenAI transcription**: parse `verbose_json` for `no_speech_prob`. If it looks like no-speech (or the returned text is empty), emit `NoSpeechDetected` (source `openai`) instead of `TranscribeOk` so clipboard copy is skipped.
 
 Short-clip VAD is implemented with WebRTC VAD and is currently limited to PCM 16-bit mono WAV at 8/16/32/48kHz (the format VoKey records by default).
