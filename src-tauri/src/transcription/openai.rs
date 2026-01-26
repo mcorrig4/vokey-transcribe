@@ -7,12 +7,18 @@ use reqwest::Client;
 use serde::Deserialize;
 use std::path::Path;
 use std::sync::OnceLock;
+use std::time::Duration;
 
 /// Global HTTP client for reuse across requests (avoids TLS handshake overhead)
 static HTTP_CLIENT: OnceLock<Client> = OnceLock::new();
 
 fn get_http_client() -> &'static Client {
-    HTTP_CLIENT.get_or_init(Client::new)
+    HTTP_CLIENT.get_or_init(|| {
+        Client::builder()
+            .timeout(Duration::from_secs(60))
+            .build()
+            .expect("Failed to build HTTP client")
+    })
 }
 
 /// Errors that can occur during transcription
