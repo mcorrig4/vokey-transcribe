@@ -320,14 +320,28 @@ async fn set_settings(
                 current.short_clip_vad_enabled, settings.short_clip_vad_enabled
             ));
         }
+        if current.vad_check_max_ms != settings.vad_check_max_ms {
+            changes.push(format!(
+                "vad_check_max_ms: {} -> {}",
+                current.vad_check_max_ms, settings.vad_check_max_ms
+            ));
+        }
+        if current.vad_ignore_start_ms != settings.vad_ignore_start_ms {
+            changes.push(format!(
+                "vad_ignore_start_ms: {} -> {}",
+                current.vad_ignore_start_ms, settings.vad_ignore_start_ms
+            ));
+        }
         *current = settings.clone();
     }
     settings::save_settings(&app, &settings)?;
 
     if changes.is_empty() {
         log::info!(
-            "Settings saved (no changes): min_transcribe_ms={}, short_clip_vad_enabled={}",
+            "Settings saved (no changes): min_transcribe_ms={}, vad_check_max_ms={}, vad_ignore_start_ms={}, short_clip_vad_enabled={}",
             settings.min_transcribe_ms,
+            settings.vad_check_max_ms,
+            settings.vad_ignore_start_ms,
             settings.short_clip_vad_enabled
         );
     } else {
@@ -336,8 +350,10 @@ async fn set_settings(
             changes.join(", ")
         );
         log::info!(
-            "Settings now: min_transcribe_ms={}, short_clip_vad_enabled={}",
+            "Settings now: min_transcribe_ms={}, vad_check_max_ms={}, vad_ignore_start_ms={}, short_clip_vad_enabled={}",
             settings.min_transcribe_ms,
+            settings.vad_check_max_ms,
+            settings.vad_ignore_start_ms,
             settings.short_clip_vad_enabled
         );
     }

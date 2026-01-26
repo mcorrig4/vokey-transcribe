@@ -8,12 +8,19 @@ const SETTINGS_FILE_NAME: &str = "settings.json";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppSettings {
-    /// Recordings shorter than this are treated as "short clips".
-    /// Short clips will be skipped unless short-clip VAD is enabled and detects speech.
+    /// Recordings shorter than this are never sent to OpenAI.
     pub min_transcribe_ms: u64,
 
-    /// When enabled, short clips are analyzed locally and only sent to OpenAI if speech is detected.
+    /// When enabled, clips shorter than `vad_check_max_ms` run a fast local VAD pass to decide
+    /// whether they should be sent to OpenAI.
     pub short_clip_vad_enabled: bool,
+
+    /// Clips shorter than this value may be gated by local VAD/heuristics (when enabled).
+    /// Clips >= this value are sent to OpenAI without local gating.
+    pub vad_check_max_ms: u64,
+
+    /// Ignore the first N ms of audio when running local VAD to avoid start-click/transient noise.
+    pub vad_ignore_start_ms: u64,
 }
 
 impl Default for AppSettings {
@@ -21,6 +28,8 @@ impl Default for AppSettings {
         Self {
             min_transcribe_ms: 500,
             short_clip_vad_enabled: true,
+            vad_check_max_ms: 1500,
+            vad_ignore_start_ms: 80,
         }
     }
 }

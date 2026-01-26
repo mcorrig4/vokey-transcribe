@@ -38,6 +38,8 @@ type TranscriptionStatus = {
 type AppSettings = {
   min_transcribe_ms: number
   short_clip_vad_enabled: boolean
+  vad_check_max_ms: number
+  vad_ignore_start_ms: number
 }
 
 // Metrics types matching Rust backend (Sprint 6)
@@ -186,7 +188,7 @@ function Debug() {
       setSettings(next)
       setSettingsError(null)
       pushLog(
-        `settings saved: min_transcribe_ms=${next.min_transcribe_ms}, short_clip_vad_enabled=${next.short_clip_vad_enabled}`,
+        `settings saved: min_transcribe_ms=${next.min_transcribe_ms}, vad_check_max_ms=${next.vad_check_max_ms}, vad_ignore_start_ms=${next.vad_ignore_start_ms}, short_clip_vad_enabled=${next.short_clip_vad_enabled}`,
       )
     } catch (e) {
       console.error('Failed to save settings:', e)
@@ -351,6 +353,18 @@ function Debug() {
               />
             </label>
             <label className="settings-row">
+              <span className="settings-label">VAD check max duration (ms)</span>
+              <input
+                className="settings-input"
+                type="number"
+                min={0}
+                step={50}
+                value={settings.vad_check_max_ms}
+                onChange={(e) => setSettings({ ...settings, vad_check_max_ms: Number(e.target.value) })}
+                disabled={settingsSaving}
+              />
+            </label>
+            <label className="settings-row">
               <span className="settings-label">Short-clip speech check (VAD)</span>
               <input
                 type="checkbox"
@@ -359,9 +373,21 @@ function Debug() {
                 disabled={settingsSaving}
               />
             </label>
+            <label className="settings-row">
+              <span className="settings-label">Ignore start for VAD (ms)</span>
+              <input
+                className="settings-input"
+                type="number"
+                min={0}
+                step={10}
+                value={settings.vad_ignore_start_ms}
+                onChange={(e) => setSettings({ ...settings, vad_ignore_start_ms: Number(e.target.value) })}
+                disabled={settingsSaving}
+              />
+            </label>
             <div className="settings-hint">
-              VAD runs only for clips shorter than the threshold above; it reads the WAV once and blocks OpenAI calls when no
-              speech is detected.
+              Clips shorter than the min duration are never sent to OpenAI. For clips shorter than the VAD max, VAD runs after
+              ignoring the start portion and may block OpenAI calls when audio looks like no-speech or transient noise.
             </div>
             <div className="settings-actions">
               <button onClick={() => saveSettings(settings)} disabled={settingsSaving}>

@@ -19,6 +19,14 @@ use crate::transcription;
 
 const OPENAI_NO_SPEECH_PROB_THRESHOLD: f32 = 0.8;
 const OPENAI_NO_SPEECH_MAX_TEXT_LEN: usize = 12;
+const SHORT_CLIP_VAD_MIN_SPEECH_FRAMES: usize = 2;
+const SHORT_CLIP_MAX_CREST_FACTOR: f32 = 15.0;
+
+#[cfg(test)]
+fn short_clip_vad_allows_transcription(stats: &crate::audio::vad::VadStats) -> bool {
+    stats.speech_frames >= SHORT_CLIP_VAD_MIN_SPEECH_FRAMES
+        && stats.crest_factor() <= SHORT_CLIP_MAX_CREST_FACTOR
+}
 
 /// Trait for running effects asynchronously.
 /// Completion events are sent back via the provided channel.
@@ -190,49 +198,96 @@ impl EffectRunner for AudioEffectRunner {
                                 m.get_current_recording_duration_ms()
                             };
 
-                            let (min_transcribe_ms, short_clip_vad_enabled) = {
+                            let (
+                                min_transcribe_ms,
+                                vad_check_max_ms,
+                                vad_ignore_start_ms,
+                                short_clip_vad_enabled,
+                            ) = {
                                 let s = settings.lock().await;
-                                (s.min_transcribe_ms, s.short_clip_vad_enabled)
+                                (
+                                    s.min_transcribe_ms,
+                                    s.vad_check_max_ms,
+                                    s.vad_ignore_start_ms,
+                                    s.short_clip_vad_enabled,
+                                )
                             };
 
                             log::debug!(
-                                "No-speech gate: id={}, duration_ms={:?}, file_size_bytes={}, min_transcribe_ms={}, short_clip_vad_enabled={}",
+                                "No-speech gate: id={}, duration_ms={:?}, file_size_bytes={}, min_transcribe_ms={}, vad_check_max_ms={}, vad_ignore_start_ms={}, short_clip_vad_enabled={}",
                                 id,
                                 recording_duration_ms,
                                 file_size,
                                 min_transcribe_ms,
+                                vad_check_max_ms,
+                                vad_ignore_start_ms,
                                 short_clip_vad_enabled
                             );
 
                             if let Some(duration_ms) = recording_duration_ms {
                                 if duration_ms < min_transcribe_ms {
-                                    log::debug!(
-                                        "No-speech gate: short clip detected ({}ms < {}ms)",
+                                    log::info!(
+                                        "Skipping transcription: recording too short ({}ms < {}ms)",
                                         duration_ms,
                                         min_transcribe_ms
                                     );
+                                    let _ = tx
+                                        .send(Event::NoSpeechDetected {
+                                            id,
+                                            source: crate::state_machine::NoSpeechSource::DurationThreshold,
+                                            message: format!(
+                                                "Recording too short: {}ms (< {}ms). Skipped transcription.",
+                                                duration_ms, min_transcribe_ms
+                                            ),
+                                        })
+                                        .await;
+                                    return;
+                                }
+
+                                if duration_ms < vad_check_max_ms {
+                                    log::debug!(
+                                        "No-speech gate: VAD window ({}ms < {}ms), short_clip_vad_enabled={}",
+                                        duration_ms,
+                                        vad_check_max_ms,
+                                        short_clip_vad_enabled
+                                    );
                                     if short_clip_vad_enabled {
                                         log::debug!(
-                                            "No-speech gate: running short-clip VAD for {:?}",
-                                            path
+                                            "No-speech gate: running short-clip VAD for {:?} (ignore_start_ms={})",
+                                            path,
+                                            vad_ignore_start_ms
                                         );
                                         let path_for_vad = path.clone();
+                                        let vad_ignore_start_ms_for_task = vad_ignore_start_ms;
                                         let vad_stats = tokio::task::spawn_blocking(move || {
-                                            crate::audio::vad::analyze_wav_for_speech(&path_for_vad)
+                                            crate::audio::vad::analyze_wav_for_speech(
+                                                &path_for_vad,
+                                                vad_ignore_start_ms_for_task,
+                                            )
                                         })
                                         .await;
 
                                         match vad_stats {
                                             Ok(Ok(stats)) => {
-                                                let speech_ratio = stats.speech_ratio();
-                                                let speech_detected = stats.speech_frames >= 2;
+                                                let speech_detected =
+                                                    stats.speech_frames >= SHORT_CLIP_VAD_MIN_SPEECH_FRAMES;
+                                                let crest_factor = stats.crest_factor();
+                                                let heuristic_pass =
+                                                    crest_factor <= SHORT_CLIP_MAX_CREST_FACTOR;
+
                                                 log::debug!(
-                                                    "No-speech gate: VAD result speech_frames={}, total_frames={}, ratio={:.2}, threshold_frames>=2 => speech_detected={}",
+                                                    "No-speech gate: VAD+heuristics speech_frames={}, total_frames={}, ratio={:.2}, rms={:.0}, peak_abs={}, crest_factor={:.1} (max {:.1}) => speech_detected={}, heuristic_pass={}",
                                                     stats.speech_frames,
                                                     stats.total_frames,
-                                                    speech_ratio,
-                                                    speech_detected
+                                                    stats.speech_ratio(),
+                                                    stats.rms,
+                                                    stats.peak_abs,
+                                                    crest_factor,
+                                                    SHORT_CLIP_MAX_CREST_FACTOR,
+                                                    speech_detected,
+                                                    heuristic_pass
                                                 );
+
                                                 if !speech_detected {
                                                     log::info!(
                                                         "Short-clip VAD: no speech detected ({}/{} frames)",
@@ -246,7 +301,7 @@ impl EffectRunner for AudioEffectRunner {
                                                             message: format!(
                                                                 "Short clip ({}ms < {}ms): VAD no-speech ({}/{} frames). Skipped transcription.",
                                                                 duration_ms,
-                                                                min_transcribe_ms,
+                                                                vad_check_max_ms,
                                                                 stats.speech_frames,
                                                                 stats.total_frames
                                                             ),
@@ -255,10 +310,29 @@ impl EffectRunner for AudioEffectRunner {
                                                     return;
                                                 }
 
+                                                if !heuristic_pass {
+                                                    log::info!(
+                                                        "Short-clip heuristic: likely transient noise (crest_factor={:.1} > {:.1}), skipping",
+                                                        crest_factor,
+                                                        SHORT_CLIP_MAX_CREST_FACTOR
+                                                    );
+                                                    let _ = tx
+                                                        .send(Event::NoSpeechDetected {
+                                                            id,
+                                                            source: crate::state_machine::NoSpeechSource::ShortClipVad,
+                                                            message: format!(
+                                                                "Short clip ({}ms < {}ms): VAD speech but looks like transient noise (crest_factor={:.1}). Skipped transcription.",
+                                                                duration_ms,
+                                                                vad_check_max_ms,
+                                                                crest_factor
+                                                            ),
+                                                        })
+                                                        .await;
+                                                    return;
+                                                }
+
                                                 log::info!(
-                                                    "Short-clip VAD: speech detected ({}/{} frames), proceeding",
-                                                    stats.speech_frames,
-                                                    stats.total_frames
+                                                    "Short-clip VAD: speech-like audio detected, proceeding"
                                                 );
                                             }
                                             Ok(Err(err)) => {
@@ -272,7 +346,7 @@ impl EffectRunner for AudioEffectRunner {
                                                         source: crate::state_machine::NoSpeechSource::ShortClipVad,
                                                         message: format!(
                                                             "Short clip ({}ms < {}ms): VAD failed ({}). Skipped transcription.",
-                                                            duration_ms, min_transcribe_ms, err
+                                                            duration_ms, vad_check_max_ms, err
                                                         ),
                                                     })
                                                     .await;
@@ -289,7 +363,7 @@ impl EffectRunner for AudioEffectRunner {
                                                         source: crate::state_machine::NoSpeechSource::ShortClipVad,
                                                         message: format!(
                                                             "Short clip ({}ms < {}ms): VAD task failed ({}). Skipped transcription.",
-                                                            duration_ms, min_transcribe_ms, e
+                                                            duration_ms, vad_check_max_ms, e
                                                         ),
                                                     })
                                                     .await;
@@ -297,26 +371,16 @@ impl EffectRunner for AudioEffectRunner {
                                             }
                                         }
                                     } else {
-                                        log::info!(
-                                            "Skipping transcription: recording too short ({}ms < {}ms)",
-                                            duration_ms,
-                                            min_transcribe_ms
-                                        );
                                         log::debug!(
-                                            "No-speech gate: short-clip VAD disabled; blocking transcription by duration threshold"
+                                            "No-speech gate: short-clip VAD disabled; proceeding without local gating"
                                         );
-                                        let _ = tx
-                                            .send(Event::NoSpeechDetected {
-                                                id,
-                                                source: crate::state_machine::NoSpeechSource::DurationThreshold,
-                                                message: format!(
-                                                    "Recording too short: {}ms (< {}ms). Skipped transcription.",
-                                                    duration_ms, min_transcribe_ms
-                                                ),
-                                            })
-                                            .await;
-                                        return;
                                     }
+                                } else {
+                                    log::debug!(
+                                        "No-speech gate: duration {}ms >= vad_check_max_ms {}ms; skipping local gating and proceeding",
+                                        duration_ms,
+                                        vad_check_max_ms
+                                    );
                                 }
 
                                 log::info!(
@@ -649,5 +713,40 @@ impl EffectRunner for StubEffectRunner {
                 unreachable!("EmitUi should be handled in run_state_loop");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn vad_stats_for_test(speech_frames: usize, total_frames: usize, rms: f32, peak_abs: i32) -> crate::audio::vad::VadStats {
+        crate::audio::vad::VadStats {
+            total_frames,
+            speech_frames,
+            total_samples: 48_000,
+            peak_abs,
+            rms,
+            abs_mean: 0.0,
+            ignored_samples: 0,
+        }
+    }
+
+    #[test]
+    fn short_clip_vad_requires_min_speech_frames() {
+        let stats = vad_stats_for_test(1, 10, 2000.0, 10_000);
+        assert!(!short_clip_vad_allows_transcription(&stats));
+    }
+
+    #[test]
+    fn short_clip_vad_rejects_transient_noise_by_crest_factor() {
+        let stats = vad_stats_for_test(10, 10, 1500.0, 30_000); // crest=20
+        assert!(!short_clip_vad_allows_transcription(&stats));
+    }
+
+    #[test]
+    fn short_clip_vad_allows_speech_like_audio() {
+        let stats = vad_stats_for_test(10, 10, 2000.0, 10_000); // crest=5
+        assert!(short_clip_vad_allows_transcription(&stats));
     }
 }
