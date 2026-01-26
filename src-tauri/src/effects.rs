@@ -22,7 +22,10 @@ const OPENAI_NO_SPEECH_MAX_TEXT_LEN: usize = 12;
 const SHORT_CLIP_VAD_MIN_SPEECH_FRAMES: usize = 2;
 const SHORT_CLIP_MAX_CREST_FACTOR: f32 = 15.0;
 
-#[cfg(test)]
+/// Determine if short-clip VAD stats indicate speech-like audio that should be transcribed.
+/// Returns `true` if the audio passes both checks:
+/// 1. At least `SHORT_CLIP_VAD_MIN_SPEECH_FRAMES` speech frames detected
+/// 2. Crest factor is below `SHORT_CLIP_MAX_CREST_FACTOR` (to filter transient noise)
 fn short_clip_vad_allows_transcription(stats: &crate::audio::vad::VadStats) -> bool {
     stats.speech_frames >= SHORT_CLIP_VAD_MIN_SPEECH_FRAMES
         && stats.crest_factor() <= SHORT_CLIP_MAX_CREST_FACTOR
@@ -274,9 +277,11 @@ impl EffectRunner for AudioEffectRunner {
                                                 let crest_factor = stats.crest_factor();
                                                 let heuristic_pass =
                                                     crest_factor <= SHORT_CLIP_MAX_CREST_FACTOR;
+                                                let allows_transcription =
+                                                    short_clip_vad_allows_transcription(&stats);
 
                                                 log::debug!(
-                                                    "No-speech gate: VAD+heuristics speech_frames={}, total_frames={}, ratio={:.2}, rms={:.0}, peak_abs={}, crest_factor={:.1} (max {:.1}) => speech_detected={}, heuristic_pass={}",
+                                                    "No-speech gate: VAD+heuristics speech_frames={}, total_frames={}, ratio={:.2}, rms={:.0}, peak_abs={}, crest_factor={:.1} (max {:.1}) => speech_detected={}, heuristic_pass={}, allows_transcription={}",
                                                     stats.speech_frames,
                                                     stats.total_frames,
                                                     stats.speech_ratio(),
@@ -285,7 +290,8 @@ impl EffectRunner for AudioEffectRunner {
                                                     crest_factor,
                                                     SHORT_CLIP_MAX_CREST_FACTOR,
                                                     speech_detected,
-                                                    heuristic_pass
+                                                    heuristic_pass,
+                                                    allows_transcription
                                                 );
 
                                                 if !speech_detected {

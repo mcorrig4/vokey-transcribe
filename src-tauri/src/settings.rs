@@ -76,6 +76,14 @@ pub fn save_settings(app: &AppHandle, settings: &AppSettings) -> Result<(), Stri
 
     let contents =
         serde_json::to_string_pretty(settings).map_err(|e| format!("Serialize settings: {}", e))?;
-    std::fs::write(&path, contents).map_err(|e| format!("Write settings {:?}: {}", path, e))?;
+
+    // Write atomically: write to a temp file in the same directory, then rename.
+    // This prevents partial/corrupt settings.json if the app crashes mid-write.
+    let tmp_path = path.with_extension("json.tmp");
+    std::fs::write(&tmp_path, &contents)
+        .map_err(|e| format!("Write temp settings {:?}: {}", tmp_path, e))?;
+    std::fs::rename(&tmp_path, &path)
+        .map_err(|e| format!("Rename temp settings {:?} to {:?}: {}", tmp_path, path, e))?;
+
     Ok(())
 }
