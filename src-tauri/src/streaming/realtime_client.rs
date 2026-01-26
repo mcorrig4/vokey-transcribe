@@ -58,8 +58,8 @@ pub struct RealtimeSession {
     incoming_rx: mpsc::Receiver<ServerMessage>,
     /// Session ID from OpenAI
     session_id: String,
-    /// Handle to the receiver task (for cleanup)
-    _receiver_task: tokio::task::JoinHandle<()>,
+    /// Handle to the receiver task (for cleanup on disconnect/drop)
+    receiver_task: tokio::task::JoinHandle<()>,
 }
 
 impl RealtimeSession {
@@ -219,7 +219,7 @@ impl RealtimeSession {
             write,
             incoming_rx,
             session_id,
-            _receiver_task: receiver_task,
+            receiver_task,
         };
 
         // Send session configuration
@@ -330,16 +330,24 @@ impl RealtimeSession {
 
     /// Gracefully disconnect from the API
     ///
-    /// This closes the WebSocket connection cleanly.
+    /// This closes the WebSocket connection cleanly and aborts the receiver task.
     pub async fn disconnect(mut self) {
         log::info!("Disconnecting from Realtime API...");
+
+        // Abort the receiver task to ensure clean shutdown
+        self.receiver_task.abort();
 
         // Send close frame
         if let Err(e) = self.write.close().await {
             log::warn!("Error closing WebSocket: {}", e);
         }
+    }
+}
 
-        // Receiver task will exit when the connection closes
+impl Drop for RealtimeSession {
+    fn drop(&mut self) {
+        // Ensure receiver task is aborted if session is dropped without disconnect()
+        self.receiver_task.abort();
     }
 }
 

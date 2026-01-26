@@ -155,6 +155,16 @@ impl AudioBuffer {
 /// # Returns
 /// Downsampled audio, or original if rates match or ratio not supported
 pub fn downsample(samples: &[i16], source_rate: u32, target_rate: u32) -> Vec<i16> {
+    // Guard against division by zero
+    if target_rate == 0 || source_rate == 0 {
+        log::warn!(
+            "Invalid sample rate (source: {}, target: {}), returning original",
+            source_rate,
+            target_rate
+        );
+        return samples.to_vec();
+    }
+
     if source_rate == target_rate {
         return samples.to_vec();
     }
@@ -174,9 +184,9 @@ pub fn downsample(samples: &[i16], source_rate: u32, target_rate: u32) -> Vec<i1
     samples
         .chunks(ratio)
         .map(|chunk| {
-            // Average all samples in the chunk
-            let sum: i32 = chunk.iter().map(|&s| s as i32).sum();
-            (sum / chunk.len() as i32) as i16
+            // Use i64 to prevent overflow with large chunks
+            let sum: i64 = chunk.iter().map(|&s| s as i64).sum();
+            (sum / chunk.len() as i64) as i16
         })
         .collect()
 }
@@ -287,6 +297,24 @@ mod tests {
         let output = downsample(&input, 44100, 24000);
 
         // Should return original unchanged
+        assert_eq!(output, input);
+    }
+
+    #[test]
+    fn test_downsample_zero_rate() {
+        // Zero rates should return original without panic
+        let input = vec![100i16, 200, 300];
+
+        // Zero target rate
+        let output = downsample(&input, 48000, 0);
+        assert_eq!(output, input);
+
+        // Zero source rate
+        let output = downsample(&input, 0, 24000);
+        assert_eq!(output, input);
+
+        // Both zero
+        let output = downsample(&input, 0, 0);
         assert_eq!(output, input);
     }
 

@@ -12,6 +12,7 @@
 //! 5. Receive partial transcripts via `conversation.item.input_audio_transcription.delta`
 //! 6. Commit audio buffer and receive final transcript
 
+use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
 
 /// OpenAI Realtime API endpoint
@@ -146,7 +147,7 @@ impl ClientMessage {
             .collect();
 
         Self::AudioAppend {
-            audio: base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes),
+            audio: STANDARD.encode(&bytes),
         }
     }
 
@@ -385,11 +386,7 @@ mod tests {
         let msg = ClientMessage::audio_append(&samples);
 
         if let ClientMessage::AudioAppend { audio } = msg {
-            let decoded = base64::Engine::decode(
-                &base64::engine::general_purpose::STANDARD,
-                &audio,
-            )
-            .unwrap();
+            let decoded = STANDARD.decode(&audio).unwrap();
 
             // Little-endian: 0x1234 -> [0x34, 0x12], 0x5678 -> [0x78, 0x56]
             assert_eq!(decoded, vec![0x34, 0x12, 0x78, 0x56]);
