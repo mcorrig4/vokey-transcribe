@@ -305,6 +305,12 @@ async fn set_settings(
     handle: tauri::State<'_, SettingsHandle>,
     settings: AppSettings,
 ) -> Result<(), String> {
+    // Persist to disk FIRST - if this fails, we don't update in-memory state.
+    // This prevents the confusing scenario where get_settings returns values
+    // that won't survive a restart.
+    settings::save_settings(&app, &settings)?;
+
+    // Now that disk write succeeded, update in-memory state and compute changes for logging
     let mut changes: Vec<String> = Vec::new();
     {
         let mut current = handle.settings.lock().await;
@@ -334,7 +340,6 @@ async fn set_settings(
         }
         *current = settings.clone();
     }
-    settings::save_settings(&app, &settings)?;
 
     if changes.is_empty() {
         log::info!(

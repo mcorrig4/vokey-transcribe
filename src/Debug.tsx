@@ -396,6 +396,17 @@ function Debug() {
               {settingsError && <span className="settings-error">Save failed: {settingsError}</span>}
             </div>
           </div>
+        ) : settingsError ? (
+          <div className="settings-error-state">
+            <span className="status-badge inactive">Error</span>
+            <span className="error-text">{settingsError}</span>
+            <button onClick={() => {
+              setSettingsError(null);
+              invoke<AppSettings>('get_settings')
+                .then(s => { setSettings(s); setSettingsError(null); })
+                .catch(e => setSettingsError(String(e)));
+            }}>Retry</button>
+          </div>
         ) : (
           <span>Loading...</span>
         )}

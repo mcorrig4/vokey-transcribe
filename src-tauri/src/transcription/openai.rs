@@ -103,14 +103,10 @@ pub struct TranscriptionResult {
 }
 
 fn max_no_speech_prob(segments: &[WhisperSegment]) -> Option<f32> {
-    let mut max: Option<f32> = None;
-    for segment in segments {
-        let Some(p) = segment.no_speech_prob else {
-            continue;
-        };
-        max = Some(max.map_or(p, |m| m.max(p)));
-    }
-    max
+    segments
+        .iter()
+        .filter_map(|s| s.no_speech_prob)
+        .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
 }
 
 /// Transcribe an audio file using OpenAI Whisper API
@@ -119,7 +115,9 @@ fn max_no_speech_prob(segments: &[WhisperSegment]) -> Option<f32> {
 /// * `wav_path` - Path to the WAV audio file
 ///
 /// # Returns
-/// * `Ok(String)` - The transcribed text
+/// * `Ok(TranscriptionResult)` - The transcription result, including the transcribed `text`
+///   and the optional `openai_no_speech_prob` indicating Whisper's estimated probability
+///   that the input contained no speech.
 /// * `Err(TranscriptionError)` - Error details
 pub async fn transcribe_audio(wav_path: &Path) -> Result<TranscriptionResult, TranscriptionError> {
     let api_key = get_api_key().ok_or(TranscriptionError::MissingApiKey)?;
