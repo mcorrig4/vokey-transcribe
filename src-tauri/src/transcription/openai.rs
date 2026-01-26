@@ -7,12 +7,17 @@ use reqwest::Client;
 use serde::Deserialize;
 use std::path::Path;
 use std::sync::OnceLock;
+use std::time::Duration;
 
 /// Global HTTP client for reuse across requests (avoids TLS handshake overhead)
 static HTTP_CLIENT: OnceLock<Client> = OnceLock::new();
 
-fn get_http_client() -> &'static Client {
-    HTTP_CLIENT.get_or_init(Client::new)
+fn get_http_client() -> Result<&'static Client, reqwest::Error> {
+    HTTP_CLIENT.get_or_try_init(|| {
+        Client::builder()
+            .timeout(Duration::from_secs(60))
+            .build()
+    })
 }
 
 /// Errors that can occur during transcription
@@ -153,7 +158,10 @@ pub async fn transcribe_audio(wav_path: &Path) -> Result<TranscriptionResult, Tr
         .text("temperature", "0");
 
     // Make API request using shared client
-    let response = get_http_client()
+    let client = get_http_client()
+        .map_err(|e| TranscriptionError::NetworkError(e.to_string()))?;
+
+    let response = client
         .post("https://api.openai.com/v1/audio/transcriptions")
         .header("Authorization", format!("Bearer {}", api_key))
         .multipart(form)

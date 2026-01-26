@@ -51,6 +51,13 @@
   background-color: rgba(255, 255, 255, 0.15);
 }
 
+.hud-settings-btn:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.8);
+  outline-offset: 2px;
+  color: rgba(255, 255, 255, 1);
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
 .hud-settings-btn svg {
   display: block;
 }
@@ -65,6 +72,6 @@
   }
 }
 
-.hud-container:has(.hud-text:first-child:contains("Recording")) {
+.hud-container.recording {
   animation: pulse 1.5s ease-in-out infinite;
 }

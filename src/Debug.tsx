@@ -1,18 +1,8 @@
 import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import { UiState } from './types'
 import './styles/debug.css'
-
-// UI state types matching Rust backend
-type UiState =
-  | { status: 'idle' }
-  | { status: 'arming' }
-  | { status: 'recording'; elapsedSecs: number }
-  | { status: 'stopping' }
-  | { status: 'transcribing' }
-  | { status: 'noSpeech'; source: string; message: string }
-  | { status: 'done'; text: string }
-  | { status: 'error'; message: string; lastText: string | null }
 
 // Hotkey status type matching Rust backend
 type HotkeyStatus = {
