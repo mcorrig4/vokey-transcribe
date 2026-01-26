@@ -8,6 +8,23 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 
+#[derive(Debug, Clone)]
+pub enum NoSpeechSource {
+    DurationThreshold,
+    ShortClipVad,
+    OpenAiNoSpeechProb,
+}
+
+impl NoSpeechSource {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            NoSpeechSource::DurationThreshold => "duration",
+            NoSpeechSource::ShortClipVad => "vad",
+            NoSpeechSource::OpenAiNoSpeechProb => "openai",
+        }
+    }
+}
+
 /// Internal state of the recording workflow.
 /// This is the authoritative state - all transitions go through the reducer.
 #[derive(Debug, Clone)]
@@ -28,6 +45,12 @@ pub enum State {
     Transcribing {
         recording_id: Uuid,
         wav_path: PathBuf,
+    },
+    NoSpeech {
+        recording_id: Uuid,
+        wav_path: PathBuf,
+        source: NoSpeechSource,
+        message: String,
     },
     Done {
         recording_id: Uuid,
@@ -79,6 +102,13 @@ pub enum Event {
     AudioStopFail {
         id: Uuid,
         err: String,
+    },
+
+    // No-speech detection events
+    NoSpeechDetected {
+        id: Uuid,
+        source: NoSpeechSource,
+        message: String,
     },
 
     // Transcription events
@@ -167,6 +197,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
         Recording { recording_id, .. } => Some(*recording_id),
         Stopping { recording_id, .. } => Some(*recording_id),
         Transcribing { recording_id, .. } => Some(*recording_id),
+        NoSpeech { recording_id, .. } => Some(*recording_id),
         Done { recording_id, .. } => Some(*recording_id),
         Error { .. } => None,
     };
@@ -286,7 +317,10 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             } else {
                 // Normal tick - just update UI
                 if elapsed.as_secs() == 30 {
-                    log::info!("Recording {} at 30 seconds (consider stopping soon)", recording_id);
+                    log::info!(
+                        "Recording {} at 30 seconds (consider stopping soon)",
+                        recording_id
+                    );
                 }
                 (state.clone(), vec![EmitUi])
             }
@@ -310,6 +344,31 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
                 StartTranscription {
                     id: *recording_id,
                     wav_path: wav_path.clone(),
+                },
+                EmitUi,
+            ],
+        ),
+        (
+            Stopping {
+                recording_id,
+                wav_path,
+            },
+            NoSpeechDetected {
+                id,
+                source,
+                message,
+            },
+        ) if *recording_id == id => (
+            NoSpeech {
+                recording_id: *recording_id,
+                wav_path: wav_path.clone(),
+                source,
+                message,
+            },
+            vec![
+                StartDoneTimeout {
+                    id: *recording_id,
+                    duration: Duration::from_secs(3),
                 },
                 EmitUi,
             ],
@@ -347,6 +406,27 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
                     id: *recording_id,
                     text,
                 },
+                StartDoneTimeout {
+                    id: *recording_id,
+                    duration: Duration::from_secs(3),
+                },
+                EmitUi,
+            ],
+        ),
+        (
+            Transcribing {
+                recording_id,
+                wav_path,
+            },
+            NoSpeechDetected { id, source, message },
+        ) if *recording_id == id => (
+            NoSpeech {
+                recording_id: *recording_id,
+                wav_path: wav_path.clone(),
+                source,
+                message,
+            },
+            vec![
                 StartDoneTimeout {
                     id: *recording_id,
                     duration: Duration::from_secs(3),
@@ -404,10 +484,31 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
                 EmitUi,
             ],
         ),
+        (
+            NoSpeech {
+                recording_id,
+                wav_path,
+                ..
+            },
+            DoneTimeout { id },
+        ) if *recording_id == id => (
+            Idle,
+            vec![
+                Cleanup {
+                    id: *recording_id,
+                    wav_path: Some(wav_path.clone()),
+                },
+                EmitUi,
+            ],
+        ),
         // Stale DoneTimeout (id doesn't match) - ignore
         (Done { .. }, DoneTimeout { .. }) => (state.clone(), vec![]),
         (Done { .. }, HotkeyToggle) => {
             // Start new recording immediately
+            let id = Uuid::new_v4();
+            (Arming { recording_id: id }, vec![StartAudio { id }, EmitUi])
+        }
+        (NoSpeech { .. }, HotkeyToggle) => {
             let id = Uuid::new_v4();
             (Arming { recording_id: id }, vec![StartAudio { id }, EmitUi])
         }
@@ -439,6 +540,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
         (_, AudioStartFail { id, .. }) if is_stale(id) => (state.clone(), vec![]),
         (_, AudioStopOk { id }) if is_stale(id) => (state.clone(), vec![]),
         (_, AudioStopFail { id, .. }) if is_stale(id) => (state.clone(), vec![]),
+        (_, NoSpeechDetected { id, .. }) if is_stale(id) => (state.clone(), vec![]),
         (_, TranscribeOk { id, .. }) if is_stale(id) => (state.clone(), vec![]),
         (_, TranscribeFail { id, .. }) if is_stale(id) => (state.clone(), vec![]),
 

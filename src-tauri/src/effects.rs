@@ -13,8 +13,59 @@ use uuid::Uuid;
 
 use crate::audio::{cleanup_old_recordings, AudioRecorder};
 use crate::metrics::MetricsCollector;
+use crate::settings::AppSettings;
 use crate::state_machine::{Effect, Event};
 use crate::transcription;
+
+const OPENAI_NO_SPEECH_PROB_THRESHOLD: f32 = 0.8;
+const OPENAI_NO_SPEECH_MAX_TEXT_LEN: usize = 12;
+const SHORT_CLIP_VAD_MIN_SPEECH_FRAMES: usize = 2;
+const SHORT_CLIP_MAX_CREST_FACTOR: f32 = 15.0;
+
+/// Result of evaluating VAD stats for short-clip transcription gating.
+/// Contains both the final decision and intermediate values for logging/debugging.
+#[derive(Debug, Clone)]
+struct VadDecision {
+    /// Final decision: should this clip be sent to OpenAI?
+    allows_transcription: bool,
+    /// Did we detect enough speech frames (>= SHORT_CLIP_VAD_MIN_SPEECH_FRAMES)?
+    speech_detected: bool,
+    /// Is the crest factor low enough to not be transient noise (<= SHORT_CLIP_MAX_CREST_FACTOR)?
+    heuristic_pass: bool,
+    /// Number of frames classified as speech by VAD
+    speech_frames: usize,
+    /// Total number of frames analyzed
+    total_frames: usize,
+    /// Computed crest factor (peak / RMS ratio)
+    crest_factor: f32,
+}
+
+/// Evaluate VAD stats to determine if a short clip should be transcribed.
+/// Returns a `VadDecision` containing the decision and all intermediate values.
+///
+/// A clip is allowed for transcription if:
+/// 1. At least `SHORT_CLIP_VAD_MIN_SPEECH_FRAMES` speech frames were detected
+/// 2. Crest factor is at or below `SHORT_CLIP_MAX_CREST_FACTOR` (filters transient noise like clicks)
+fn evaluate_short_clip_vad(stats: &crate::audio::vad::VadStats) -> VadDecision {
+    let speech_detected = stats.speech_frames >= SHORT_CLIP_VAD_MIN_SPEECH_FRAMES;
+    let crest_factor = stats.crest_factor();
+    let heuristic_pass = crest_factor <= SHORT_CLIP_MAX_CREST_FACTOR;
+
+    VadDecision {
+        allows_transcription: speech_detected && heuristic_pass,
+        speech_detected,
+        heuristic_pass,
+        speech_frames: stats.speech_frames,
+        total_frames: stats.total_frames,
+        crest_factor,
+    }
+}
+
+/// Convenience function that returns just the boolean decision.
+/// Used by tests and any code that only needs the final answer.
+fn short_clip_vad_allows_transcription(stats: &crate::audio::vad::VadStats) -> bool {
+    evaluate_short_clip_vad(stats).allows_transcription
+}
 
 /// Trait for running effects asynchronously.
 /// Completion events are sent back via the provided channel.
@@ -35,12 +86,16 @@ pub struct AudioEffectRunner {
     recorder: Arc<Mutex<Option<AudioRecorder>>>,
     active_recordings: Arc<Mutex<HashMap<Uuid, ActiveRecording>>>,
     metrics: Arc<Mutex<MetricsCollector>>,
+    settings: Arc<Mutex<AppSettings>>,
 }
 
 impl AudioEffectRunner {
     /// Create a new AudioEffectRunner with metrics collection.
     /// Returns Ok even if audio device isn't available - errors happen at record time.
-    pub fn new(metrics: Arc<Mutex<MetricsCollector>>) -> Arc<Self> {
+    pub fn new(
+        metrics: Arc<Mutex<MetricsCollector>>,
+        settings: Arc<Mutex<AppSettings>>,
+    ) -> Arc<Self> {
         // Try to create the recorder now, but don't fail if we can't
         let recorder = match AudioRecorder::new() {
             Ok(r) => {
@@ -57,6 +112,7 @@ impl AudioEffectRunner {
             recorder: Arc::new(Mutex::new(recorder)),
             active_recordings: Arc::new(Mutex::new(HashMap::new())),
             metrics,
+            settings,
         })
     }
 }
@@ -96,13 +152,11 @@ impl EffectRunner for AudioEffectRunner {
                         } else {
                             Ok(())
                         }
-                        .and_then(|_| {
-                            match recorder_guard.as_ref() {
-                                Some(rec) => rec.start(id).map_err(|e| e.to_string()),
-                                None => {
-                                    log::error!("Audio recorder is unavailable after retry");
-                                    Err("Audio recorder unavailable".to_string())
-                                }
+                        .and_then(|_| match recorder_guard.as_ref() {
+                            Some(rec) => rec.start(id).map_err(|e| e.to_string()),
+                            None => {
+                                log::error!("Audio recorder is unavailable after retry");
+                                Err("Audio recorder unavailable".to_string())
                             }
                         })
                     }; // recorder_guard dropped here
@@ -137,9 +191,7 @@ impl EffectRunner for AudioEffectRunner {
                                 let mut m = metrics.lock().await;
                                 m.cycle_failed(err.clone());
                             }
-                            let _ = tx
-                                .send(Event::AudioStartFail { id, err })
-                                .await;
+                            let _ = tx.send(Event::AudioStartFail { id, err }).await;
                         }
                     }
                 });
@@ -148,74 +200,252 @@ impl EffectRunner for AudioEffectRunner {
             Effect::StopAudio { id } => {
                 let active = self.active_recordings.clone();
                 let metrics = self.metrics.clone();
+                let settings = self.settings.clone();
 
                 tokio::spawn(async move {
-                    let mut active_guard = active.lock().await;
+                    let handle = {
+                        let mut active_guard = active.lock().await;
+                        active_guard
+                            .remove(&id)
+                            .and_then(|mut recording| recording.handle.take())
+                    };
 
-                    if let Some(mut recording) = active_guard.remove(&id) {
-                        if let Some(handle) = recording.handle.take() {
-                            match handle.stop() {
-                                Ok(path) => {
-                                    log::info!("Audio recording stopped: {:?}", path);
+                    let Some(handle) = handle else {
+                        log::warn!("StopAudio: no active handle for id={}", id);
+                        let _ = tx.send(Event::AudioStopOk { id }).await;
+                        return;
+                    };
 
-                                    // Get file size for metrics (use async fs to avoid blocking)
-                                    let file_size = match tokio::fs::metadata(&path).await {
-                                        Ok(m) => m.len(),
-                                        Err(e) => {
-                                            log::warn!("Failed to get file size for {:?}: {}", path, e);
-                                            0
-                                        }
-                                    };
+                    match handle.stop() {
+                        Ok(path) => {
+                            log::info!("Audio recording stopped: {:?}", path);
 
-                                    // Track recording stopped in metrics
-                                    let recording_duration_ms = {
-                                        let mut m = metrics.lock().await;
-                                        m.recording_stopped(file_size);
-                                        // Get duration from metrics for logging
-                                        m.get_current_recording_duration_ms()
-                                    };
-
-                                    // Log warning for very short recordings
-                                    if let Some(duration_ms) = recording_duration_ms {
-                                        if duration_ms < 500 {
-                                            log::warn!(
-                                                "Very short recording detected: {}ms - transcription may be empty",
-                                                duration_ms
-                                            );
-                                        } else {
-                                            log::info!(
-                                                "Recording stopped: {}ms, {} bytes",
-                                                duration_ms,
-                                                file_size
-                                            );
-                                        }
-                                    }
-
-                                    let _ = tx.send(Event::AudioStopOk { id }).await;
-                                }
+                            // Get file size for metrics (use async fs to avoid blocking)
+                            let file_size = match tokio::fs::metadata(&path).await {
+                                Ok(m) => m.len(),
                                 Err(e) => {
-                                    log::error!("Failed to stop audio recording: {}", e);
-                                    // Record error in metrics
-                                    {
-                                        let mut m = metrics.lock().await;
-                                        m.cycle_failed(e.to_string());
-                                    }
+                                    log::warn!("Failed to get file size for {:?}: {}", path, e);
+                                    0
+                                }
+                            };
+
+                            // Track recording stopped in metrics
+                            let recording_duration_ms = {
+                                let mut m = metrics.lock().await;
+                                m.recording_stopped(file_size);
+                                // Get duration from metrics for logging
+                                m.get_current_recording_duration_ms()
+                            };
+
+                            let (
+                                min_transcribe_ms,
+                                vad_check_max_ms,
+                                vad_ignore_start_ms,
+                                short_clip_vad_enabled,
+                            ) = {
+                                let s = settings.lock().await;
+                                (
+                                    s.min_transcribe_ms,
+                                    s.vad_check_max_ms,
+                                    s.vad_ignore_start_ms,
+                                    s.short_clip_vad_enabled,
+                                )
+                            };
+
+                            log::debug!(
+                                "No-speech gate: id={}, duration_ms={:?}, file_size_bytes={}, min_transcribe_ms={}, vad_check_max_ms={}, vad_ignore_start_ms={}, short_clip_vad_enabled={}",
+                                id,
+                                recording_duration_ms,
+                                file_size,
+                                min_transcribe_ms,
+                                vad_check_max_ms,
+                                vad_ignore_start_ms,
+                                short_clip_vad_enabled
+                            );
+
+                            if let Some(duration_ms) = recording_duration_ms {
+                                if duration_ms < min_transcribe_ms {
+                                    log::info!(
+                                        "Skipping transcription: recording too short ({}ms < {}ms)",
+                                        duration_ms,
+                                        min_transcribe_ms
+                                    );
                                     let _ = tx
-                                        .send(Event::AudioStopFail {
+                                        .send(Event::NoSpeechDetected {
                                             id,
-                                            err: e.to_string(),
+                                            source: crate::state_machine::NoSpeechSource::DurationThreshold,
+                                            message: format!(
+                                                "Recording too short: {}ms (< {}ms). Skipped transcription.",
+                                                duration_ms, min_transcribe_ms
+                                            ),
                                         })
                                         .await;
+                                    return;
                                 }
+
+                                if duration_ms < vad_check_max_ms {
+                                    log::debug!(
+                                        "No-speech gate: VAD window ({}ms < {}ms), short_clip_vad_enabled={}",
+                                        duration_ms,
+                                        vad_check_max_ms,
+                                        short_clip_vad_enabled
+                                    );
+                                    if short_clip_vad_enabled {
+                                        log::debug!(
+                                            "No-speech gate: running short-clip VAD for {:?} (ignore_start_ms={})",
+                                            path,
+                                            vad_ignore_start_ms
+                                        );
+                                        let path_for_vad = path.clone();
+                                        let vad_ignore_start_ms_for_task = vad_ignore_start_ms;
+                                        let vad_stats = tokio::task::spawn_blocking(move || {
+                                            crate::audio::vad::analyze_wav_for_speech(
+                                                &path_for_vad,
+                                                vad_ignore_start_ms_for_task,
+                                            )
+                                        })
+                                        .await;
+
+                                        match vad_stats {
+                                            Ok(Ok(stats)) => {
+                                                let decision = evaluate_short_clip_vad(&stats);
+
+                                                log::debug!(
+                                                    "No-speech gate: VAD+heuristics speech_frames={}, total_frames={}, ratio={:.2}, rms={:.0}, peak_abs={}, crest_factor={:.1} (max {:.1}) => speech_detected={}, heuristic_pass={}, allows_transcription={}",
+                                                    decision.speech_frames,
+                                                    decision.total_frames,
+                                                    stats.speech_ratio(),
+                                                    stats.rms,
+                                                    stats.peak_abs,
+                                                    decision.crest_factor,
+                                                    SHORT_CLIP_MAX_CREST_FACTOR,
+                                                    decision.speech_detected,
+                                                    decision.heuristic_pass,
+                                                    decision.allows_transcription
+                                                );
+
+                                                if !decision.speech_detected {
+                                                    log::info!(
+                                                        "Short-clip VAD: no speech detected ({}/{} frames)",
+                                                        decision.speech_frames,
+                                                        decision.total_frames
+                                                    );
+                                                    let _ = tx
+                                                        .send(Event::NoSpeechDetected {
+                                                            id,
+                                                            source: crate::state_machine::NoSpeechSource::ShortClipVad,
+                                                            message: format!(
+                                                                "Short clip ({}ms < {}ms): VAD no-speech ({}/{} frames). Skipped transcription.",
+                                                                duration_ms,
+                                                                vad_check_max_ms,
+                                                                decision.speech_frames,
+                                                                decision.total_frames
+                                                            ),
+                                                        })
+                                                        .await;
+                                                    return;
+                                                }
+
+                                                if !decision.heuristic_pass {
+                                                    log::info!(
+                                                        "Short-clip heuristic: likely transient noise (crest_factor={:.1} > {:.1}), skipping",
+                                                        decision.crest_factor,
+                                                        SHORT_CLIP_MAX_CREST_FACTOR
+                                                    );
+                                                    let _ = tx
+                                                        .send(Event::NoSpeechDetected {
+                                                            id,
+                                                            source: crate::state_machine::NoSpeechSource::ShortClipVad,
+                                                            message: format!(
+                                                                "Short clip ({}ms < {}ms): VAD speech but looks like transient noise (crest_factor={:.1}). Skipped transcription.",
+                                                                duration_ms,
+                                                                vad_check_max_ms,
+                                                                decision.crest_factor
+                                                            ),
+                                                        })
+                                                        .await;
+                                                    return;
+                                                }
+
+                                                log::info!(
+                                                    "Short-clip VAD: speech-like audio detected, proceeding"
+                                                );
+                                            }
+                                            Ok(Err(err)) => {
+                                                log::warn!("Short-clip VAD failed: {}", err);
+                                                log::debug!(
+                                                    "No-speech gate: treating VAD failure as no-speech by policy"
+                                                );
+                                                let _ = tx
+                                                    .send(Event::NoSpeechDetected {
+                                                        id,
+                                                        source: crate::state_machine::NoSpeechSource::ShortClipVad,
+                                                        message: format!(
+                                                            "Short clip ({}ms < {}ms): VAD failed ({}). Skipped transcription.",
+                                                            duration_ms, vad_check_max_ms, err
+                                                        ),
+                                                    })
+                                                    .await;
+                                                return;
+                                            }
+                                            Err(e) => {
+                                                log::warn!("Short-clip VAD task failed: {}", e);
+                                                log::debug!(
+                                                    "No-speech gate: treating VAD task failure as no-speech by policy"
+                                                );
+                                                let _ = tx
+                                                    .send(Event::NoSpeechDetected {
+                                                        id,
+                                                        source: crate::state_machine::NoSpeechSource::ShortClipVad,
+                                                        message: format!(
+                                                            "Short clip ({}ms < {}ms): VAD task failed ({}). Skipped transcription.",
+                                                            duration_ms, vad_check_max_ms, e
+                                                        ),
+                                                    })
+                                                    .await;
+                                                return;
+                                            }
+                                        }
+                                    } else {
+                                        log::debug!(
+                                            "No-speech gate: short-clip VAD disabled; proceeding without local gating"
+                                        );
+                                    }
+                                } else {
+                                    log::debug!(
+                                        "No-speech gate: duration {}ms >= vad_check_max_ms {}ms; skipping local gating and proceeding",
+                                        duration_ms,
+                                        vad_check_max_ms
+                                    );
+                                }
+
+                                log::info!(
+                                    "Recording stopped: {}ms, {} bytes",
+                                    duration_ms,
+                                    file_size
+                                );
+                            } else {
+                                log::debug!(
+                                    "No-speech gate: recording duration unavailable; skipping short-clip checks and proceeding"
+                                );
                             }
-                        } else {
-                            log::warn!("StopAudio: no active handle for id={}", id);
+
                             let _ = tx.send(Event::AudioStopOk { id }).await;
                         }
-                    } else {
-                        log::warn!("StopAudio: no recording found for id={}", id);
-                        // Still send OK to allow state machine to proceed
-                        let _ = tx.send(Event::AudioStopOk { id }).await;
+                        Err(e) => {
+                            log::error!("Failed to stop audio recording: {}", e);
+                            // Record error in metrics
+                            {
+                                let mut m = metrics.lock().await;
+                                m.cycle_failed(e.to_string());
+                            }
+                            let _ = tx
+                                .send(Event::AudioStopFail {
+                                    id,
+                                    err: e.to_string(),
+                                })
+                                .await;
+                        }
                     }
                 });
             }
@@ -235,7 +465,8 @@ impl EffectRunner for AudioEffectRunner {
                     let start_time = Instant::now();
 
                     match transcription::transcribe_audio(&wav_path).await {
-                        Ok(text) => {
+                        Ok(result) => {
+                            let text = result.text;
                             let duration = start_time.elapsed();
                             log::info!(
                                 "Transcription successful: {} chars in {:?} for {:?}",
@@ -248,6 +479,33 @@ impl EffectRunner for AudioEffectRunner {
                             {
                                 let mut m = metrics.lock().await;
                                 m.transcription_completed(text.len());
+                            }
+
+                            let trimmed = text.trim();
+                            let openai_no_speech_prob = result.openai_no_speech_prob;
+                            if trimmed.is_empty()
+                                || openai_no_speech_prob.is_some_and(|p| {
+                                    p >= OPENAI_NO_SPEECH_PROB_THRESHOLD
+                                        && trimmed.len() <= OPENAI_NO_SPEECH_MAX_TEXT_LEN
+                                })
+                            {
+                                log::info!(
+                                    "Treating transcription as no-speech (openai_no_speech_prob={:?}, text_len={})",
+                                    openai_no_speech_prob,
+                                    trimmed.len()
+                                );
+                                let _ = tx
+                                    .send(Event::NoSpeechDetected {
+                                        id,
+                                        source: crate::state_machine::NoSpeechSource::OpenAiNoSpeechProb,
+                                        message: format!(
+                                            "OpenAI indicates no speech (no_speech_prob={:?}, text=\"{}\"). Skipped clipboard copy.",
+                                            openai_no_speech_prob,
+                                            trimmed
+                                        ),
+                                    })
+                                    .await;
+                                return;
                             }
 
                             let _ = tx.send(Event::TranscribeOk { id, text }).await;
@@ -285,7 +543,8 @@ impl EffectRunner for AudioEffectRunner {
                         let mut clipboard = arboard::Clipboard::new()
                             .map_err(|e| format!("Clipboard access failed: {}", e))?;
 
-                        clipboard.set_text(&text_clone)
+                        clipboard
+                            .set_text(&text_clone)
                             .map_err(|e| format!("Clipboard set failed: {}", e))?;
 
                         log::info!("Copied {} chars to clipboard", text_clone.len());
@@ -362,7 +621,10 @@ impl EffectRunner for AudioEffectRunner {
                             guard.contains_key(&id)
                         };
                         if !is_active {
-                            log::debug!("Recording tick stopping - recording {} no longer active", id);
+                            log::debug!(
+                                "Recording tick stopping - recording {} no longer active",
+                                id
+                            );
                             break;
                         }
                         // Send tick event
@@ -487,5 +749,40 @@ impl EffectRunner for StubEffectRunner {
                 unreachable!("EmitUi should be handled in run_state_loop");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn vad_stats_for_test(speech_frames: usize, total_frames: usize, rms: f32, peak_abs: i32) -> crate::audio::vad::VadStats {
+        crate::audio::vad::VadStats {
+            total_frames,
+            speech_frames,
+            total_samples: 48_000,
+            peak_abs,
+            rms,
+            abs_mean: 0.0,
+            ignored_samples: 0,
+        }
+    }
+
+    #[test]
+    fn short_clip_vad_requires_min_speech_frames() {
+        let stats = vad_stats_for_test(1, 10, 2000.0, 10_000);
+        assert!(!short_clip_vad_allows_transcription(&stats));
+    }
+
+    #[test]
+    fn short_clip_vad_rejects_transient_noise_by_crest_factor() {
+        let stats = vad_stats_for_test(10, 10, 1500.0, 30_000); // crest=20
+        assert!(!short_clip_vad_allows_transcription(&stats));
+    }
+
+    #[test]
+    fn short_clip_vad_allows_speech_like_audio() {
+        let stats = vad_stats_for_test(10, 10, 2000.0, 10_000); // crest=5
+        assert!(short_clip_vad_allows_transcription(&stats));
     }
 }

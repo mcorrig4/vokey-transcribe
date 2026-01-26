@@ -7,7 +7,7 @@ A lightweight desktop tool that:
 - Uses a global hotkey to start/stop microphone recording
 - Sends the audio to OpenAI Speech-to-Text (cloud) for transcription
 - Copies the transcript to the clipboard (user pastes manually)
-- Shows a minimal always-on-top HUD (Idle / Recording / Transcribing / Done)
+- Shows a minimal always-on-top HUD (Idle / Arming / Recording / Stopping / Transcribing / No speech / Done / Error)
 - Phase 2: optional streaming partial transcript + post-processing for "coding mode"
 
 **Target platform:** Kubuntu with KDE Plasma 6.4 on Wayland. Windows support is future/best-effort.
@@ -28,19 +28,34 @@ A lightweight desktop tool that:
      `~/.local/share/vokey-transcribe/temp/audio/<recordingId>.wav`
 
 3. Hotkey press again (toggle mode) triggers:
-   - `Recording → Stopping → Transcribing`
-   - WAV file is finalized and uploaded to OpenAI STT (batch)
+   - `Recording → Stopping`
+   - WAV file is finalized, then one of:
+     - `Stopping → NoSpeech` (skips sending to OpenAI) if the clip is shorter than `min_transcribe_ms`
+     - `Stopping → NoSpeech` (skips sending to OpenAI) if the clip is in the VAD window and local VAD/heuristics say "no speech"
+     - `Stopping → Transcribing` if the clip is long enough, or local checks allow it
+
+   This prevents spamming the hotkey from repeatedly overwriting the clipboard with hallucinated short tokens (common for silence).
 
 4. When transcript arrives:
    - (MVP) No post-processing (pass-through)
-   - Transcript is copied to clipboard
-   - HUD shows "Copied — paste now" indicator
-   - State goes `Transcribing → Done → Idle`
+   - If OpenAI indicates "no speech" (or the text is effectively empty), the app shows `NoSpeech` and does not copy to clipboard
+   - Otherwise, transcript is copied to clipboard and HUD shows "Copied — paste now"
+   - State goes `Transcribing → Done → Idle` (or `Transcribing → NoSpeech → Idle`)
 
 5. UI updates:
    - Rust emits state snapshots to React over Tauri events
    - HUD updates are throttled (especially for partial transcript in Phase 2)
    - HUD is designed to never steal focus
+
+### No-speech filtering (anti-hallucination)
+VoKey has multiple safeguards to avoid overwriting your clipboard when you record silence or accidental hotkey taps:
+- **Hard minimum duration** (`min_transcribe_ms`): clips shorter than this are never sent to OpenAI
+- **Short-clip VAD window** (`vad_check_max_ms`): when enabled, clips shorter than this are analyzed locally (VAD + heuristics) and only sent to OpenAI if the audio looks speech-like
+- **VAD start trimming** (`vad_ignore_start_ms`): ignore the first N ms when scoring VAD to reduce false positives from start-click/transients
+- **OpenAI no-speech signal**: for clips that are sent to OpenAI, the response is parsed for `no_speech_prob`; if it looks like no-speech, the app shows `NoSpeech` and does not copy to clipboard
+
+Settings are persisted to the Tauri app config directory (Linux example: `~/.config/com.vokey.transcribe/settings.json`) and can be edited from the Settings/Debug window.
+Short-clip VAD uses WebRTC VAD (PCM 16-bit mono, 8/16/32/48kHz).
 
 ---
 
@@ -106,6 +121,7 @@ src-tauri/                            # Rust backend (Tauri host)
 
     state_machine.rs                  # State, Event, Effect enums + reduce()
     effects.rs                        # EffectRunner trait + AudioEffectRunner
+    settings.rs                       # Persisted app settings (no-speech filters)
 
     hotkey/                           # Global hotkey (evdev)
       mod.rs                          # Hotkey struct, exports
@@ -116,6 +132,7 @@ src-tauri/                            # Rust backend (Tauri host)
       mod.rs                          # Module exports
       paths.rs                        # XDG paths for temp audio, cleanup
       recorder.rs                     # AudioRecorder with dedicated thread
+      vad.rs                          # Short-clip speech detection (WebRTC VAD)
 
 # Future/Planned:
 #   openai/                           # Sprint 4: transcription
@@ -194,6 +211,7 @@ lxc restart <container>                  # Apply changes
 - Transcript is copied to clipboard automatically
 - HUD shows "Copied — paste now" indicator
 - User presses Ctrl+V to paste into their target app
+- Silent/very-short clips should not overwrite the clipboard (HUD shows "No speech")
 - If transcription fails, error is shown and user can retry
 
 ---

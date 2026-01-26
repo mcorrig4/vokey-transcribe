@@ -38,6 +38,9 @@ hound = "3.5"
 reqwest = { version = "0.12", features = ["json", "multipart"] }
 arboard = "3"
 
+# Short-clip speech detection (optional)
+webrtc-vad = "0.4"
+
 # XDG paths
 dirs = "5"
 

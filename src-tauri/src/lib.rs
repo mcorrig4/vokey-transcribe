@@ -2,6 +2,7 @@ mod audio;
 mod effects;
 mod hotkey;
 mod metrics;
+mod settings;
 mod state_machine;
 
 // Public for integration tests
@@ -19,11 +20,17 @@ use tokio::sync::{mpsc, Mutex};
 use effects::{AudioEffectRunner, EffectRunner};
 use hotkey::{Hotkey, HotkeyManager, HotkeyStatus};
 use metrics::{CycleMetrics, ErrorRecord, MetricsCollector, MetricsSummary};
+use settings::AppSettings;
 use state_machine::{reduce, Effect, Event, State};
 
 /// Thread-safe wrapper for metrics collector
 pub struct MetricsHandle {
     collector: Arc<Mutex<MetricsCollector>>,
+}
+
+/// Thread-safe wrapper for app settings
+pub struct SettingsHandle {
+    settings: Arc<Mutex<AppSettings>>,
 }
 
 /// UI state sent to the frontend via Tauri events.
@@ -39,6 +46,10 @@ pub enum UiState {
     },
     Stopping,
     Transcribing,
+    NoSpeech {
+        source: String,
+        message: String,
+    },
     Done {
         text: String,
     },
@@ -59,6 +70,12 @@ fn state_to_ui(state: &State) -> UiState {
         },
         State::Stopping { .. } => UiState::Stopping,
         State::Transcribing { .. } => UiState::Transcribing,
+        State::NoSpeech {
+            source, message, ..
+        } => UiState::NoSpeech {
+            source: source.as_str().to_string(),
+            message: message.clone(),
+        },
         State::Done { text, .. } => UiState::Done { text: text.clone() },
         State::Error {
             message,
@@ -273,26 +290,108 @@ fn get_transcription_status() -> TranscriptionStatusResponse {
 }
 
 // ============================================================================
+// Settings Commands
+// ============================================================================
+
+#[tauri::command]
+async fn get_settings(handle: tauri::State<'_, SettingsHandle>) -> Result<AppSettings, String> {
+    let settings = handle.settings.lock().await;
+    Ok(settings.clone())
+}
+
+#[tauri::command]
+async fn set_settings(
+    app: AppHandle,
+    handle: tauri::State<'_, SettingsHandle>,
+    settings: AppSettings,
+) -> Result<(), String> {
+    // Persist to disk FIRST - if this fails, we don't update in-memory state.
+    // This prevents the confusing scenario where get_settings returns values
+    // that won't survive a restart.
+    settings::save_settings(&app, &settings)?;
+
+    // Now that disk write succeeded, update in-memory state and compute changes for logging
+    let mut changes: Vec<String> = Vec::new();
+    {
+        let mut current = handle.settings.lock().await;
+        if current.min_transcribe_ms != settings.min_transcribe_ms {
+            changes.push(format!(
+                "min_transcribe_ms: {} -> {}",
+                current.min_transcribe_ms, settings.min_transcribe_ms
+            ));
+        }
+        if current.short_clip_vad_enabled != settings.short_clip_vad_enabled {
+            changes.push(format!(
+                "short_clip_vad_enabled: {} -> {}",
+                current.short_clip_vad_enabled, settings.short_clip_vad_enabled
+            ));
+        }
+        if current.vad_check_max_ms != settings.vad_check_max_ms {
+            changes.push(format!(
+                "vad_check_max_ms: {} -> {}",
+                current.vad_check_max_ms, settings.vad_check_max_ms
+            ));
+        }
+        if current.vad_ignore_start_ms != settings.vad_ignore_start_ms {
+            changes.push(format!(
+                "vad_ignore_start_ms: {} -> {}",
+                current.vad_ignore_start_ms, settings.vad_ignore_start_ms
+            ));
+        }
+        *current = settings.clone();
+    }
+
+    if changes.is_empty() {
+        log::info!(
+            "Settings saved (no changes): min_transcribe_ms={}, vad_check_max_ms={}, vad_ignore_start_ms={}, short_clip_vad_enabled={}",
+            settings.min_transcribe_ms,
+            settings.vad_check_max_ms,
+            settings.vad_ignore_start_ms,
+            settings.short_clip_vad_enabled
+        );
+    } else {
+        log::info!(
+            "Settings updated: {}",
+            changes.join(", ")
+        );
+        log::info!(
+            "Settings now: min_transcribe_ms={}, vad_check_max_ms={}, vad_ignore_start_ms={}, short_clip_vad_enabled={}",
+            settings.min_transcribe_ms,
+            settings.vad_check_max_ms,
+            settings.vad_ignore_start_ms,
+            settings.short_clip_vad_enabled
+        );
+    }
+    Ok(())
+}
+
+// ============================================================================
 // Metrics Commands (Sprint 6)
 // ============================================================================
 
 /// Get metrics summary (totals, averages, last error)
 #[tauri::command]
-async fn get_metrics_summary(handle: tauri::State<'_, MetricsHandle>) -> Result<MetricsSummary, String> {
+async fn get_metrics_summary(
+    handle: tauri::State<'_, MetricsHandle>,
+) -> Result<MetricsSummary, String> {
     let collector = handle.collector.lock().await;
     Ok(collector.get_summary())
 }
 
 /// Get recent cycle history (newest first)
 #[tauri::command]
-async fn get_metrics_history(handle: tauri::State<'_, MetricsHandle>) -> Result<Vec<CycleMetrics>, String> {
+async fn get_metrics_history(
+    handle: tauri::State<'_, MetricsHandle>,
+) -> Result<Vec<CycleMetrics>, String> {
     let collector = handle.collector.lock().await;
     Ok(collector.get_history())
 }
 
 /// Get recent error history (newest first)
 #[tauri::command]
-async fn get_error_history(handle: tauri::State<'_, MetricsHandle>) -> Result<Vec<ErrorRecord>, String> {
+async fn get_error_history(
+    handle: tauri::State<'_, MetricsHandle>,
+) -> Result<Vec<ErrorRecord>, String> {
     let collector = handle.collector.lock().await;
     Ok(collector.get_errors())
 }
@@ -304,7 +403,9 @@ async fn get_error_history(handle: tauri::State<'_, MetricsHandle>) -> Result<Ve
 /// Open the application logs folder in the system file manager
 #[tauri::command]
 async fn open_logs_folder(app: tauri::AppHandle) -> Result<(), String> {
-    let logs_dir = app.path().app_log_dir()
+    let logs_dir = app
+        .path()
+        .app_log_dir()
         .map_err(|e| format!("Could not determine logs directory: {}", e))?;
     std::fs::create_dir_all(&logs_dir)
         .map_err(|e| format!("Failed to create logs directory: {}", e))?;
@@ -500,9 +601,21 @@ pub fn run() {
                 collector: metrics_collector.clone(),
             });
 
+            // Load and manage settings
+            let loaded_settings = settings::load_settings(&app.handle());
+            log::info!(
+                "Settings loaded: min_transcribe_ms={}, short_clip_vad_enabled={}",
+                loaded_settings.min_transcribe_ms,
+                loaded_settings.short_clip_vad_enabled
+            );
+            let settings_handle = Arc::new(Mutex::new(loaded_settings));
+            app.manage(SettingsHandle {
+                settings: settings_handle.clone(),
+            });
+
             // Create effect runner (real audio capture as of Sprint 3)
             // Pass metrics collector for tracking (Sprint 6)
-            let effect_runner = AudioEffectRunner::new(metrics_collector);
+            let effect_runner = AudioEffectRunner::new(metrics_collector, settings_handle);
 
             // Spawn the state loop
             let app_handle = app.handle().clone();
@@ -552,6 +665,8 @@ pub fn run() {
             get_hotkey_status,
             get_audio_status,
             get_transcription_status,
+            get_settings,
+            set_settings,
             get_metrics_summary,
             get_metrics_history,
             get_error_history,

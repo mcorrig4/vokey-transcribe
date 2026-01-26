@@ -8,14 +8,20 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 **Phase:** Sprint 7B PLANNING — Post-processing modes
 **Target:** Kubuntu with KDE Plasma 6.4 on Wayland
-**Branch:** `claude/plan-sprint-7-70hjz`
-**Last Updated:** 2026-01-24
+**Branch:** `feat/no-speech-filters` (WIP)
+**Last Updated:** 2026-01-25
 
 **Sprint 6 Status:** Phases 1-5 complete, Phase 6 (Stability Testing) needs real hardware
 
 ---
 
 ## Completed Work
+
+### 2026-01-25: No-speech filtering + settings (anti-hallucination)
+- [x] Added `NoSpeech` state so silence/very short clips don’t overwrite clipboard
+- [x] Added persisted settings (`min_transcribe_ms`, `vad_check_max_ms`, `vad_ignore_start_ms`, `short_clip_vad_enabled`)
+- [x] Added optional short-clip VAD check (reads the WAV once post-finalize)
+- [x] Parse OpenAI `verbose_json` response for `no_speech_prob` and treat as `NoSpeech` when appropriate
 
 ### 2025-01-20: Linux Pivot Documentation
 - [x] Revised README.md for Linux-first approach
@@ -238,7 +244,7 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 **Phase 2 - Timing Logs:**
 - State transition timing in lib.rs run_state_loop
-- Short recording warnings (<500ms) in effects.rs
+- Short recording handling (default <500ms): NoSpeech filtering in effects.rs
 - Added get_current_recording_duration_ms() to metrics.rs
 - Filtered RecordingTick events from debug logs
 

@@ -367,6 +367,7 @@ enum State {
     Recording { recording_id: Uuid, wav_path: PathBuf, started_at: Instant },
     Stopping { recording_id: Uuid, wav_path: PathBuf },
     Transcribing { recording_id: Uuid, wav_path: PathBuf },
+    NoSpeech { recording_id: Uuid, wav_path: PathBuf, source: NoSpeechSource, message: String },
     Done { recording_id: Uuid, text: String },  // Shows "Copied — paste now"
     Error { message: String, last_good_text: Option<String> },
 }
@@ -375,6 +376,7 @@ enum State {
 Notes:
 
 * `Done` state replaces `Injecting` since we don't auto-inject
+* `NoSpeech` is a first-class terminal state for silence/very-short clips (does not copy to clipboard)
 * `Done` auto-transitions to `Idle` after a timeout (3 seconds)
 * Everything is keyed by `recording_id` so stale async completions can be ignored
 
@@ -385,13 +387,17 @@ enum Event {
     HotkeyToggle,            // MVP toggle start/stop
     Cancel,
     Exit,
-    DoneTimeout,             // Auto-dismiss Done state
+    DoneTimeout { id: Uuid },        // Auto-dismiss Done/NoSpeech state
+    RecordingTick { id: Uuid },      // 1Hz timer tick while Recording
 
     AudioStartOk { id: Uuid, wav_path: PathBuf },
     AudioStartFail { id: Uuid, err: String },
 
     AudioStopOk { id: Uuid },
     AudioStopFail { id: Uuid, err: String },
+
+    // No-speech filtering (can come from local checks or OpenAI response)
+    NoSpeechDetected { id: Uuid, source: NoSpeechSource, message: String },
 
     TranscribeOk { id: Uuid, text: String },
     TranscribeFail { id: Uuid, err: String },
@@ -412,6 +418,7 @@ enum Effect {
     StartTranscription { id: Uuid, wav_path: PathBuf },
     CopyToClipboard { id: Uuid, text: String },
     StartDoneTimeout { id: Uuid, duration: Duration },
+    StartRecordingTick { id: Uuid },
     Cleanup { id: Uuid, wav_path: Option<PathBuf> },
     EmitUi,  // push state snapshot to React overlay
 }
@@ -433,16 +440,22 @@ enum Effect {
 
 **Stopping{id,wav}**
 * `AudioStopOk{id}` → `Transcribing{id,wav}` + `StartTranscription{id,wav}` + `EmitUi`
+* `NoSpeechDetected{id,source,message}` → `NoSpeech{id,wav,source,message}` + `StartDoneTimeout{3s}` + `EmitUi`
 * `AudioStopFail{id,err}` → `Error{...}` + `EmitUi` + `Cleanup`
 
 **Transcribing{id,wav}**
 * `TranscribeOk{id,text}` → `Done{id,text}` + `CopyToClipboard{id,text}` + `StartDoneTimeout{3s}` + `EmitUi`
+* `NoSpeechDetected{id,source,message}` → `NoSpeech{id,wav,source,message}` + `StartDoneTimeout{3s}` + `EmitUi`
 * `TranscribeFail{id,err}` → `Error{...}` + `EmitUi` + `Cleanup`
 * `Cancel` → `Idle` + `Cleanup` + `EmitUi`
 
 **Done{id,text}**
-* `DoneTimeout` → `Idle` + `Cleanup{wav}` + `EmitUi`
+* `DoneTimeout{id}` → `Idle` + `Cleanup{wav}` + `EmitUi`
 * `HotkeyToggle` → `Arming{new_id}` + `StartAudio{new_id}` + `EmitUi`  (start new recording immediately)
+
+**NoSpeech{id,wav,source,message}**
+* `DoneTimeout{id}` → `Idle` + `Cleanup{wav}` + `EmitUi`
+* `HotkeyToggle` → `Arming{new_id}` + `StartAudio{new_id}` + `EmitUi`
 
 **Error**
 * `HotkeyToggle` → `Arming{id}` + `StartAudio{id}` + `EmitUi`
@@ -454,169 +467,11 @@ Every handler checks the `id` matches the current state's `recording_id`. If not
 
 ---
 
-## Full Reducer Implementation
+## Reducer (source of truth)
 
-This is a complete, copy-paste-ready reducer with pattern matching and stale event handling.
+The reducer evolves as features are added (RecordingTick, NoSpeech, etc). Keep docs lightweight and use the code as the canonical reference:
 
-```rust
-use std::{path::PathBuf, time::{Duration, Instant}};
-use uuid::Uuid;
-
-/// Reducer function: (state, event) -> (next_state, effects)
-///
-/// Key rules:
-/// - Never mutate state directly
-/// - Ignore events with stale recording IDs
-/// - Always emit EmitUi after state changes
-pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
-    use Effect::*;
-    use Event::*;
-    use State::*;
-
-    // Helper: extract current recording_id (if any)
-    let current_id: Option<Uuid> = match state {
-        Idle => None,
-        Arming { recording_id } => Some(*recording_id),
-        Recording { recording_id, .. } => Some(*recording_id),
-        Stopping { recording_id, .. } => Some(*recording_id),
-        Transcribing { recording_id, .. } => Some(*recording_id),
-        Done { recording_id, .. } => Some(*recording_id),
-        Error { .. } => None,
-    };
-
-    // Helper: check if event's ID is stale (doesn't match current workflow)
-    let is_stale = |eid: Uuid| current_id.is_some() && Some(eid) != current_id;
-
-    match (state, event) {
-        // -----------------
-        // Idle
-        // -----------------
-        (Idle, HotkeyToggle) => {
-            let id = Uuid::new_v4();
-            (Arming { recording_id: id }, vec![StartAudio { id }, EmitUi])
-        }
-        (Idle, Cancel) => (Idle.clone(), vec![]),
-        (Idle, Exit) => (Idle.clone(), vec![]),
-
-        // -----------------
-        // Arming
-        // -----------------
-        (Arming { recording_id }, AudioStartOk { id, wav_path }) if *recording_id == id => {
-            (
-                Recording {
-                    recording_id: *recording_id,
-                    wav_path,
-                    started_at: Instant::now(),
-                },
-                vec![EmitUi],
-            )
-        }
-        (Arming { recording_id }, AudioStartFail { id, err }) if *recording_id == id => {
-            (
-                Error { message: err, last_good_text: None },
-                vec![Cleanup { id: *recording_id, wav_path: None }, EmitUi],
-            )
-        }
-        (Arming { recording_id }, Cancel) => {
-            (Idle, vec![Cleanup { id: *recording_id, wav_path: None }, EmitUi])
-        }
-
-        // -----------------
-        // Recording
-        // -----------------
-        (Recording { recording_id, wav_path, .. }, HotkeyToggle) => {
-            (
-                Stopping { recording_id: *recording_id, wav_path: wav_path.clone() },
-                vec![StopAudio { id: *recording_id }, EmitUi],
-            )
-        }
-        (Recording { recording_id, wav_path, .. }, Cancel) => {
-            (
-                Stopping { recording_id: *recording_id, wav_path: wav_path.clone() },
-                vec![StopAudio { id: *recording_id }, EmitUi],
-            )
-        }
-
-        // -----------------
-        // Stopping
-        // -----------------
-        (Stopping { recording_id, wav_path }, AudioStopOk { id }) if *recording_id == id => {
-            (
-                Transcribing { recording_id: *recording_id, wav_path: wav_path.clone() },
-                vec![StartTranscription { id: *recording_id, wav_path: wav_path.clone() }, EmitUi],
-            )
-        }
-        (Stopping { recording_id, wav_path }, AudioStopFail { id, err }) if *recording_id == id => {
-            (
-                Error { message: err, last_good_text: None },
-                vec![Cleanup { id: *recording_id, wav_path: Some(wav_path.clone()) }, EmitUi],
-            )
-        }
-
-        // -----------------
-        // Transcribing
-        // -----------------
-        (Transcribing { recording_id, wav_path }, TranscribeOk { id, text }) if *recording_id == id => {
-            (
-                Done { recording_id: *recording_id, text: text.clone() },
-                vec![
-                    CopyToClipboard { id: *recording_id, text },
-                    StartDoneTimeout { id: *recording_id, duration: Duration::from_secs(3) },
-                    EmitUi,
-                ],
-            )
-        }
-        (Transcribing { recording_id, wav_path }, TranscribeFail { id, err }) if *recording_id == id => {
-            (
-                Error { message: err, last_good_text: None },
-                vec![Cleanup { id: *recording_id, wav_path: Some(wav_path.clone()) }, EmitUi],
-            )
-        }
-        (Transcribing { recording_id, wav_path }, Cancel) => {
-            (
-                Idle,
-                vec![Cleanup { id: *recording_id, wav_path: Some(wav_path.clone()) }, EmitUi],
-            )
-        }
-
-        // -----------------
-        // Done
-        // -----------------
-        (Done { recording_id, .. }, DoneTimeout) => {
-            (Idle, vec![Cleanup { id: *recording_id, wav_path: None }, EmitUi])
-        }
-        (Done { .. }, HotkeyToggle) => {
-            // Start new recording immediately
-            let id = Uuid::new_v4();
-            (Arming { recording_id: id }, vec![StartAudio { id }, EmitUi])
-        }
-
-        // -----------------
-        // Error
-        // -----------------
-        (Error { .. }, HotkeyToggle) => {
-            let id = Uuid::new_v4();
-            (Arming { recording_id: id }, vec![StartAudio { id }, EmitUi])
-        }
-        (Error { .. }, Cancel) => (Idle, vec![EmitUi]),
-
-        // -----------------
-        // Stale events (drop silently)
-        // -----------------
-        (_, AudioStartOk { id, .. }) if is_stale(id) => (state.clone(), vec![]),
-        (_, AudioStartFail { id, .. }) if is_stale(id) => (state.clone(), vec![]),
-        (_, AudioStopOk { id }) if is_stale(id) => (state.clone(), vec![]),
-        (_, AudioStopFail { id, .. }) if is_stale(id) => (state.clone(), vec![]),
-        (_, TranscribeOk { id, .. }) if is_stale(id) => (state.clone(), vec![]),
-        (_, TranscribeFail { id, .. }) if is_stale(id) => (state.clone(), vec![]),
-
-        // -----------------
-        // Unhandled: no transition
-        // -----------------
-        _ => (state.clone(), vec![]),
-    }
-}
-```
+- `src-tauri/src/state_machine.rs`
 
 ---
 
@@ -682,6 +537,15 @@ The effect runner spawns async work and posts completion events back to the queu
 3. **Never mutate State directly** — only the reducer does that
 4. **Handle errors gracefully** — convert to `*Fail` events, don't panic
 5. **Throttle UI updates** if needed (especially for Phase 2 partial deltas)
+6. **No-speech filtering** — decide whether to emit `AudioStopOk`/`TranscribeOk` or `NoSpeechDetected`
+
+For VoKey, no-speech filtering happens at two points:
+- **After StopAudio**:
+  - If the clip is shorter than `min_transcribe_ms`, emit `NoSpeechDetected` (source `duration`) instead of `AudioStopOk` (never call OpenAI).
+  - If the clip is shorter than `vad_check_max_ms` and short-clip VAD is enabled, run local VAD/heuristics (optionally ignoring the first `vad_ignore_start_ms`) and emit `NoSpeechDetected` (source `vad`) when it looks like no-speech/transient noise.
+- **After OpenAI transcription**: parse `verbose_json` for `no_speech_prob`. If it looks like no-speech (or the returned text is empty), emit `NoSpeechDetected` (source `openai`) instead of `TranscribeOk` so clipboard copy is skipped.
+
+Short-clip VAD is implemented with WebRTC VAD and is currently limited to PCM 16-bit mono WAV at 8/16/32/48kHz (the format VoKey records by default).
 
 ### Trait Definition
 
@@ -765,7 +629,7 @@ impl EffectRunner for AppEffectRunner {
             Effect::StartDoneTimeout { id, duration } => {
                 tokio::spawn(async move {
                     tokio::time::sleep(duration).await;
-                    let _ = tx.send(Event::DoneTimeout).await;
+                    let _ = tx.send(Event::DoneTimeout { id }).await;
                 });
             }
 
@@ -806,6 +670,7 @@ pub enum UiState {
     Recording { elapsed_secs: u64 },
     Stopping,
     Transcribing,
+    NoSpeech { source: String, message: String },
     Done { text: String },
     Error { message: String, last_text: Option<String> },
 }
@@ -828,6 +693,10 @@ impl UiEmitter {
             },
             State::Stopping { .. } => UiState::Stopping,
             State::Transcribing { .. } => UiState::Transcribing,
+            State::NoSpeech { source, message, .. } => UiState::NoSpeech {
+                source: source.as_str().to_string(),
+                message: message.clone(),
+            },
             State::Done { text, .. } => UiState::Done { text: text.clone() },
             State::Error { message, last_good_text } => UiState::Error {
                 message: message.clone(),
@@ -891,6 +760,17 @@ futures-util = "0.3"
 * Each effect runs async and posts completion events back into the same queue
 * After any state change, emit a compact "state snapshot" to React:
   * `{ status: "done", text: "...", error: null }`
+
+### Settings persistence (`AppSettings`)
+
+VoKey stores no-speech filter settings in a small JSON file under the per-user Tauri config directory (keyed by the app identifier).
+
+* **Load at startup:** `settings::load_settings()` reads `app_config_dir/settings.json`, falls back to defaults if missing/unparseable, and uses `#[serde(default)]` so missing keys get sensible defaults.
+* **In-memory storage:** Settings live in a `SettingsHandle` (`Arc<Mutex<AppSettings>>`) so they can be safely read by async tasks.
+* **Update flow:** the Settings/Debug window calls Tauri commands:
+  * `get_settings` → returns current settings
+  * `set_settings` → updates the in-memory settings and calls `settings::save_settings()` to write `settings.json`
+* **Immediate effect:** the effect runner reads the mutex when deciding whether to run short-clip VAD / skip OpenAI, so changes take effect without restarting the app.
 
 ## Where the Wayland gotchas plug in
 

@@ -46,7 +46,7 @@ Target: Kubuntu with KDE Plasma 6.4 on Wayland
 
 ---
 
-## 2) Sprint 1 — State machine + UI state wiring (Idle/Recording/Transcribing/Done/Error)
+## 2) Sprint 1 — State machine + UI state wiring (Idle/Arming/Recording/Stopping/Transcribing/NoSpeech/Done/Error)
 **Goal:** Implement the single-writer state machine in Rust and wire UI to show state changes (no real hotkey/audio yet).
 
 ### Scope
@@ -55,7 +55,7 @@ Target: Kubuntu with KDE Plasma 6.4 on Wayland
   - mpsc queue and reducer
 - UI event emission:
   - Rust emits state snapshots to React via Tauri events
-  - React renders HUD state: Idle / Recording / Transcribing / Done / Error
+  - React renders HUD state: Idle / Arming / Recording / Stopping / Transcribing / NoSpeech / Done / Error
 - Add debug-only commands to simulate events:
   - `simulate_record_start`, `simulate_record_stop`, `simulate_error`
 
@@ -67,7 +67,7 @@ Target: Kubuntu with KDE Plasma 6.4 on Wayland
 ### Manual validation checklist
 - [ ] Settings/diagnostics UI can trigger "simulate record"
 - [ ] HUD changes to Recording + timer increments
-- [ ] Simulate stop → HUD shows Transcribing then Done (with "Copied" indicator)
+- [ ] Simulate stop → HUD shows Transcribing then Done (or NoSpeech for empty audio)
 - [ ] Simulate error → HUD shows Error and can recover back to Idle
 
 ### Demo script (30s)
@@ -157,7 +157,7 @@ Target: Kubuntu with KDE Plasma 6.4 on Wayland
   - Upload WAV via multipart
   - Parse transcript text
 - State transitions:
-  - Recording → Transcribing → Done → Idle
+  - Recording → Stopping → Transcribing → Done → Idle (or NoSpeech for silence/short clips)
 - Clipboard set to transcript via `arboard`
 - HUD shows "Copied — paste now" indicator
 
@@ -226,7 +226,7 @@ Target: Kubuntu with KDE Plasma 6.4 on Wayland
 - Keep-last-error details in diagnostics panel
 - Ensure all async effects are cancellable and keyed by recordingId
 - Handle edge cases:
-  - Very short recordings (< 0.5s)
+  - Very short recordings (default <500ms, configurable) → NoSpeech, no clipboard overwrite
   - Very long recordings (> 60s — warn or split?)
   - Rapid hotkey spam
 
@@ -240,7 +240,7 @@ Target: Kubuntu with KDE Plasma 6.4 on Wayland
 - [ ] Cancel works during transcribing
 - [ ] Errors recover without restart
 - [ ] Logs show durations/timings
-- [ ] Very short recording handled gracefully
+- [ ] Very short recording handled gracefully (NoSpeech, no clipboard overwrite)
 
 ### Demo script (30s)
 1. Run one full cycle
@@ -304,4 +304,3 @@ Target: Kubuntu with KDE Plasma 6.4 on Wayland
 - Temp audio: `~/.local/share/vokey-transcribe/temp/audio/`
 
 Use `dirs` crate in Rust to get these paths portably.
-

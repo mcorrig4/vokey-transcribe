@@ -10,6 +10,7 @@ type UiState =
   | { status: 'recording'; elapsedSecs: number }
   | { status: 'stopping' }
   | { status: 'transcribing' }
+  | { status: 'noSpeech'; source: string; message: string }
   | { status: 'done'; text: string }
   | { status: 'error'; message: string; lastText: string | null }
 
@@ -32,6 +33,13 @@ type AudioStatus = {
 type TranscriptionStatus = {
   api_key_configured: boolean
   api_provider: string
+}
+
+type AppSettings = {
+  min_transcribe_ms: number
+  short_clip_vad_enabled: boolean
+  vad_check_max_ms: number
+  vad_ignore_start_ms: number
 }
 
 // Metrics types matching Rust backend (Sprint 6)
@@ -76,23 +84,42 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
 }
 
+function formatUiStateForLog(state: UiState): string {
+  switch (state.status) {
+    case 'error':
+      return `error: ${state.message}`
+    case 'done':
+      return `done: "${state.text}"`
+    case 'noSpeech':
+      return `noSpeech (${state.source}): ${state.message}`
+    case 'recording':
+      return `recording (${state.elapsedSecs}s)`
+    default:
+      return state.status
+  }
+}
+
 function Debug() {
   const [uiState, setUiState] = useState<UiState>({ status: 'idle' })
   const [log, setLog] = useState<string[]>([])
   const [hotkeyStatus, setHotkeyStatus] = useState<HotkeyStatus | null>(null)
   const [audioStatus, setAudioStatus] = useState<AudioStatus | null>(null)
   const [transcriptionStatus, setTranscriptionStatus] = useState<TranscriptionStatus | null>(null)
+  const [settings, setSettings] = useState<AppSettings | null>(null)
+  const [settingsError, setSettingsError] = useState<string | null>(null)
+  const [settingsSaving, setSettingsSaving] = useState(false)
   const [metricsSummary, setMetricsSummary] = useState<MetricsSummary | null>(null)
   const [metricsHistory, setMetricsHistory] = useState<CycleMetrics[]>([])
   const [errorHistory, setErrorHistory] = useState<ErrorRecord[]>([])
 
+  const pushLog = (message: string) => {
+    setLog((prev) => [...prev.slice(-9), `${new Date().toLocaleTimeString()}: ${message}`])
+  }
+
   useEffect(() => {
     const unlisten = listen<UiState>('state-update', (event) => {
       setUiState(event.payload)
-      setLog((prev) => [
-        ...prev.slice(-9), // Keep last 10 entries
-        `${new Date().toLocaleTimeString()}: ${event.payload.status}`,
-      ])
+      pushLog(formatUiStateForLog(event.payload))
     })
 
     return () => {
@@ -138,6 +165,39 @@ function Debug() {
     }
     loadTranscriptionStatus()
   }, [])
+
+  // Load settings on mount
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const s = await invoke<AppSettings>('get_settings')
+        setSettings(s)
+        setSettingsError(null)
+      } catch (e) {
+        console.error('Failed to get settings:', e)
+        setSettingsError(String(e))
+      }
+    }
+    loadSettings()
+  }, [])
+
+  const saveSettings = async (next: AppSettings) => {
+    setSettingsSaving(true)
+    try {
+      await invoke('set_settings', { settings: next })
+      setSettings(next)
+      setSettingsError(null)
+      pushLog(
+        `settings saved: min_transcribe_ms=${next.min_transcribe_ms}, vad_check_max_ms=${next.vad_check_max_ms}, vad_ignore_start_ms=${next.vad_ignore_start_ms}, short_clip_vad_enabled=${next.short_clip_vad_enabled}`,
+      )
+    } catch (e) {
+      console.error('Failed to save settings:', e)
+      setSettingsError(String(e))
+      pushLog(`settings save error: ${String(e)}`)
+    } finally {
+      setSettingsSaving(false)
+    }
+  }
 
   // Load metrics data on mount and after state changes
   useEffect(() => {
@@ -277,6 +337,82 @@ function Debug() {
       </div>
 
       <div className="debug-section">
+        <strong>No-Speech Filters:</strong>
+        {settings ? (
+          <div className="settings-controls">
+            <label className="settings-row">
+              <span className="settings-label">Min duration to send to OpenAI (ms)</span>
+              <input
+                className="settings-input"
+                type="number"
+                min={0}
+                step={50}
+                value={settings.min_transcribe_ms}
+                onChange={(e) => setSettings({ ...settings, min_transcribe_ms: Number(e.target.value) })}
+                disabled={settingsSaving}
+              />
+            </label>
+            <label className="settings-row">
+              <span className="settings-label">VAD check max duration (ms)</span>
+              <input
+                className="settings-input"
+                type="number"
+                min={0}
+                step={50}
+                value={settings.vad_check_max_ms}
+                onChange={(e) => setSettings({ ...settings, vad_check_max_ms: Number(e.target.value) })}
+                disabled={settingsSaving}
+              />
+            </label>
+            <label className="settings-row">
+              <span className="settings-label">Short-clip speech check (VAD)</span>
+              <input
+                type="checkbox"
+                checked={settings.short_clip_vad_enabled}
+                onChange={(e) => setSettings({ ...settings, short_clip_vad_enabled: e.target.checked })}
+                disabled={settingsSaving}
+              />
+            </label>
+            <label className="settings-row">
+              <span className="settings-label">Ignore start for VAD (ms)</span>
+              <input
+                className="settings-input"
+                type="number"
+                min={0}
+                step={10}
+                value={settings.vad_ignore_start_ms}
+                onChange={(e) => setSettings({ ...settings, vad_ignore_start_ms: Number(e.target.value) })}
+                disabled={settingsSaving}
+              />
+            </label>
+            <div className="settings-hint">
+              Clips shorter than the min duration are never sent to OpenAI. For clips shorter than the VAD max, VAD runs after
+              ignoring the start portion and may block OpenAI calls when audio looks like no-speech or transient noise.
+            </div>
+            <div className="settings-actions">
+              <button onClick={() => saveSettings(settings)} disabled={settingsSaving}>
+                {settingsSaving ? 'Saving...' : 'Save Settings'}
+              </button>
+              {settingsError && <span className="settings-error">Save failed: {settingsError}</span>}
+            </div>
+          </div>
+        ) : settingsError ? (
+          <div className="settings-error-state">
+            <span className="status-badge inactive">Error</span>
+            <span className="error-text">{settingsError}</span>
+            <button onClick={() => {
+              setSettingsError(null);
+              invoke<AppSettings>('get_settings')
+                .then(s => { setSettings(s); setSettingsError(null); })
+                .catch(e => setSettingsError(String(e)));
+            }}>Retry</button>
+          </div>
+        ) : (
+          <span>Loading...</span>
+        )}
+      </div>
+
+      <div className="debug-section">
         <strong>Folders:</strong>
         <div className="folder-buttons">
           <button onClick={openLogsFolder}>Open Logs Folder</button>
@@ -288,6 +424,7 @@ function Debug() {
         <strong>Current State:</strong> {uiState.status}
         {uiState.status === 'recording' && ` (${uiState.elapsedSecs}s)`}
         {uiState.status === 'error' && `: ${uiState.message}`}
+        {uiState.status === 'noSpeech' && `: ${uiState.message}`}
         {uiState.status === 'done' && `: "${uiState.text}"`}
       </div>
 
