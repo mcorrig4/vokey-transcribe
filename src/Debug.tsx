@@ -42,6 +42,16 @@ type AppSettings = {
   vad_ignore_start_ms: number
 }
 
+// KWin status type matching Rust backend
+type KwinStatus = {
+  is_wayland: boolean
+  is_kde: boolean
+  rules_applicable: boolean
+  rule_installed: boolean
+  config_path: string | null
+  error: string | null
+}
+
 // Metrics types matching Rust backend (Sprint 6)
 type CycleMetrics = {
   cycle_id: string
@@ -108,6 +118,9 @@ function Debug() {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [settingsError, setSettingsError] = useState<string | null>(null)
   const [settingsSaving, setSettingsSaving] = useState(false)
+  const [kwinStatus, setKwinStatus] = useState<KwinStatus | null>(null)
+  const [kwinLoading, setKwinLoading] = useState(false)
+  const [kwinError, setKwinError] = useState<string | null>(null)
   const [metricsSummary, setMetricsSummary] = useState<MetricsSummary | null>(null)
   const [metricsHistory, setMetricsHistory] = useState<CycleMetrics[]>([])
   const [errorHistory, setErrorHistory] = useState<ErrorRecord[]>([])
@@ -179,6 +192,19 @@ function Debug() {
       }
     }
     loadSettings()
+  }, [])
+
+  // Load KWin status on mount
+  useEffect(() => {
+    const loadKwinStatus = async () => {
+      try {
+        const status = await invoke<KwinStatus>('get_kwin_status')
+        setKwinStatus(status)
+      } catch (e) {
+        console.error('Failed to get KWin status:', e)
+      }
+    }
+    loadKwinStatus()
   }, [])
 
   const saveSettings = async (next: AppSettings) => {
@@ -266,6 +292,42 @@ function Debug() {
     }
   }
 
+  const installKwinRule = async () => {
+    setKwinLoading(true)
+    setKwinError(null)
+    try {
+      await invoke('install_kwin_rule')
+      // Reload status after install
+      const status = await invoke<KwinStatus>('get_kwin_status')
+      setKwinStatus(status)
+      pushLog('KWin rule installed')
+    } catch (e) {
+      console.error('Failed to install KWin rule:', e)
+      setKwinError(String(e))
+      pushLog(`KWin rule install failed: ${String(e)}`)
+    } finally {
+      setKwinLoading(false)
+    }
+  }
+
+  const removeKwinRule = async () => {
+    setKwinLoading(true)
+    setKwinError(null)
+    try {
+      await invoke('remove_kwin_rule')
+      // Reload status after remove
+      const status = await invoke<KwinStatus>('get_kwin_status')
+      setKwinStatus(status)
+      pushLog('KWin rule removed')
+    } catch (e) {
+      console.error('Failed to remove KWin rule:', e)
+      setKwinError(String(e))
+      pushLog(`KWin rule remove failed: ${String(e)}`)
+    } finally {
+      setKwinLoading(false)
+    }
+  }
+
   return (
     <div className="debug-container">
       <h3>VoKey Debug Panel</h3>
@@ -335,6 +397,40 @@ function Debug() {
           </div>
         )}
       </div>
+
+      {/* KWin Rules section - only shown on Wayland + KDE */}
+      {kwinStatus && kwinStatus.rules_applicable && (
+        <div className="debug-section">
+          <strong>Wayland HUD Setup (KWin):</strong>
+          <div className="kwin-status">
+            <div className="kwin-info">
+              <span className="status-badge active">Wayland + KDE</span>
+              {kwinStatus.rule_installed ? (
+                <span className="status-badge active">Rule Installed</span>
+              ) : (
+                <span className="status-badge inactive">Rule Not Installed</span>
+              )}
+            </div>
+            <div className="kwin-hint">
+              {kwinStatus.rule_installed
+                ? 'HUD window will stay on top, positioned at top-left, and won\'t steal focus.'
+                : 'Install KWin rule to fix HUD position, always-on-top, and focus behavior on Wayland.'}
+            </div>
+            <div className="kwin-actions">
+              {kwinStatus.rule_installed ? (
+                <button onClick={removeKwinRule} disabled={kwinLoading}>
+                  {kwinLoading ? 'Removing...' : 'Remove KWin Rule'}
+                </button>
+              ) : (
+                <button onClick={installKwinRule} disabled={kwinLoading} className="kwin-install-btn">
+                  {kwinLoading ? 'Installing...' : 'Install KWin Rule'}
+                </button>
+              )}
+              {kwinError && <span className="kwin-error">{kwinError}</span>}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="debug-section">
         <strong>No-Speech Filters:</strong>

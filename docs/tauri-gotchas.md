@@ -33,31 +33,108 @@ fn find_keyboards() -> Vec<Device> {
 * **KGlobalAccel via D-Bus:** KDE-specific, tighter integration
 * **Tray menu only:** No hotkey, user clicks tray to start/stop
 
-### 2) The overlay might steal focus on Wayland (compositor-dependent)
+### 2) Window positioning and always-on-top don't work on Wayland (by design)
 
-Unlike Windows where you can set `WS_EX_NOACTIVATE`, Wayland compositors have their own focus policies. KWin (KDE's compositor) generally handles this well, but behavior can vary.
+Wayland's security model intentionally prevents applications from:
+- Setting their own window coordinates (`x`, `y` in tauri.conf.json are ignored)
+- Controlling window stacking order (`alwaysOnTop: true` is ignored)
+- Reading their global screen position
 
-**Recommended approach**
+This is a fundamental Wayland design decision, not a Tauri bug. The compositor (KWin) decides where windows appear and their z-order.
 
-* Create the overlay window with Tauri config: `alwaysOnTop: true`, `decorations: false`, `transparent: true`, `skipTaskbar: true`, `resizable: false`
-* Test focus behavior explicitly on KDE Plasma 6
-* If focus issues occur, investigate KWin window rules
+**Upstream issues:**
+- [tauri-apps/tauri#3117](https://github.com/tauri-apps/tauri/issues/3117) - alwaysOnTop not working on Wayland
+- [tauri-apps/tao#1134](https://github.com/tauri-apps/tao/issues/1134) - with_always_on_top not working on Wayland
+- [tauri-apps/tao#566](https://github.com/tauri-apps/tao/issues/566) - set_outer_position doesn't work on Wayland
+- [tauri-apps/tauri#13121](https://github.com/tauri-apps/tauri/issues/13121) - alwaysOnTop not working on Ubuntu Wayland
 
-**KWin window rules (if needed)**
-
-You can create a KWin rule to prevent focus:
-1. Right-click title bar → More Actions → Configure Special Window Settings
-2. Add rule: "Do not accept focus" = Force Yes
-
-Or programmatically via `kwriteconfig5`:
+**X11 workaround (loses Wayland benefits):**
 ```bash
-kwriteconfig5 --file kwinrulesrc --group 1 --key Description "VoKey No Focus"
-kwriteconfig5 --file kwinrulesrc --group 1 --key wmclass "vokey-transcribe"
-kwriteconfig5 --file kwinrulesrc --group 1 --key acceptfocus "true"
-kwriteconfig5 --file kwinrulesrc --group 1 --key acceptfocusrule "2"  # Force
+GDK_BACKEND=x11 ./vokey-transcribe
+# or
+WAYLAND_DISPLAY="" ./vokey-transcribe
 ```
 
-### 3) Click-through overlays are compositor-dependent
+### 3) The overlay steals focus on Wayland (compositor-dependent)
+
+Unlike Windows where you can set `WS_EX_NOACTIVATE`, Wayland compositors have their own focus policies. Tauri's `focused: false` window option is typically ignored by Wayland compositors.
+
+### 4) KWin Window Rules: The Wayland Solution
+
+For KDE Plasma on Wayland, **KWin window rules** are the proper solution for all three issues above. A single rule can:
+- Force window position (top-left corner)
+- Force always-on-top behavior
+- Prevent focus stealing
+
+**Manual setup:**
+1. Right-click title bar → More Actions → Configure Special Window Settings
+2. Add rules for: Position (Force → 20,20), Keep Above (Force → Yes), Accept Focus (Force → No)
+
+**Programmatic setup:**
+
+KWin rules are stored in `~/.config/kwinrulesrc` (INI format):
+
+```ini
+[General]
+count=1
+rules=vokey-hud-rule
+
+[vokey-hud-rule]
+Description=VoKey HUD - Always on top, top-left, no focus
+above=true
+aboverule=2
+acceptfocus=false
+acceptfocusrule=2
+position=20,20
+positionrule=2
+wmclass=vokey-transcribe
+wmclassmatch=1
+```
+
+Rule values:
+- `1` = Apply Initially (can be changed by user)
+- `2` = Force (always applied)
+- `3` = Apply Now
+- `4` = Force Temporarily
+
+Apply changes via D-Bus:
+```bash
+# KDE Plasma 6
+qdbus6 org.kde.KWin /KWin reconfigure
+
+# KDE Plasma 5
+qdbus org.kde.KWin /KWin reconfigure
+```
+
+**VoKey implements in-app KWin rule management:**
+- Detects Wayland + KDE environment
+- Checks if rule already exists
+- Provides Install/Remove buttons in Settings
+- Automatically calls `qdbus6` to apply changes
+
+### 5) Distribution: AppImage and .deb only (no Flatpak/Snap)
+
+The KWin rules approach requires:
+- Access to `~/.config/kwinrulesrc`
+- D-Bus session bus access for `qdbus6`
+
+**Packaging compatibility:**
+
+| Format | KWin Rules | Notes |
+|--------|------------|-------|
+| **deb/rpm** | ✅ Full access | Native packages, no sandbox |
+| **AppImage** | ✅ Full access | Runs with host filesystem access |
+| **Flatpak** | ❌ Sandboxed | Would need `--filesystem=~/.config:rw` and D-Bus permissions |
+| **Snap** | ❌ Sandboxed | Would need `personal-files` and `dbus` plugs |
+
+Flatpak/Snap sandboxing prevents reliable KWin rule management. Users could manually grant permissions, but this creates a poor UX. For v1.0, **distribute as AppImage and .deb only**.
+
+**Future consideration:** If Flatpak/Snap support is desired:
+1. Detect sandboxed environment
+2. Show manual setup instructions instead of in-app buttons
+3. Provide a standalone `vokey-setup-kwin.sh` script users run outside the sandbox
+
+### 6) Click-through overlays are compositor-dependent
 
 Wayland doesn't have a universal "click-through" window style like Windows' `WS_EX_TRANSPARENT`.
 
@@ -71,7 +148,7 @@ Wayland doesn't have a universal "click-through" window style like Windows' `WS_
 
 The overlay only shows state (a small indicator). Users won't be clicking near it during normal use. Don't over-engineer this for MVP.
 
-### 4) No SendInput equivalent on Wayland
+### 7) No SendInput equivalent on Wayland
 
 Wayland isolates applications from each other—there's no way to inject keystrokes into another window like Windows' `SendInput`.
 
@@ -99,7 +176,7 @@ Requires:
 - User in `input` group
 - May have timing/focus issues
 
-### 5) Clipboard behavior differs on Wayland
+### 8) Clipboard behavior differs on Wayland
 
 Wayland has two clipboards:
 - **Regular clipboard:** Ctrl+C/Ctrl+V (what we use)
@@ -124,7 +201,7 @@ fn set_clipboard(text: &str) -> Result<(), arboard::Error> {
 
 ---
 
-### 6) LXD Container D-Bus and AppArmor
+### 9) LXD Container D-Bus and AppArmor
 
 When running Tauri apps in LXD containers, system notifications via `notify-send` may fail with "Permission denied" even though other D-Bus tools like `gdbus` work.
 
@@ -161,7 +238,7 @@ lxc config device add mycontainer dbus proxy \
 
 ---
 
-### 7) CPAL Audio Thread Architecture
+### 10) CPAL Audio Thread Architecture
 
 CPAL (Cross-Platform Audio Library) has a critical threading requirement: streams must be created and dropped on the same thread. This prevents using async/await directly with CPAL streams.
 
@@ -242,7 +319,7 @@ let mut guard = match writer.lock() {
 
 ---
 
-### 8) Window control buttons don't work on Wayland (decorated windows)
+### 11) Window control buttons don't work on Wayland (decorated windows)
 
 On Wayland (especially KDE Plasma), window control buttons (minimize, maximize, close) may not respond to clicks when a decorated Tauri window is first shown. The buttons start working after maximizing/restoring the window manually.
 

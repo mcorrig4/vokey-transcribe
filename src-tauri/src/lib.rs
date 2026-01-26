@@ -1,6 +1,7 @@
 mod audio;
 mod effects;
 mod hotkey;
+mod kwin;
 mod metrics;
 mod settings;
 mod state_machine;
@@ -457,6 +458,30 @@ async fn open_settings_window(app: AppHandle) -> Result<(), String> {
 }
 
 // ============================================================================
+// KWin Rules Commands (Wayland HUD positioning)
+// ============================================================================
+
+/// Get KWin rules status (Wayland detection, KDE detection, rule installed)
+#[tauri::command]
+fn get_kwin_status() -> kwin::KwinStatus {
+    kwin::get_status()
+}
+
+/// Install the KWin rule for proper HUD behavior on Wayland
+#[tauri::command]
+async fn install_kwin_rule() -> Result<(), String> {
+    log::info!("Installing KWin rule");
+    kwin::install_kwin_rule()
+}
+
+/// Remove the KWin rule
+#[tauri::command]
+async fn remove_kwin_rule() -> Result<(), String> {
+    log::info!("Removing KWin rule");
+    kwin::remove_kwin_rule()
+}
+
+// ============================================================================
 // Application entry point
 // ============================================================================
 
@@ -668,6 +693,9 @@ pub fn run() {
             open_logs_folder,
             open_recordings_folder,
             open_settings_window,
+            get_kwin_status,
+            install_kwin_rule,
+            remove_kwin_rule,
         ])
         .on_window_event(|window, event| {
             // Hide windows instead of closing them (except for quit)
