@@ -157,8 +157,9 @@ fn install_rule(path: &PathBuf) -> Result<(), String> {
         .get("rules")
         .map(|r| {
             r.split(',')
-                .map(|s| s.trim().to_string())
+                .map(|s| s.trim())
                 .filter(|s| !s.is_empty())
+                .map(|s| s.to_string())
                 .collect()
         })
         .unwrap_or_default();
@@ -218,9 +219,9 @@ fn remove_rule(path: &PathBuf) -> Result<(), String> {
         if let Some(rules) = general.get("rules") {
             let rules_list: Vec<String> = rules
                 .split(',')
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty())
-                .filter(|r| r != RULE_ID)
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty() && *s != RULE_ID)
+                .map(str::to_string)
                 .collect();
 
             general.insert("count".to_string(), rules_list.len().to_string());
