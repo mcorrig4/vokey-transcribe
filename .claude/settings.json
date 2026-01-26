@@ -2,7 +2,8 @@
   "env": {
     "addintolocalGH_TOKEN": "ghp_xABCD",
     "GH_USERNAME": "CodespaceAgent:Claude-Do",
-    "GH_EMAIL": "claude@claude.do"
+    "GH_EMAIL": "claude@claude.do",
+    "addintolocalNTFY_CHANNEL": "abc1234"
   },
   "hooks": {
     "SessionStart": [
