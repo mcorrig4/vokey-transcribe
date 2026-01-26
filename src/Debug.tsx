@@ -110,13 +110,14 @@ function Debug() {
   const [metricsHistory, setMetricsHistory] = useState<CycleMetrics[]>([])
   const [errorHistory, setErrorHistory] = useState<ErrorRecord[]>([])
 
+  const pushLog = (message: string) => {
+    setLog((prev) => [...prev.slice(-9), `${new Date().toLocaleTimeString()}: ${message}`])
+  }
+
   useEffect(() => {
     const unlisten = listen<UiState>('state-update', (event) => {
       setUiState(event.payload)
-      setLog((prev) => [
-        ...prev.slice(-9), // Keep last 10 entries
-        `${new Date().toLocaleTimeString()}: ${formatUiStateForLog(event.payload)}`,
-      ])
+      pushLog(formatUiStateForLog(event.payload))
     })
 
     return () => {
@@ -184,9 +185,13 @@ function Debug() {
       await invoke('set_settings', { settings: next })
       setSettings(next)
       setSettingsError(null)
+      pushLog(
+        `settings saved: min_transcribe_ms=${next.min_transcribe_ms}, short_clip_vad_enabled=${next.short_clip_vad_enabled}`,
+      )
     } catch (e) {
       console.error('Failed to save settings:', e)
       setSettingsError(String(e))
+      pushLog(`settings save error: ${String(e)}`)
     } finally {
       setSettingsSaving(false)
     }

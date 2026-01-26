@@ -305,11 +305,42 @@ async fn set_settings(
     handle: tauri::State<'_, SettingsHandle>,
     settings: AppSettings,
 ) -> Result<(), String> {
+    let mut changes: Vec<String> = Vec::new();
     {
         let mut current = handle.settings.lock().await;
+        if current.min_transcribe_ms != settings.min_transcribe_ms {
+            changes.push(format!(
+                "min_transcribe_ms: {} -> {}",
+                current.min_transcribe_ms, settings.min_transcribe_ms
+            ));
+        }
+        if current.short_clip_vad_enabled != settings.short_clip_vad_enabled {
+            changes.push(format!(
+                "short_clip_vad_enabled: {} -> {}",
+                current.short_clip_vad_enabled, settings.short_clip_vad_enabled
+            ));
+        }
         *current = settings.clone();
     }
     settings::save_settings(&app, &settings)?;
+
+    if changes.is_empty() {
+        log::info!(
+            "Settings saved (no changes): min_transcribe_ms={}, short_clip_vad_enabled={}",
+            settings.min_transcribe_ms,
+            settings.short_clip_vad_enabled
+        );
+    } else {
+        log::info!(
+            "Settings updated: {}",
+            changes.join(", ")
+        );
+        log::info!(
+            "Settings now: min_transcribe_ms={}, short_clip_vad_enabled={}",
+            settings.min_transcribe_ms,
+            settings.short_clip_vad_enabled
+        );
+    }
     Ok(())
 }
 
