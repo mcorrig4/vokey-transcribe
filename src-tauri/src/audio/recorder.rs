@@ -3,11 +3,20 @@
 //! The AudioRecorder captures audio from the default input device and writes
 //! it to a WAV file. Recording is controlled via a dedicated audio thread
 //! to ensure CPAL streams are created and dropped on the same thread.
+//!
+//! # Streaming Support (Sprint 7A)
+//!
+//! When a streaming channel is provided to `start()`, the audio callback will
+//! batch samples and send them to the channel using non-blocking `try_send()`.
+//! This allows real-time streaming to OpenAI Realtime API while recording.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread::{self, JoinHandle};
+
+/// Sender type for streaming audio samples to the streaming pipeline
+pub type StreamingSender = tokio::sync::mpsc::Sender<Vec<i16>>;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, SampleFormat, Stream, StreamConfig};
@@ -49,6 +58,8 @@ enum AudioCommand {
     Start {
         recording_id: Uuid,
         response: mpsc::Sender<Result<PathBuf, AudioError>>,
+        /// Optional channel for streaming audio samples
+        streaming_tx: Option<StreamingSender>,
     },
     Stop {
         response: mpsc::Sender<Result<PathBuf, AudioError>>,
@@ -153,14 +164,27 @@ impl AudioRecorder {
     }
 
     /// Start recording to a new WAV file.
-    /// Returns a handle that must be used to stop the recording.
-    pub fn start(&self, recording_id: Uuid) -> Result<(RecordingHandle, PathBuf), AudioError> {
+    ///
+    /// # Arguments
+    /// * `recording_id` - Unique identifier for this recording
+    /// * `streaming_tx` - Optional channel for streaming audio samples to the
+    ///   streaming pipeline. If provided, samples will be batched and sent
+    ///   using non-blocking `try_send()`.
+    ///
+    /// # Returns
+    /// A handle that must be used to stop the recording, and the WAV file path.
+    pub fn start(
+        &self,
+        recording_id: Uuid,
+        streaming_tx: Option<StreamingSender>,
+    ) -> Result<(RecordingHandle, PathBuf), AudioError> {
         let (response_tx, response_rx) = mpsc::channel();
 
         self.command_sender
             .send(AudioCommand::Start {
                 recording_id,
                 response: response_tx,
+                streaming_tx,
             })
             .map_err(|_| AudioError::ThreadError("Failed to send start command".to_string()))?;
 
@@ -199,6 +223,7 @@ fn audio_thread_main(
             Ok(AudioCommand::Start {
                 recording_id,
                 response,
+                streaming_tx,
             }) => {
                 // Stop any existing recording first
                 if let Some(stream) = active_stream.take() {
@@ -208,7 +233,8 @@ fn audio_thread_main(
                 }
 
                 // Start new recording
-                let result = start_recording(&device, &config, sample_format, recording_id);
+                let result =
+                    start_recording(&device, &config, sample_format, recording_id, streaming_tx);
                 match result {
                     Ok((stream, path)) => {
                         active_stream = Some(stream);
@@ -257,6 +283,7 @@ fn start_recording(
     config: &StreamConfig,
     sample_format: SampleFormat,
     recording_id: Uuid,
+    streaming_tx: Option<StreamingSender>,
 ) -> Result<(ActiveStream, PathBuf), AudioError> {
     let wav_path = generate_wav_path(recording_id)
         .map_err(|e| AudioError::FileCreationFailed(e.to_string()))?;
@@ -280,6 +307,7 @@ fn start_recording(
         sample_format,
         writer.clone(),
         is_recording.clone(),
+        streaming_tx,
     )?;
 
     stream
@@ -329,18 +357,19 @@ fn build_stream(
     sample_format: SampleFormat,
     writer: Arc<Mutex<Option<WavWriter<std::io::BufWriter<std::fs::File>>>>>,
     is_recording: Arc<AtomicBool>,
+    streaming_tx: Option<StreamingSender>,
 ) -> Result<Stream, AudioError> {
     let err_fn = |err| log::error!("Audio stream error: {}", err);
 
     match sample_format {
         SampleFormat::I16 => {
-            build_stream_typed::<i16>(device, config, writer, is_recording, err_fn)
+            build_stream_typed::<i16>(device, config, writer, is_recording, streaming_tx, err_fn)
         }
         SampleFormat::U16 => {
-            build_stream_typed::<u16>(device, config, writer, is_recording, err_fn)
+            build_stream_typed::<u16>(device, config, writer, is_recording, streaming_tx, err_fn)
         }
         SampleFormat::F32 => {
-            build_stream_typed::<f32>(device, config, writer, is_recording, err_fn)
+            build_stream_typed::<f32>(device, config, writer, is_recording, streaming_tx, err_fn)
         }
         _ => Err(AudioError::NoSupportedConfig),
     }
@@ -351,6 +380,7 @@ fn build_stream_typed<T>(
     config: &StreamConfig,
     writer: Arc<Mutex<Option<WavWriter<std::io::BufWriter<std::fs::File>>>>>,
     is_recording: Arc<AtomicBool>,
+    streaming_tx: Option<StreamingSender>,
     err_fn: impl FnMut(cpal::StreamError) + Send + 'static,
 ) -> Result<Stream, AudioError>
 where
@@ -364,6 +394,10 @@ where
                     return;
                 }
 
+                // Collect samples as i16 for both WAV writing and streaming
+                let samples: Vec<i16> = data.iter().map(|&s| sample_to_i16(s)).collect();
+
+                // 1. Write to WAV file
                 // Handle poisoned mutex gracefully instead of panicking
                 let mut guard = match writer.lock() {
                     Ok(guard) => guard,
@@ -375,14 +409,25 @@ where
                 };
 
                 if let Some(ref mut w) = *guard {
-                    for &sample in data {
-                        // Convert to i16 for WAV
-                        let sample_i16 = sample_to_i16(sample);
+                    for &sample_i16 in &samples {
                         if w.write_sample(sample_i16).is_err() {
                             log::error!("Failed to write sample, stopping recording.");
                             is_recording.store(false, Ordering::SeqCst);
-                            break;
+                            return;
                         }
+                    }
+                }
+
+                // Release the mutex before sending to streaming channel
+                drop(guard);
+
+                // 2. Send to streaming channel (non-blocking)
+                if let Some(ref tx) = streaming_tx {
+                    // try_send is non-blocking - if channel is full or closed, we drop the samples
+                    // This is acceptable as streaming is best-effort and WAV backup always works
+                    if tx.try_send(samples).is_err() {
+                        // Channel full or closed - this is expected under load
+                        // Metrics tracking is done by the caller via MetricsCollector
                     }
                 }
             },

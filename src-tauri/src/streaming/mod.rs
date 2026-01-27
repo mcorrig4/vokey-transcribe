@@ -23,12 +23,14 @@
 //! - WAV recording is never interrupted by streaming failures
 
 mod audio_buffer;
+mod audio_streamer;
 mod protocol;
 mod realtime_client;
 
-pub use audio_buffer::{AudioBuffer, AudioChunk};
+pub use audio_buffer::{downsample, AudioBuffer, AudioChunk};
+pub use audio_streamer::{connect_streamer, AudioStreamer, StreamerConfig};
 pub use protocol::{ClientMessage, ServerMessage, SessionConfig};
-pub use realtime_client::RealtimeSession;
+pub use realtime_client::{get_api_key, RealtimeSession};
 
 /// Errors that can occur during streaming transcription
 #[derive(Debug, Clone)]

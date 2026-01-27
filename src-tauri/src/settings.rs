@@ -21,6 +21,11 @@ pub struct AppSettings {
 
     /// Ignore the first N ms of audio when running local VAD to avoid start-click/transient noise.
     pub vad_ignore_start_ms: u64,
+
+    /// Enable real-time streaming transcription via OpenAI Realtime API.
+    /// When enabled, partial transcripts are shown while recording.
+    /// When disabled, only batch transcription (Whisper) is used.
+    pub streaming_enabled: bool,
 }
 
 impl Default for AppSettings {
@@ -30,6 +35,7 @@ impl Default for AppSettings {
             short_clip_vad_enabled: true,
             vad_check_max_ms: 1500,
             vad_ignore_start_ms: 80,
+            streaming_enabled: true, // On by default
         }
     }
 }
