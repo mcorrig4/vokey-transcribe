@@ -1,4 +1,12 @@
 .button {
+  /* Reset button defaults */
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: default;
+  font: inherit;
+
+  /* Visual styling */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -13,8 +21,18 @@
     transform 0.2s ease;
 }
 
-/* Subtle hover effect */
-.button:hover {
+/* Disabled state - currently just a status indicator, becomes interactive in #74 */
+.button:disabled {
+  cursor: default;
+  opacity: 1; /* Override default disabled opacity */
+}
+
+/*
+ * Hover effect provides visual feedback.
+ * Currently disabled (status indicator only). Will become interactive in #74
+ * with click handling and cursor: pointer.
+ */
+.button:not(:disabled):hover {
   background-color: rgba(255, 255, 255, 0.25);
 }
 
@@ -79,5 +97,17 @@
   }
   100% {
     transform: scale(1);
+  }
+}
+
+/* Accessibility: Respect user's motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .button,
+  .button[data-state="recording"],
+  .button[data-state="transcribing"],
+  .button[data-state="error"],
+  .button[data-state="done"] {
+    animation: none;
+    transition: none;
   }
 }

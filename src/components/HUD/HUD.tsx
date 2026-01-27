@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window'
 import { useHUD } from '../../context/HUDContext'
 import { ControlPill } from './ControlPill'
@@ -9,6 +9,9 @@ import styles from './HUD.module.css'
 const COMPACT_SIZE = new LogicalSize(320, 80)
 const EXPANDED_SIZE = new LogicalSize(320, 220)
 
+// Exit animation duration (must match CSS)
+const EXIT_ANIMATION_MS = 200
+
 /**
  * Main HUD layout component.
  * Manages window sizing and component arrangement.
@@ -16,36 +19,66 @@ const EXPANDED_SIZE = new LogicalSize(320, 220)
 export function HUD() {
   const { state } = useHUD()
 
-  // Show transcript panel during active states
-  const showTranscript = state.status === 'recording' || state.status === 'transcribing'
+  // Determine if transcript should be visible based on app state
+  const shouldShowTranscript = state.status === 'recording' || state.status === 'transcribing'
 
-  // Dynamic window resize based on state
+  // Track panel visibility with exit animation support
+  const [panelState, setPanelState] = useState<'hidden' | 'visible' | 'exiting'>('hidden')
+
+  // Handle panel show/hide with exit animation
+  useEffect(() => {
+    if (shouldShowTranscript && panelState === 'hidden') {
+      // Show panel immediately
+      setPanelState('visible')
+    } else if (!shouldShowTranscript && panelState === 'visible') {
+      // Start exit animation
+      setPanelState('exiting')
+      const timer = setTimeout(() => {
+        setPanelState('hidden')
+      }, EXIT_ANIMATION_MS)
+      return () => clearTimeout(timer)
+    }
+  }, [shouldShowTranscript, panelState])
+
+  // Dynamic window resize based on panel visibility
   useEffect(() => {
     const window = getCurrentWindow()
-    const targetSize = showTranscript ? EXPANDED_SIZE : COMPACT_SIZE
+    const isExpanded = panelState === 'visible' || panelState === 'exiting'
+    const targetSize = isExpanded ? EXPANDED_SIZE : COMPACT_SIZE
 
-    // Use requestAnimationFrame to batch the resize
-    requestAnimationFrame(() => {
+    // Use requestAnimationFrame to batch the resize, with cleanup
+    const rafId = requestAnimationFrame(() => {
       window.setSize(targetSize).catch((err) => {
         console.warn('Failed to resize window:', err)
       })
     })
-  }, [showTranscript])
+
+    return () => cancelAnimationFrame(rafId)
+  }, [panelState])
 
   // Handle drag for Wayland compatibility
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
     // Don't drag if clicking on interactive elements
     const target = e.target as HTMLElement
     if (target.closest('[data-no-drag]') || target.closest('button')) {
       return
     }
-    getCurrentWindow().startDragging()
-  }
+    getCurrentWindow().startDragging().catch((err) => {
+      // Log metric for drag failures (may indicate Wayland compositor issues)
+      console.warn('[HUD] Window drag failed - this may indicate compositor compatibility issues:', {
+        error: err,
+        timestamp: new Date().toISOString(),
+        platform: navigator.platform,
+      })
+    })
+  }, [])
 
   return (
     <div className={styles.layout} onMouseDown={handleMouseDown}>
       <ControlPill />
-      {showTranscript && <TranscriptPanel />}
+      {panelState !== 'hidden' && (
+        <TranscriptPanel isExiting={panelState === 'exiting'} />
+      )}
     </div>
   )
 }
