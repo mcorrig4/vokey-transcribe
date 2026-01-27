@@ -8,4 +8,4 @@ pub mod recorder;
 pub mod vad;
 
 pub use paths::{cleanup_old_recordings, create_temp_audio_dir, generate_wav_path};
-pub use recorder::{AudioError, AudioRecorder};
+pub use recorder::{AudioError, AudioRecorder, StreamingSender};

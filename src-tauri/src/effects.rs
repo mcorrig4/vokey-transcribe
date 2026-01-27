@@ -15,12 +15,94 @@ use crate::audio::{cleanup_old_recordings, AudioRecorder};
 use crate::metrics::MetricsCollector;
 use crate::settings::AppSettings;
 use crate::state_machine::{Effect, Event};
+use crate::streaming::{
+    connect_streamer, get_api_key, ServerMessage, TranscriptAggregator, TranscriptReceiver,
+};
 use crate::transcription;
 
 const OPENAI_NO_SPEECH_PROB_THRESHOLD: f32 = 0.8;
 const OPENAI_NO_SPEECH_MAX_TEXT_LEN: usize = 12;
 const SHORT_CLIP_VAD_MIN_SPEECH_FRAMES: usize = 2;
 const SHORT_CLIP_MAX_CREST_FACTOR: f32 = 15.0;
+
+/// Run the transcript receiver loop
+///
+/// Receives transcript messages from the WebSocket and sends PartialDelta events
+/// to the state machine for UI updates.
+///
+/// # Arguments
+/// * `rx` - Receiver for incoming WebSocket messages
+/// * `event_tx` - Sender for state machine events
+/// * `recording_id` - ID of the current recording (for event correlation)
+async fn run_transcript_receiver(
+    mut rx: TranscriptReceiver,
+    event_tx: mpsc::Sender<Event>,
+    recording_id: Uuid,
+) {
+    let mut aggregator = TranscriptAggregator::new();
+
+    log::info!(
+        "Transcript receiver: starting for recording {}",
+        recording_id
+    );
+
+    while let Some(msg) = rx.recv().await {
+        match msg {
+            ServerMessage::TranscriptDelta { delta, .. } => {
+                let new_text = aggregator.process_delta(&delta);
+                log::debug!(
+                    "Transcript delta: '{}' (total: {} chars)",
+                    delta,
+                    new_text.len()
+                );
+
+                // Send PartialDelta event to state machine
+                if let Err(e) = event_tx
+                    .send(Event::PartialDelta {
+                        id: recording_id,
+                        delta,
+                    })
+                    .await
+                {
+                    log::warn!("Failed to send PartialDelta event: {}", e);
+                    break;
+                }
+            }
+            ServerMessage::TranscriptCompleted { transcript, .. } => {
+                aggregator.process_completed(&transcript);
+                log::info!(
+                    "Transcript completed: {} chars (after {} deltas)",
+                    transcript.len(),
+                    aggregator.delta_count()
+                );
+                // Final transcript is handled by batch transcription flow
+                // The streaming transcript is for real-time display only
+            }
+            ServerMessage::Error { error } => {
+                log::warn!(
+                    "Streaming error from API: {} ({})",
+                    error.message,
+                    error.error_type
+                );
+                // Don't break - continue receiving, errors may be recoverable
+            }
+            ServerMessage::SessionCreated { .. } | ServerMessage::SessionUpdated { .. } => {
+                // Session events are handled during connection setup
+                log::debug!("Ignoring session event in transcript receiver");
+            }
+            _ => {
+                // Other message types (InputAudioBufferCommitted, etc.)
+                log::trace!("Ignoring message type in transcript receiver");
+            }
+        }
+    }
+
+    log::info!(
+        "Transcript receiver: ended for recording {} ({} deltas processed)",
+        recording_id,
+        aggregator.delta_count()
+    );
+}
 
 /// Result of evaluating VAD stats for short-clip transcription gating.
 /// Contains both the final decision and intermediate values for logging/debugging.
@@ -124,41 +206,146 @@ impl EffectRunner for AudioEffectRunner {
                 let recorder = self.recorder.clone();
                 let active = self.active_recordings.clone();
                 let metrics = self.metrics.clone();
+                let settings = self.settings.clone();
 
                 tokio::spawn(async move {
                     // Start metrics tracking for this cycle
                     {
                         let mut m = metrics.lock().await;
                         m.start_cycle(id);
+                        m.reset_streaming_stats();
                     }
-                    // Try to get or create recorder, then start recording while holding lock
+
+                    // Check streaming settings before initializing recorder
+                    let (streaming_enabled, api_key) = {
+                        let settings_guard = settings.lock().await;
+                        (settings_guard.streaming_enabled, get_api_key())
+                    };
+
+                    // Try to get or create recorder first, so we have the correct sample rate
                     // We capture the result and drop the lock before any awaits to avoid
                     // holding the mutex across await points (can cause contention/deadlocks)
-                    let start_result = {
+                    let recorder_init_result: Result<u32, String> = {
                         let mut recorder_guard = recorder.lock().await;
                         if recorder_guard.is_none() {
                             // Retry creating recorder
                             match AudioRecorder::new() {
                                 Ok(r) => {
                                     *recorder_guard = Some(r);
-                                    Ok(())
                                 }
                                 Err(e) => {
                                     log::error!("Failed to initialize audio recorder: {}", e);
-                                    // Return error to be handled after lock is dropped
-                                    Err(e.to_string())
+                                    // Send AudioStartFail event so state machine can transition properly
+                                    let err_msg = e.to_string();
+                                    drop(recorder_guard); // Release lock before async operations
+                                    let mut m = metrics.lock().await;
+                                    m.cycle_failed(err_msg.clone());
+                                    drop(m);
+                                    let _ =
+                                        tx.send(Event::AudioStartFail { id, err: err_msg }).await;
+                                    return;
                                 }
                             }
-                        } else {
-                            Ok(())
                         }
-                        .and_then(|_| match recorder_guard.as_ref() {
-                            Some(rec) => rec.start(id).map_err(|e| e.to_string()),
+                        // Recorder is guaranteed to exist now
+                        match recorder_guard.as_ref() {
+                            Some(rec) => Ok(rec.sample_rate()),
+                            None => Err("Audio recorder unavailable".to_string()),
+                        }
+                    };
+
+                    let source_sample_rate = match recorder_init_result {
+                        Ok(rate) => rate,
+                        Err(e) => {
+                            log::error!("Failed to get sample rate: {}", e);
+                            let mut m = metrics.lock().await;
+                            m.cycle_failed(e.clone());
+                            let _ = tx.send(Event::AudioStartFail { id, err: e }).await;
+                            return;
+                        }
+                    };
+
+                    // Now create streaming channel with correct sample rate
+                    let streaming_tx = if streaming_enabled {
+                        if let Some(api_key) = api_key {
+                            // Create channel for streaming
+                            let (stx, rx) = tokio::sync::mpsc::channel::<Vec<i16>>(100);
+
+                            // Clone for streaming tasks
+                            let streaming_metrics = metrics.clone();
+                            let transcript_tx = tx.clone();
+                            let recording_id = id;
+
+                            // Spawn streaming task
+                            tokio::spawn(async move {
+                                log::info!("Streaming: connecting to OpenAI Realtime API...");
+                                match connect_streamer(&api_key, rx, source_sample_rate).await {
+                                    Ok((streamer, transcript_rx)) => {
+                                        log::info!("Streaming: connected, starting audio stream");
+
+                                        // Spawn transcript receiver task
+                                        let transcript_tx_clone = transcript_tx.clone();
+                                        tokio::spawn(async move {
+                                            run_transcript_receiver(
+                                                transcript_rx,
+                                                transcript_tx_clone,
+                                                recording_id,
+                                            )
+                                            .await;
+                                        });
+
+                                        // Run audio streamer (sends audio to WebSocket)
+                                        match streamer.run().await {
+                                            Ok(chunks_sent) => {
+                                                log::info!(
+                                                    "Streaming: completed, {} chunks sent",
+                                                    chunks_sent
+                                                );
+                                                // Update metrics with chunks sent
+                                                let mut m = streaming_metrics.lock().await;
+                                                m.add_streaming_chunks_sent(chunks_sent);
+                                            }
+                                            Err(e) => {
+                                                log::warn!(
+                                                    "Streaming: error during streaming: {}",
+                                                    e
+                                                );
+                                                // Streaming failed mid-recording, but WAV continues
+                                                // This is expected behavior per fallback strategy
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        log::warn!(
+                                            "Streaming: failed to connect (falling back to batch): {}",
+                                            e
+                                        );
+                                        // Connection failed - fall back to batch-only mode
+                                        // WAV recording continues normally
+                                    }
+                                }
+                            });
+
+                            Some(stx)
+                        } else {
+                            log::debug!("Streaming: disabled (no API key)");
+                            None
+                        }
+                    } else {
+                        log::debug!("Streaming: disabled (setting off)");
+                        None
+                    };
+
+                    // Start recording with the streaming channel
+                    let start_result = {
+                        let recorder_guard = recorder.lock().await;
+                        match recorder_guard.as_ref() {
+                            Some(rec) => rec.start(id, streaming_tx).map_err(|e| e.to_string()),
                             None => {
-                                log::error!("Audio recorder is unavailable after retry");
+                                log::error!("Audio recorder is unavailable");
                                 Err("Audio recorder unavailable".to_string())
                             }
-                        })
+                        }
                     }; // recorder_guard dropped here
 
                     // Now handle results without holding the mutex
