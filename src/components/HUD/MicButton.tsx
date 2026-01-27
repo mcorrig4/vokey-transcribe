@@ -74,7 +74,7 @@ function getAriaLabel(state: UiState): string {
     case 'done':
       return 'Transcription complete, copied to clipboard'
     case 'error':
-      return `Error: ${state.message || 'Unknown error'}`
+      return `Error: ${state.message}`
     case 'noSpeech':
       return 'No speech detected'
   }
