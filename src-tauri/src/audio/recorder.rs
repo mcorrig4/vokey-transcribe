@@ -96,6 +96,8 @@ impl RecordingHandle {
 pub struct AudioRecorder {
     command_sender: mpsc::Sender<AudioCommand>,
     _thread_handle: JoinHandle<()>,
+    /// Sample rate used for recording (needed for streaming pipeline)
+    sample_rate: u32,
 }
 
 impl AudioRecorder {
@@ -152,6 +154,9 @@ impl AudioRecorder {
         // Create command channel
         let (command_tx, command_rx) = mpsc::channel::<AudioCommand>();
 
+        // Store sample rate before moving config
+        let sample_rate = config.sample_rate.0;
+
         // Spawn dedicated audio thread
         let thread_handle = thread::spawn(move || {
             audio_thread_main(device, config, sample_format, command_rx);
@@ -160,7 +165,14 @@ impl AudioRecorder {
         Ok(Self {
             command_sender: command_tx,
             _thread_handle: thread_handle,
+            sample_rate,
         })
+    }
+
+    /// Get the sample rate being used for recording.
+    /// This is needed by the streaming pipeline to configure downsampling.
+    pub fn sample_rate(&self) -> u32 {
+        self.sample_rate
     }
 
     /// Start recording to a new WAV file.

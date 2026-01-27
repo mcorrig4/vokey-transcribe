@@ -136,18 +136,30 @@ impl EffectRunner for AudioEffectRunner {
                     }
 
                     // Check if streaming is enabled and API key is available
+                    // We need to get sample rate from recorder if available
                     let streaming_tx = {
                         let settings_guard = settings.lock().await;
                         if settings_guard.streaming_enabled {
                             if let Some(api_key) = get_api_key() {
+                                // Get sample rate from recorder (default to 48000 if not available)
+                                let source_sample_rate = {
+                                    let recorder_guard = recorder.lock().await;
+                                    recorder_guard
+                                        .as_ref()
+                                        .map(|r| r.sample_rate())
+                                        .unwrap_or(48000)
+                                };
+
                                 // Create channel for streaming
                                 let (tx, rx) = tokio::sync::mpsc::channel::<Vec<i16>>(100);
 
+                                // Clone metrics for streaming task
+                                let streaming_metrics = metrics.clone();
+
                                 // Spawn streaming task
-                                let metrics_clone = metrics.clone();
                                 tokio::spawn(async move {
                                     log::info!("Streaming: connecting to OpenAI Realtime API...");
-                                    match connect_streamer(&api_key, rx, 48000).await {
+                                    match connect_streamer(&api_key, rx, source_sample_rate).await {
                                         Ok(streamer) => {
                                             log::info!("Streaming: connected, starting audio stream");
                                             match streamer.run().await {
@@ -156,6 +168,9 @@ impl EffectRunner for AudioEffectRunner {
                                                         "Streaming: completed, {} chunks sent",
                                                         chunks_sent
                                                     );
+                                                    // Update metrics with chunks sent
+                                                    let mut m = streaming_metrics.lock().await;
+                                                    m.add_streaming_chunks_sent(chunks_sent);
                                                 }
                                                 Err(e) => {
                                                     log::warn!(

@@ -228,6 +228,11 @@ impl MetricsCollector {
         self.streaming_chunks_dropped = 0;
     }
 
+    /// Add streaming chunks sent (for bulk update after streaming completes)
+    pub fn add_streaming_chunks_sent(&mut self, count: u64) {
+        self.streaming_chunks_sent += count;
+    }
+
     /// Get the current recording duration in milliseconds (if recording just stopped)
     pub fn get_current_recording_duration_ms(&self) -> Option<u64> {
         self.current_cycle
