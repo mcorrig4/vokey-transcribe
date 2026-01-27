@@ -1,17 +1,21 @@
 import { useHUD } from '../../context/HUDContext'
 import { formatTime } from '../../utils/formatTime'
-import { getStatusLabel } from '../../utils/stateColors'
 import type { UiState } from '../../types'
 import styles from './PillContent.module.css'
 
 /**
  * Dynamic content area for the control pill.
- * Shows state-appropriate content: timer during recording, status text otherwise.
+ * Displays state-appropriate content following issue #77 spec:
+ * - Idle: "Ready" text
+ * - Arming: "Starting..." text
+ * - Recording: Dot + Timer (MM:SS)
+ * - Stopping: "Finishing..." text
+ * - Transcribing: Spinner + "Transcribing..." text
+ * - Done: "Copied ✓" text
+ * - Error: Truncated error message
+ * - NoSpeech: "No speech" + source
  *
- * Future enhancements (#77):
- * - Waveform visualization during recording
- * - Progress indicator during transcribing
- * - Truncated error messages with ellipsis
+ * Waveform visualization deferred until backend provides data (#75).
  */
 export function PillContent() {
   const { state } = useHUD()
@@ -25,6 +29,12 @@ export function PillContent() {
 
 function renderContent(state: UiState) {
   switch (state.status) {
+    case 'idle':
+      return <span className={styles.label}>Ready</span>
+
+    case 'arming':
+      return <span className={styles.label}>Starting\u2026</span>
+
     case 'recording':
       return (
         <div className={styles.recording}>
@@ -33,18 +43,21 @@ function renderContent(state: UiState) {
         </div>
       )
 
-    case 'noSpeech':
+    case 'stopping':
+      return <span className={styles.label}>Finishing\u2026</span>
+
+    case 'transcribing':
       return (
-        <div className={styles.info}>
-          <span className={styles.label}>{getStatusLabel(state)}</span>
-          <span className={styles.detail}>{state.source}</span>
+        <div className={styles.transcribing}>
+          <span className={styles.spinner} aria-hidden="true" />
+          <span className={styles.label}>Transcribing\u2026</span>
         </div>
       )
 
     case 'done':
       return (
         <div className={styles.success}>
-          <span className={styles.label}>Copied</span>
+          <span className={styles.label}>Copied ✓</span>
           <span className={styles.hint}>Paste now</span>
         </div>
       )
@@ -61,8 +74,13 @@ function renderContent(state: UiState) {
         </div>
       )
 
-    default:
-      return <span className={styles.label}>{getStatusLabel(state)}</span>
+    case 'noSpeech':
+      return (
+        <div className={styles.info}>
+          <span className={styles.label}>No speech</span>
+          <span className={styles.detail}>{state.source}</span>
+        </div>
+      )
   }
 }
 

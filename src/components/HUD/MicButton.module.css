@@ -17,44 +17,103 @@
   color: white;
   flex-shrink: 0;
   transition:
-    background-color 0.2s ease,
+    background-color 0.3s ease,
+    box-shadow 0.3s ease,
     transform 0.2s ease;
 }
 
-/* Disabled state - currently just a status indicator, becomes interactive in #74 */
+/* Disabled state - currently just a status indicator */
 .button:disabled {
   cursor: default;
   opacity: 1; /* Override default disabled opacity */
 }
 
-/*
- * Hover effect provides visual feedback.
- * Currently disabled (status indicator only). Will become interactive in #74
- * with click handling and cursor: pointer.
- */
+/* Future: hover effect when button becomes interactive */
 .button:not(:disabled):hover {
   background-color: rgba(255, 255, 255, 0.25);
+  cursor: pointer;
 }
 
-/* Recording state - subtle pulse animation */
+/* ===========================================
+   State-specific background colors
+   Colors use semi-transparent overlays to maintain
+   glassmorphism aesthetic while indicating state
+   =========================================== */
+
+/* Idle - default gray, no override needed */
+
+/* Arming - amber tint to indicate preparing */
+.button[data-state="arming"] {
+  background-color: rgba(245, 158, 11, 0.25);
+}
+
+/* Recording - red tint for active recording */
+.button[data-state="recording"] {
+  background-color: rgba(239, 68, 68, 0.3);
+}
+
+/* Stopping - amber tint for processing */
+.button[data-state="stopping"] {
+  background-color: rgba(245, 158, 11, 0.25);
+}
+
+/* Transcribing - blue tint for AI processing */
+.button[data-state="transcribing"] {
+  background-color: rgba(59, 130, 246, 0.25);
+}
+
+/* Done - green tint for success */
+.button[data-state="done"] {
+  background-color: rgba(34, 197, 94, 0.3);
+}
+
+/* Error - red tint for error */
+.button[data-state="error"] {
+  background-color: rgba(239, 68, 68, 0.3);
+}
+
+/* NoSpeech - purple tint for info */
+.button[data-state="noSpeech"] {
+  background-color: rgba(124, 58, 237, 0.25);
+}
+
+/* ===========================================
+   State-specific animations
+   Subtle feedback without being distracting
+   =========================================== */
+
+/* Arming - gentle pulse to indicate starting */
+.button[data-state="arming"] {
+  animation: pulse 1s ease-in-out infinite;
+}
+
+/* Recording - subtle pulse */
 .button[data-state="recording"] {
   animation: pulse 1.5s ease-in-out infinite;
 }
 
-/* Transcribing state - gentle opacity pulse */
-.button[data-state="transcribing"] {
-  animation: working 1s ease-in-out infinite;
+/* Done - brief glow effect */
+.button[data-state="done"] {
+  animation: glow 0.6s ease-out;
 }
 
-/* Error state - brief shake */
+/* Error - shake animation */
 .button[data-state="error"] {
   animation: shake 0.5s ease-in-out;
 }
 
-/* Done state - brief scale pop */
-.button[data-state="done"] {
-  animation: pop 0.3s ease-out;
+/* ===========================================
+   Spinner icon rotation
+   Applied via className on SpinnerIcon
+   =========================================== */
+
+.spinner {
+  animation: spin 1s linear infinite;
 }
+
+/* ===========================================
+   Keyframes
+   =========================================== */
 
 @keyframes pulse {
   0%, 100% {
@@ -67,12 +126,24 @@
   }
 }
 
-@keyframes working {
-  0%, 100% {
-    opacity: 1;
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes glow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
   }
   50% {
-    opacity: 0.6;
+    box-shadow: 0 0 16px 4px rgba(34, 197, 94, 0.4);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
   }
 }
 
@@ -88,26 +159,22 @@
   }
 }
 
-@keyframes pop {
-  0% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.15);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
+/* ===========================================
+   Accessibility: Respect motion preferences
+   =========================================== */
 
-/* Accessibility: Respect user's motion preferences */
 @media (prefers-reduced-motion: reduce) {
   .button,
+  .button[data-state="arming"],
   .button[data-state="recording"],
   .button[data-state="transcribing"],
-  .button[data-state="error"],
-  .button[data-state="done"] {
+  .button[data-state="done"],
+  .button[data-state="error"] {
     animation: none;
     transition: none;
+  }
+
+  .spinner {
+    animation: none;
   }
 }

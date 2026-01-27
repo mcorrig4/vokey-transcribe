@@ -83,6 +83,28 @@
   max-width: 100%;
 }
 
+/* Transcribing state: spinner + text */
+.transcribing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: content-spin 0.8s linear infinite;
+}
+
+@keyframes content-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Animations */
 @keyframes dot-blink {
   0%, 100% {
@@ -110,6 +132,7 @@
 /* Accessibility: Respect user's motion preferences */
 @media (prefers-reduced-motion: reduce) {
   .dot,
+  .spinner,
   .content[data-state="transcribing"] .label {
     animation: none;
   }
