@@ -38,7 +38,7 @@ function renderContent(state: UiState) {
     case 'recording':
       return (
         <div className={styles.recording}>
-          <span className={styles.dot}>●</span>
+          <span className={styles.dot} aria-hidden="true">●</span>
           <span className={styles.timer}>{formatTime(state.elapsedSecs)}</span>
         </div>
       )

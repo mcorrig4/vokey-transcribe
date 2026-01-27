@@ -15,26 +15,3 @@ export const STATE_COLORS: Record<Status, string> = {
   error: '#dc2626',      // Red - error
 }
 
-/**
- * Get human-readable label for each state
- */
-export function getStatusLabel(state: { status: Status }): string {
-  switch (state.status) {
-    case 'idle':
-      return 'Ready'
-    case 'arming':
-      return 'Starting...'
-    case 'recording':
-      return 'Recording'
-    case 'stopping':
-      return 'Stopping...'
-    case 'transcribing':
-      return 'Transcribing...'
-    case 'noSpeech':
-      return 'No speech'
-    case 'done':
-      return 'Copied'
-    case 'error':
-      return 'Error'
-  }
-}

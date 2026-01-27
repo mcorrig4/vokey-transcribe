@@ -40,13 +40,12 @@ function getIcon(status: Status): ReactNode {
   switch (status) {
     case 'idle':
     case 'noSpeech':
-      return <MicIcon size={28} />
     case 'arming':
       return <MicIcon size={28} />
     case 'recording':
       return <MicIcon size={28} filled />
     case 'stopping':
-      return <StopIcon size={24} />
+      return <StopIcon size={28} />
     case 'transcribing':
       return <SpinnerIcon size={28} className={styles.spinner} />
     case 'done':
