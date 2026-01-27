@@ -27,8 +27,8 @@ export function HUD() {
 
   // Handle panel show/hide with exit animation
   useEffect(() => {
-    if (shouldShowTranscript && panelState === 'hidden') {
-      // Show panel immediately
+    if (shouldShowTranscript && (panelState === 'hidden' || panelState === 'exiting')) {
+      // Show panel immediately, interrupting any exit animation
       setPanelState('visible')
     } else if (!shouldShowTranscript && panelState === 'visible') {
       // Start exit animation
