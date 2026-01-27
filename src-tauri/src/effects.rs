@@ -135,103 +135,113 @@ impl EffectRunner for AudioEffectRunner {
                         m.reset_streaming_stats();
                     }
 
-                    // Check if streaming is enabled and API key is available
-                    // We need to get sample rate from recorder if available
-                    let streaming_tx = {
+                    // Check streaming settings before initializing recorder
+                    let (streaming_enabled, api_key) = {
                         let settings_guard = settings.lock().await;
-                        if settings_guard.streaming_enabled {
-                            if let Some(api_key) = get_api_key() {
-                                // Get sample rate from recorder (default to 48000 if not available)
-                                let source_sample_rate = {
-                                    let recorder_guard = recorder.lock().await;
-                                    recorder_guard
-                                        .as_ref()
-                                        .map(|r| r.sample_rate())
-                                        .unwrap_or(48000)
-                                };
-
-                                // Create channel for streaming
-                                let (tx, rx) = tokio::sync::mpsc::channel::<Vec<i16>>(100);
-
-                                // Clone metrics for streaming task
-                                let streaming_metrics = metrics.clone();
-
-                                // Spawn streaming task
-                                tokio::spawn(async move {
-                                    log::info!("Streaming: connecting to OpenAI Realtime API...");
-                                    match connect_streamer(&api_key, rx, source_sample_rate).await {
-                                        Ok(streamer) => {
-                                            log::info!("Streaming: connected, starting audio stream");
-                                            match streamer.run().await {
-                                                Ok(chunks_sent) => {
-                                                    log::info!(
-                                                        "Streaming: completed, {} chunks sent",
-                                                        chunks_sent
-                                                    );
-                                                    // Update metrics with chunks sent
-                                                    let mut m = streaming_metrics.lock().await;
-                                                    m.add_streaming_chunks_sent(chunks_sent);
-                                                }
-                                                Err(e) => {
-                                                    log::warn!(
-                                                        "Streaming: error during streaming: {}",
-                                                        e
-                                                    );
-                                                    // Streaming failed mid-recording, but WAV continues
-                                                    // This is expected behavior per fallback strategy
-                                                }
-                                            }
-                                        }
-                                        Err(e) => {
-                                            log::warn!(
-                                                "Streaming: failed to connect (falling back to batch): {}",
-                                                e
-                                            );
-                                            // Connection failed - fall back to batch-only mode
-                                            // WAV recording continues normally
-                                        }
-                                    }
-                                });
-
-                                Some(tx)
-                            } else {
-                                log::debug!("Streaming: disabled (no API key)");
-                                None
-                            }
-                        } else {
-                            log::debug!("Streaming: disabled (setting off)");
-                            None
-                        }
+                        (settings_guard.streaming_enabled, get_api_key())
                     };
 
-                    // Try to get or create recorder, then start recording while holding lock
+                    // Try to get or create recorder first, so we have the correct sample rate
                     // We capture the result and drop the lock before any awaits to avoid
                     // holding the mutex across await points (can cause contention/deadlocks)
-                    let start_result = {
+                    let recorder_init_result: Result<u32, String> = {
                         let mut recorder_guard = recorder.lock().await;
                         if recorder_guard.is_none() {
                             // Retry creating recorder
                             match AudioRecorder::new() {
                                 Ok(r) => {
                                     *recorder_guard = Some(r);
-                                    Ok(())
                                 }
                                 Err(e) => {
                                     log::error!("Failed to initialize audio recorder: {}", e);
-                                    // Return error to be handled after lock is dropped
-                                    Err(e.to_string())
+                                    return; // Can't proceed without recorder
                                 }
                             }
-                        } else {
-                            Ok(())
                         }
-                        .and_then(|_| match recorder_guard.as_ref() {
+                        // Recorder is guaranteed to exist now
+                        match recorder_guard.as_ref() {
+                            Some(rec) => Ok(rec.sample_rate()),
+                            None => Err("Audio recorder unavailable".to_string()),
+                        }
+                    };
+
+                    let source_sample_rate = match recorder_init_result {
+                        Ok(rate) => rate,
+                        Err(e) => {
+                            log::error!("Failed to get sample rate: {}", e);
+                            let mut m = metrics.lock().await;
+                            m.cycle_failed(e.clone());
+                            let _ = tx.send(Event::AudioStartFail { id, err: e }).await;
+                            return;
+                        }
+                    };
+
+                    // Now create streaming channel with correct sample rate
+                    let streaming_tx = if streaming_enabled {
+                        if let Some(api_key) = api_key {
+                            // Create channel for streaming
+                            let (stx, rx) = tokio::sync::mpsc::channel::<Vec<i16>>(100);
+
+                            // Clone metrics for streaming task
+                            let streaming_metrics = metrics.clone();
+
+                            // Spawn streaming task
+                            tokio::spawn(async move {
+                                log::info!("Streaming: connecting to OpenAI Realtime API...");
+                                match connect_streamer(&api_key, rx, source_sample_rate).await {
+                                    Ok(streamer) => {
+                                        log::info!("Streaming: connected, starting audio stream");
+                                        match streamer.run().await {
+                                            Ok(chunks_sent) => {
+                                                log::info!(
+                                                    "Streaming: completed, {} chunks sent",
+                                                    chunks_sent
+                                                );
+                                                // Update metrics with chunks sent
+                                                let mut m = streaming_metrics.lock().await;
+                                                m.add_streaming_chunks_sent(chunks_sent);
+                                            }
+                                            Err(e) => {
+                                                log::warn!(
+                                                    "Streaming: error during streaming: {}",
+                                                    e
+                                                );
+                                                // Streaming failed mid-recording, but WAV continues
+                                                // This is expected behavior per fallback strategy
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        log::warn!(
+                                            "Streaming: failed to connect (falling back to batch): {}",
+                                            e
+                                        );
+                                        // Connection failed - fall back to batch-only mode
+                                        // WAV recording continues normally
+                                    }
+                                }
+                            });
+
+                            Some(stx)
+                        } else {
+                            log::debug!("Streaming: disabled (no API key)");
+                            None
+                        }
+                    } else {
+                        log::debug!("Streaming: disabled (setting off)");
+                        None
+                    };
+
+                    // Start recording with the streaming channel
+                    let start_result = {
+                        let recorder_guard = recorder.lock().await;
+                        match recorder_guard.as_ref() {
                             Some(rec) => rec.start(id, streaming_tx).map_err(|e| e.to_string()),
                             None => {
-                                log::error!("Audio recorder is unavailable after retry");
+                                log::error!("Audio recorder is unavailable");
                                 Err("Audio recorder unavailable".to_string())
                             }
-                        })
+                        }
                     }; // recorder_guard dropped here
 
                     // Now handle results without holding the mutex

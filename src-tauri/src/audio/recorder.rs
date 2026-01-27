@@ -435,11 +435,12 @@ where
 
                 // 2. Send to streaming channel (non-blocking)
                 if let Some(ref tx) = streaming_tx {
-                    // try_send is non-blocking - if channel is full or closed, we drop the samples
-                    // This is acceptable as streaming is best-effort and WAV backup always works
+                    // try_send is non-blocking - if channel is full or closed, we drop the samples.
+                    // This is acceptable as streaming is best-effort and the WAV backup always works.
+                    // Note: Dropped chunk metrics are tracked in the streaming task when it completes,
+                    // not here in the audio callback (which cannot access async MetricsCollector).
                     if tx.try_send(samples).is_err() {
                         // Channel full or closed - this is expected under load
-                        // Metrics tracking is done by the caller via MetricsCollector
                     }
                 }
             },
