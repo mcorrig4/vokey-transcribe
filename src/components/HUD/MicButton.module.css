@@ -1,0 +1,83 @@
+.button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.15);
+  color: white;
+  flex-shrink: 0;
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+/* Subtle hover effect */
+.button:hover {
+  background-color: rgba(255, 255, 255, 0.25);
+}
+
+/* Recording state - subtle pulse animation */
+.button[data-state="recording"] {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Transcribing state - gentle opacity pulse */
+.button[data-state="transcribing"] {
+  animation: working 1s ease-in-out infinite;
+}
+
+/* Error state - brief shake */
+.button[data-state="error"] {
+  animation: shake 0.5s ease-in-out;
+}
+
+/* Done state - brief scale pop */
+.button[data-state="done"] {
+  animation: pop 0.3s ease-out;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.85;
+  }
+}
+
+@keyframes working {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  20%, 60% {
+    transform: translateX(-3px);
+  }
+  40%, 80% {
+    transform: translateX(3px);
+  }
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+  }
+}

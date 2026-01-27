@@ -14,8 +14,10 @@
       {
         "label": "hud",
         "title": "VoKey",
-        "width": 200,
-        "height": 40,
+        "width": 320,
+        "height": 80,
+        "minWidth": 320,
+        "minHeight": 80,
         "x": 20,
         "y": 20,
         "resizable": false,
