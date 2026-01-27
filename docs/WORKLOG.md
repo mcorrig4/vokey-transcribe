@@ -6,20 +6,28 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Current Status
 
-**Phase:** Sprint 7A Frontend — HUD Component Redesign
+**Phase:** Sprint 7A — Real-time Streaming Transcription
 **Target:** Kubuntu with KDE Plasma 6.4 on Wayland
-**Branch:** `claude/sprint-7a-frontend-planning-ngiX4`
+**Branch:** `claude/sprint-7a-mic-button-pill-content-ngiX4`
 **Last Updated:** 2026-01-27
 
-**Sprint 7A Frontend Status:**
-- #73 HUD Component Scaffolding — 🧪 UAT (PR #105)
-- #74 + #77 Mic Button States + Pill Content — 🔄 IN PROGRESS
-- #75 Waveform Visualization — ⏸️ BLOCKED (needs backend #72)
-- #76 Transcript Panel Fade Scroll — ⏸️ BLOCKED (needs backend #70/#71)
+**Sprint 7A Status:**
+- Backend: #68 WebSocket ✅, #69 Audio Pipeline ✅, #70 Transcript Aggregation ✅ (PR #107 merged)
+- Frontend: #73 HUD Scaffolding 🧪 UAT (PR #105), #74+#77 Mic Button+Pill 🧪 UAT (PR #108)
 
 ---
 
 ## Completed Work
+
+### 2026-01-27: Sprint 7A - Transcript Reception & Aggregation (#70)
+- [x] Created TranscriptAggregator for delta text accumulation
+- [x] Added partial_text to Recording state and UiState
+- [x] Implemented PartialDelta event handler in state machine
+- [x] Modified RealtimeSession to expose incoming receiver for concurrent processing
+- [x] Updated connect_streamer to return (AudioStreamer, TranscriptReceiver) tuple
+- [x] Added run_transcript_receiver task in effects.rs
+- [x] Fixed HIGH priority bug: AudioStartFail event now sent on recorder init failure
+- [x] PR #107 created and reviewed
 
 ### 2026-01-25: No-speech filtering + settings (anti-hallucination)
 - [x] Added `NoSpeech` state so silence/very short clips don’t overwrite clipboard
@@ -53,9 +61,7 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 | 4 - OpenAI transcription + clipboard | ✅ COMPLETE | OpenAI Whisper API, arboard clipboard, tested on real hardware |
 | 5 - Full flow polish + tray controls | 🧪 UAT | Tray menu with Toggle/Cancel/Open Logs, HUD timer, auto-dismiss |
 | 6 - Hardening + UX polish | ⏸️ PAUSED | Phases 1-5 done; Phase 6 (50-cycle stability) needs real hardware |
-| 7A - Streaming transcription | 🔄 PARALLEL | Backend: Realtime API. Frontend: HUD redesign |
-| 7A.6 - HUD Component Scaffolding | 🧪 UAT | PR #105 - modular components, CSS Modules, exit animations |
-| 7A.7+10 - Mic Button + Pill Content | 🔄 IN PROGRESS | #74 + #77 combined |
+| 7A - Streaming transcription | 🧪 UAT | Backend: #68-#70 ✅ (PR #107 merged). Frontend: PR #105, #108 in UAT |
 | 7B - Post-processing modes | 📋 PLANNING | Option B chosen: Normal/Coding/Markdown/Prompt modes |
 
 ---

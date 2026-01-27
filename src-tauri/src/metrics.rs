@@ -135,6 +135,10 @@ pub struct MetricsCollector {
     total_cycles: u64,
     /// Total successful cycles
     successful_cycles: u64,
+    /// Total audio chunks sent to streaming pipeline
+    streaming_chunks_sent: u64,
+    /// Total audio chunks dropped (channel full or closed)
+    streaming_chunks_dropped: u64,
 }
 
 impl MetricsCollector {
@@ -146,6 +150,8 @@ impl MetricsCollector {
             current_cycle: None,
             total_cycles: 0,
             successful_cycles: 0,
+            streaming_chunks_sent: 0,
+            streaming_chunks_dropped: 0,
         }
     }
 
@@ -161,7 +167,8 @@ impl MetricsCollector {
                 old_cycle.cycle_id,
                 cycle_id
             );
-            let metrics = old_cycle.to_metrics(false, Some("Discarded: new cycle started".to_string()));
+            let metrics =
+                old_cycle.to_metrics(false, Some("Discarded: new cycle started".to_string()));
             self.add_to_history(metrics);
             // Note: total_cycles was already incremented for old cycle
         }
@@ -193,6 +200,38 @@ impl MetricsCollector {
                 file_size_bytes
             );
         }
+    }
+
+    /// Increment the count of audio chunks sent to streaming pipeline
+    pub fn streaming_chunk_sent(&mut self) {
+        self.streaming_chunks_sent += 1;
+    }
+
+    /// Increment the count of audio chunks dropped (channel full or closed)
+    pub fn streaming_chunk_dropped(&mut self) {
+        self.streaming_chunks_dropped += 1;
+        if self.streaming_chunks_dropped % 100 == 1 {
+            log::warn!(
+                "Streaming: dropped chunk (total dropped: {})",
+                self.streaming_chunks_dropped
+            );
+        }
+    }
+
+    /// Get streaming metrics (sent, dropped)
+    pub fn get_streaming_stats(&self) -> (u64, u64) {
+        (self.streaming_chunks_sent, self.streaming_chunks_dropped)
+    }
+
+    /// Reset streaming metrics (call at start of each recording)
+    pub fn reset_streaming_stats(&mut self) {
+        self.streaming_chunks_sent = 0;
+        self.streaming_chunks_dropped = 0;
+    }
+
+    /// Add streaming chunks sent (for bulk update after streaming completes)
+    pub fn add_streaming_chunks_sent(&mut self, count: u64) {
+        self.streaming_chunks_sent += count;
     }
 
     /// Get the current recording duration in milliseconds (if recording just stopped)
@@ -428,10 +467,7 @@ mod tests {
 
         let history = collector.get_history();
         assert!(!history[0].success);
-        assert_eq!(
-            history[0].error_message,
-            Some("Network error".to_string())
-        );
+        assert_eq!(history[0].error_message, Some("Network error".to_string()));
     }
 
     #[test]
@@ -465,6 +501,8 @@ mod tests {
         assert_eq!(history.len(), MAX_CYCLE_HISTORY);
 
         // Newest should be first (highest file size)
-        assert!(history[0].audio_file_size_bytes > history[MAX_CYCLE_HISTORY - 1].audio_file_size_bytes);
+        assert!(
+            history[0].audio_file_size_bytes > history[MAX_CYCLE_HISTORY - 1].audio_file_size_bytes
+        );
     }
 }

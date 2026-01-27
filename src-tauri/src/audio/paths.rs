@@ -87,17 +87,15 @@ pub fn cleanup_old_recordings() -> std::io::Result<usize> {
 
     // Sort by modified time (oldest first) - sort_by_key is more efficient
     // Sprint 6 #24: Log metadata errors instead of silently swallowing them
-    entries.sort_by_key(|entry| {
-        match entry.metadata().and_then(|m| m.modified()) {
-            Ok(time) => Some(time),
-            Err(e) => {
-                log::warn!(
-                    "Failed to get modified time for {:?}: {} - file may be deleted in wrong order",
-                    entry.path(),
-                    e
-                );
-                None
-            }
+    entries.sort_by_key(|entry| match entry.metadata().and_then(|m| m.modified()) {
+        Ok(time) => Some(time),
+        Err(e) => {
+            log::warn!(
+                "Failed to get modified time for {:?}: {} - file may be deleted in wrong order",
+                entry.path(),
+                e
+            );
+            None
         }
     });
 

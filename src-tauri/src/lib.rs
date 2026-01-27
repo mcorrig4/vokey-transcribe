@@ -46,6 +46,8 @@ pub enum UiState {
     Recording {
         #[serde(rename = "elapsedSecs")]
         elapsed_secs: u64,
+        #[serde(rename = "partialText")]
+        partial_text: Option<String>,
     },
     Stopping,
     Transcribing,
@@ -68,8 +70,13 @@ fn state_to_ui(state: &State) -> UiState {
     match state {
         State::Idle => UiState::Idle,
         State::Arming { .. } => UiState::Arming,
-        State::Recording { started_at, .. } => UiState::Recording {
+        State::Recording {
+            started_at,
+            partial_text,
+            ..
+        } => UiState::Recording {
             elapsed_secs: started_at.elapsed().as_secs(),
+            partial_text: partial_text.clone(),
         },
         State::Stopping { .. } => UiState::Stopping,
         State::Transcribing { .. } => UiState::Transcribing,
@@ -353,10 +360,7 @@ async fn set_settings(
             settings.short_clip_vad_enabled
         );
     } else {
-        log::info!(
-            "Settings updated: {}",
-            changes.join(", ")
-        );
+        log::info!("Settings updated: {}", changes.join(", "));
         log::info!(
             "Settings now: min_transcribe_ms={}, vad_check_max_ms={}, vad_ignore_start_ms={}, short_clip_vad_enabled={}",
             settings.min_transcribe_ms,
