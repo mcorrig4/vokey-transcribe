@@ -43,7 +43,45 @@ After completing major work, checking in code, or making significant discoveries
 - **Target:** Linux (Kubuntu/KDE Plasma 6.4/Wayland)
 - **Approach:** Clipboard-only (no auto-paste), evdev for hotkeys
 
+## Git Branching Strategy
 
+This project uses a **GitHub Flow + Develop Branch** hybrid workflow:
+
+```
+master (stable releases)
+  │   • Only receives tested, stable code
+  │   • Tagged releases (v1.0.0, v1.1.0, etc.)
+  │   • PRs from develop require passing CI + manual approval
+  │
+  └── develop (integration/testing)
+        │   • Default branch for all PRs
+        │   • Integration branch for testing multiple features together
+        │   • Merge to master when ready for release
+        │
+        ├── claude/feature-branch-*
+        └── feat/manual-work
+```
+
+### Branch Workflow
+
+1. **Feature Development**
+   - Create feature branches from `develop`
+   - Open PRs targeting `develop` (not master)
+   - Merge to `develop` after review
+
+2. **Integration Testing**
+   - Test combined features on `develop`
+   - Fix integration issues before promoting
+
+3. **Release to Master**
+   - Create PR from `develop` → `master`
+   - Tag releases on master (e.g., `v1.0.0`)
+
+### PR Conventions
+
+- All PRs should target `develop` unless explicitly releasing to master
+- Use conventional commit messages in PR titles
+- Link related issues with "Closes #XX" or "Part of #XX"
 
 ## LXD Container Development
 

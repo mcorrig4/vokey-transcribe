@@ -132,6 +132,22 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 - Logs: `~/.local/share/vokey-transcribe/logs/`
 - Temp audio: `~/.local/share/vokey-transcribe/temp/audio/`
 
+### AD-004: Git Branching Strategy (GitHub Flow + Develop)
+**Date:** 2026-01-27
+**Decision:** Use hybrid GitHub Flow with a `develop` integration branch
+**Branches:**
+- `master` - Stable releases only, tagged versions
+- `develop` - Integration/testing branch, default PR target
+- `claude/*`, `feat/*` - Feature branches
+
+**Rationale:**
+- Enables testing multiple PRs together before release
+- Protects master from untested code
+- Simple enough for small team + AI development
+- Works well with parallel feature development (Sprint 7A + 7B)
+
+**Trade-off:** Extra step to promote `develop` → `master` for releases
+
 ---
 
 ## Known Issues / Risks
@@ -158,6 +174,27 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 ---
 
 ## Session Notes
+
+### Session 2026-01-27 (Git Workflow Setup)
+**Implemented GitHub Flow + Develop branch strategy:**
+
+**Changes Made:**
+- Created `develop` branch from `master` via GitHub API
+- Retargeted all 5 open PRs (#90, #105, #106, #107, #108) to `develop`
+- Updated CLAUDE.md with branching workflow documentation
+- Added AD-004 architecture decision
+
+**Manual Steps Required (admin access):**
+- [ ] Set `develop` as default branch in GitHub Settings
+- [ ] Add branch protection rules for `master` and `develop`
+
+**New Workflow:**
+1. All PRs target `develop` for integration testing
+2. Test combined features on `develop`
+3. Create release PRs from `develop` → `master`
+4. Tag releases on `master`
+
+---
 
 ### Session 2026-01-24 (Sprint 7B Planning)
 **Analyzed options and created Sprint 7B plan:**
