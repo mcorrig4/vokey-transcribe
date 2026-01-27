@@ -780,6 +780,12 @@ VoKey stores no-speech filter settings in a small JSON file under the per-user T
 
 ---
 
+### 9) Use actual characters in JSX, not Unicode escapes
+
+`\u2026` in JSX may render as literal `\2026`. Use `…` directly instead.
+
+---
+
 ## Windows notes (for future reference)
 
 If Windows support is added later, these are the key differences:

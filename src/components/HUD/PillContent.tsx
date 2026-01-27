@@ -33,7 +33,7 @@ function renderContent(state: UiState) {
       return <span className={styles.label}>Ready</span>
 
     case 'arming':
-      return <span className={styles.label}>Starting\u2026</span>
+      return <span className={styles.label}>Starting…</span>
 
     case 'recording':
       return (
@@ -44,13 +44,13 @@ function renderContent(state: UiState) {
       )
 
     case 'stopping':
-      return <span className={styles.label}>Finishing\u2026</span>
+      return <span className={styles.label}>Finishing…</span>
 
     case 'transcribing':
       return (
         <div className={styles.transcribing}>
           <span className={styles.spinner} aria-hidden="true" />
-          <span className={styles.label}>Transcribing\u2026</span>
+          <span className={styles.label}>Transcribing…</span>
         </div>
       )
 

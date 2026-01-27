@@ -33,7 +33,7 @@
         "title": "VoKey Settings",
         "url": "index.html?window=debug",
         "width": 450,
-        "height": 500,
+        "height": 700,
         "resizable": true,
         "decorations": true,
         "alwaysOnTop": false,

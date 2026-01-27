@@ -21,8 +21,8 @@ export function TranscriptPanel({ isExiting = false }: TranscriptPanelProps) {
 
   // Placeholder content based on state
   const placeholderText = state.status === 'transcribing'
-    ? 'Processing audio\u2026'
-    : 'Listening\u2026'
+    ? 'Processing audio…'
+    : 'Listening…'
 
   // Combine panel class with exiting state
   const panelClassName = isExiting
