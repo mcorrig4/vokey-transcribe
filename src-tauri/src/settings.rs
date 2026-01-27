@@ -95,20 +95,13 @@ pub fn save_settings(app: &AppHandle, settings: &AppSettings) -> Result<(), Stri
         if path.exists() {
             if let Err(e) = std::fs::remove_file(&path) {
                 if e.kind() != std::io::ErrorKind::NotFound {
-                    return Err(format!(
-                        "Remove existing settings file {:?}: {}",
-                        path, e
-                    ));
+                    return Err(format!("Remove existing settings file {:?}: {}", path, e));
                 }
             }
         }
     }
 
-    std::fs::rename(&tmp_path, &path).map_err(|e| {
-        format!(
-            "Rename temp settings {:?} to {:?}: {}",
-            tmp_path, path, e
-        )
-    })?;
+    std::fs::rename(&tmp_path, &path)
+        .map_err(|e| format!("Rename temp settings {:?} to {:?}: {}", tmp_path, path, e))?;
     Ok(())
 }

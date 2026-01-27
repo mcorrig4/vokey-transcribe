@@ -167,7 +167,8 @@ impl MetricsCollector {
                 old_cycle.cycle_id,
                 cycle_id
             );
-            let metrics = old_cycle.to_metrics(false, Some("Discarded: new cycle started".to_string()));
+            let metrics =
+                old_cycle.to_metrics(false, Some("Discarded: new cycle started".to_string()));
             self.add_to_history(metrics);
             // Note: total_cycles was already incremented for old cycle
         }
@@ -466,10 +467,7 @@ mod tests {
 
         let history = collector.get_history();
         assert!(!history[0].success);
-        assert_eq!(
-            history[0].error_message,
-            Some("Network error".to_string())
-        );
+        assert_eq!(history[0].error_message, Some("Network error".to_string()));
     }
 
     #[test]
@@ -503,6 +501,8 @@ mod tests {
         assert_eq!(history.len(), MAX_CYCLE_HISTORY);
 
         // Newest should be first (highest file size)
-        assert!(history[0].audio_file_size_bytes > history[MAX_CYCLE_HISTORY - 1].audio_file_size_bytes);
+        assert!(
+            history[0].audio_file_size_bytes > history[MAX_CYCLE_HISTORY - 1].audio_file_size_bytes
+        );
     }
 }

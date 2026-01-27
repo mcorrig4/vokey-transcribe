@@ -447,7 +447,11 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
                 recording_id,
                 wav_path,
             },
-            NoSpeechDetected { id, source, message },
+            NoSpeechDetected {
+                id,
+                source,
+                message,
+            },
         ) if *recording_id == id => (
             NoSpeech {
                 recording_id: *recording_id,

@@ -360,10 +360,7 @@ async fn set_settings(
             settings.short_clip_vad_enabled
         );
     } else {
-        log::info!(
-            "Settings updated: {}",
-            changes.join(", ")
-        );
+        log::info!("Settings updated: {}", changes.join(", "));
         log::info!(
             "Settings now: min_transcribe_ms={}, vad_check_max_ms={}, vad_ignore_start_ms={}, short_clip_vad_enabled={}",
             settings.min_transcribe_ms,
