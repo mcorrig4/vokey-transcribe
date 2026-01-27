@@ -79,7 +79,8 @@ impl TranscriptAggregator {
             self.partial_text.len()
         );
         self.final_text = Some(transcript.to_string());
-        transcript
+        // Return reference to stored data (not input) to satisfy borrow checker
+        self.final_text.as_deref().unwrap()
     }
 
     /// Get the current best available text
