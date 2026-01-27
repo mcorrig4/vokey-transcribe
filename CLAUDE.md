@@ -74,3 +74,4 @@ When asked to review a Pull Request: use gh cli to read code review comments on 
 - never use npm. only use pnpm.
 - always use gh cli to check for issues matching the work we are doing. use gh cli to manage PRs, linked to uses, and post comment on issues updating work statuses, and close issues when PRs get merged. use gh cli to follow software development lifecycle and project management best practices
 - whenever done a task, try notifying the user using ntfy.sh/$NTFY_CHANNEL. be sure to include link(s) to any issues, comments, or PRs that your updating using gh, and briefly describe the completed work.
+- when creating GitHub issues, always assign a priority label (priority:critical/high/medium/low). If priority is unclear, ask the user for clarification via ntfy.sh before creating the issue.
