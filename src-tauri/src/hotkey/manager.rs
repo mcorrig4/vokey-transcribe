@@ -52,7 +52,10 @@ impl DebounceState {
                 }
             }
         } else {
-            log::trace!("Hotkey debounced ({}ms since last trigger)", now_ms.saturating_sub(last));
+            log::trace!(
+                "Hotkey debounced ({}ms since last trigger)",
+                now_ms.saturating_sub(last)
+            );
             false
         }
     }

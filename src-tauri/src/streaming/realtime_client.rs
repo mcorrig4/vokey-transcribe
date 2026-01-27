@@ -50,10 +50,7 @@ const RETRY_BASE_DELAY: Duration = Duration::from_secs(1);
 /// sending audio and receiving transcripts.
 pub struct RealtimeSession {
     /// WebSocket write half for sending messages
-    write: futures_util::stream::SplitSink<
-        WebSocketStream<MaybeTlsStream<TcpStream>>,
-        Message,
-    >,
+    write: futures_util::stream::SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
     /// Channel receiver for incoming messages (processed by background task)
     incoming_rx: mpsc::Receiver<ServerMessage>,
     /// Session ID from OpenAI
@@ -120,19 +117,19 @@ impl RealtimeSession {
                 .map_err(|e| StreamingError::AuthenticationFailed(e.to_string()))?,
         );
 
-        request.headers_mut().insert(
-            "OpenAI-Beta",
-            HeaderValue::from_static("realtime=v1"),
-        );
+        request
+            .headers_mut()
+            .insert("OpenAI-Beta", HeaderValue::from_static("realtime=v1"));
 
         log::info!("Connecting to OpenAI Realtime API...");
 
         // Connect with timeout
-        let (ws_stream, _response) = timeout(CONNECTION_TIMEOUT, connect_async_with_config(
-            request,
-            None,
-            false, // disable_nagle (we want low latency)
-        ))
+        let (ws_stream, _response) = timeout(
+            CONNECTION_TIMEOUT,
+            connect_async_with_config(
+                request, None, false, // disable_nagle (we want low latency)
+            ),
+        )
         .await
         .map_err(|_| StreamingError::ConnectionFailed("Connection timeout".to_string()))?
         .map_err(|e| StreamingError::ConnectionFailed(e.to_string()))?;
@@ -146,25 +143,21 @@ impl RealtimeSession {
         let session_id = timeout(SESSION_TIMEOUT, async {
             while let Some(msg_result) = read.next().await {
                 match msg_result {
-                    Ok(Message::Text(text)) => {
-                        match serde_json::from_str::<ServerMessage>(&text) {
-                            Ok(ServerMessage::SessionCreated { session }) => {
-                                log::info!("Session created: {}", session.id);
-                                return Ok(session.id);
-                            }
-                            Ok(ServerMessage::Error { error }) => {
-                                return Err(StreamingError::AuthenticationFailed(
-                                    error.message,
-                                ));
-                            }
-                            Ok(_) => {
-                                log::debug!("Ignoring message while waiting for session.created");
-                            }
-                            Err(e) => {
-                                log::warn!("Failed to parse message: {}", e);
-                            }
+                    Ok(Message::Text(text)) => match serde_json::from_str::<ServerMessage>(&text) {
+                        Ok(ServerMessage::SessionCreated { session }) => {
+                            log::info!("Session created: {}", session.id);
+                            return Ok(session.id);
                         }
-                    }
+                        Ok(ServerMessage::Error { error }) => {
+                            return Err(StreamingError::AuthenticationFailed(error.message));
+                        }
+                        Ok(_) => {
+                            log::debug!("Ignoring message while waiting for session.created");
+                        }
+                        Err(e) => {
+                            log::warn!("Failed to parse message: {}", e);
+                        }
+                    },
                     Ok(Message::Close(_)) => {
                         return Err(StreamingError::Disconnected(
                             "Connection closed before session created".to_string(),
@@ -188,19 +181,17 @@ impl RealtimeSession {
         let receiver_task = tokio::spawn(async move {
             while let Some(msg_result) = read.next().await {
                 match msg_result {
-                    Ok(Message::Text(text)) => {
-                        match serde_json::from_str::<ServerMessage>(&text) {
-                            Ok(msg) => {
-                                if incoming_tx.send(msg).await.is_err() {
-                                    log::debug!("Receiver channel closed");
-                                    break;
-                                }
-                            }
-                            Err(e) => {
-                                log::warn!("Failed to parse message: {}", e);
+                    Ok(Message::Text(text)) => match serde_json::from_str::<ServerMessage>(&text) {
+                        Ok(msg) => {
+                            if incoming_tx.send(msg).await.is_err() {
+                                log::debug!("Receiver channel closed");
+                                break;
                             }
                         }
-                    }
+                        Err(e) => {
+                            log::warn!("Failed to parse message: {}", e);
+                        }
+                    },
                     Ok(Message::Close(_)) => {
                         log::info!("WebSocket closed by server");
                         break;
@@ -275,8 +266,8 @@ impl RealtimeSession {
 
     /// Send a client message over the WebSocket
     async fn send_message(&mut self, msg: &ClientMessage) -> Result<(), StreamingError> {
-        let json = serde_json::to_string(msg)
-            .map_err(|e| StreamingError::ProtocolError(e.to_string()))?;
+        let json =
+            serde_json::to_string(msg).map_err(|e| StreamingError::ProtocolError(e.to_string()))?;
 
         self.write
             .send(Message::Text(json))
@@ -353,7 +344,9 @@ impl Drop for RealtimeSession {
 
 /// Get the OpenAI API key from environment
 pub fn get_api_key() -> Option<String> {
-    std::env::var("OPENAI_API_KEY").ok().filter(|k| !k.is_empty())
+    std::env::var("OPENAI_API_KEY")
+        .ok()
+        .filter(|k| !k.is_empty())
 }
 
 #[cfg(test)]

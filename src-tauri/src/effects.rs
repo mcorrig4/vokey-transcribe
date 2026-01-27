@@ -756,7 +756,12 @@ impl EffectRunner for StubEffectRunner {
 mod tests {
     use super::*;
 
-    fn vad_stats_for_test(speech_frames: usize, total_frames: usize, rms: f32, peak_abs: i32) -> crate::audio::vad::VadStats {
+    fn vad_stats_for_test(
+        speech_frames: usize,
+        total_frames: usize,
+        rms: f32,
+        peak_abs: i32,
+    ) -> crate::audio::vad::VadStats {
         crate::audio::vad::VadStats {
             total_frames,
             speech_frames,

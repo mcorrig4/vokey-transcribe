@@ -141,10 +141,7 @@ impl ClientMessage {
     /// Create an audio append message from raw PCM16 samples
     pub fn audio_append(samples: &[i16]) -> Self {
         // Convert samples to bytes (little-endian)
-        let bytes: Vec<u8> = samples
-            .iter()
-            .flat_map(|&s| s.to_le_bytes())
-            .collect();
+        let bytes: Vec<u8> = samples.iter().flat_map(|&s| s.to_le_bytes()).collect();
 
         Self::AudioAppend {
             audio: STANDARD.encode(&bytes),
