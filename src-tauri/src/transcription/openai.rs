@@ -13,11 +13,7 @@ use std::time::Duration;
 static HTTP_CLIENT: OnceCell<Client> = OnceCell::new();
 
 fn get_http_client() -> Result<&'static Client, reqwest::Error> {
-    HTTP_CLIENT.get_or_try_init(|| {
-        Client::builder()
-            .timeout(Duration::from_secs(60))
-            .build()
-    })
+    HTTP_CLIENT.get_or_try_init(|| Client::builder().timeout(Duration::from_secs(60)).build())
 }
 
 /// Errors that can occur during transcription
@@ -158,8 +154,7 @@ pub async fn transcribe_audio(wav_path: &Path) -> Result<TranscriptionResult, Tr
         .text("temperature", "0");
 
     // Make API request using shared client
-    let client = get_http_client()
-        .map_err(|e| TranscriptionError::NetworkError(e.to_string()))?;
+    let client = get_http_client().map_err(|e| TranscriptionError::NetworkError(e.to_string()))?;
 
     let response = client
         .post("https://api.openai.com/v1/audio/transcriptions")
