@@ -13,11 +13,21 @@ use std::time::Duration;
 static HTTP_CLIENT: OnceLock<Client> = OnceLock::new();
 
 fn get_http_client() -> Result<&'static Client, reqwest::Error> {
-    HTTP_CLIENT.get_or_try_init(|| {
-        Client::builder()
-            .timeout(Duration::from_secs(60))
-            .build()
-    })
+    // Return existing client if already initialized
+    if let Some(client) = HTTP_CLIENT.get() {
+        return Ok(client);
+    }
+
+    // Try to build the client (can fail on TLS/DNS init)
+    let client = Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()?;
+
+    // Attempt to set it (another thread may have raced us, that's fine)
+    let _ = HTTP_CLIENT.set(client);
+
+    // Return whatever client is now stored (ours or the race winner)
+    Ok(HTTP_CLIENT.get().expect("client was just set"))
 }
 
 /// Errors that can occur during transcription
