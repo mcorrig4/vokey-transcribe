@@ -41,6 +41,11 @@ arboard = "3"
 # Short-clip speech detection (optional)
 webrtc-vad = "0.4"
 
+# Streaming transcription (Sprint 7A)
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
+base64 = "0.22"
+futures-util = "0.3"
+
 # XDG paths
 dirs = "5"
 

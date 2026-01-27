@@ -8,6 +8,9 @@ mod state_machine;
 // Public for integration tests
 pub mod transcription;
 
+// Streaming transcription (Sprint 7A)
+pub mod streaming;
+
 use serde::Serialize;
 use std::sync::Arc;
 use tauri::{

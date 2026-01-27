@@ -5,6 +5,17 @@
     "GH_EMAIL": "claude@claude.do",
     "addintolocalNTFY_CHANNEL": "abc1234"
   },
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(find:*)",
+      "Bash(gh issue list:*)",
+      "Bash(gh issue view:*)",
+      "Bash(gh pr comment:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh release view:*)"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {
