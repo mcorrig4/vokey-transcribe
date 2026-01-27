@@ -18,8 +18,12 @@
 use tokio::sync::mpsc;
 
 use super::audio_buffer::downsample;
+use super::protocol::ServerMessage;
 use super::realtime_client::RealtimeSession;
 use super::StreamingError;
+
+/// Receiver for incoming transcript messages from the WebSocket
+pub type TranscriptReceiver = mpsc::Receiver<ServerMessage>;
 
 /// Configuration for the audio streamer
 #[derive(Debug, Clone)]
@@ -189,12 +193,13 @@ impl AudioStreamer {
 /// * `source_sample_rate` - Sample rate from CPAL (typically 48000)
 ///
 /// # Returns
-/// A connected and configured AudioStreamer ready for streaming
+/// A tuple of (AudioStreamer, TranscriptReceiver) - the streamer for sending audio
+/// and the receiver for processing incoming transcript messages.
 pub async fn connect_streamer(
     api_key: &str,
     rx: mpsc::Receiver<Vec<i16>>,
     source_sample_rate: u32,
-) -> Result<AudioStreamer, StreamingError> {
+) -> Result<(AudioStreamer, TranscriptReceiver), StreamingError> {
     // Validate API key
     if api_key.is_empty() {
         return Err(StreamingError::MissingApiKey);
@@ -202,11 +207,16 @@ pub async fn connect_streamer(
 
     // Connect to OpenAI Realtime API
     log::info!("AudioStreamer: connecting to OpenAI Realtime API...");
-    let session = RealtimeSession::connect(api_key).await?;
+    let mut session = RealtimeSession::connect(api_key).await?;
     log::info!(
         "AudioStreamer: connected (session: {})",
         session.session_id()
     );
+
+    // Take the incoming receiver for concurrent transcript processing
+    let transcript_rx = session.take_incoming_receiver().ok_or_else(|| {
+        StreamingError::ProtocolError("Failed to get transcript receiver".to_string())
+    })?;
 
     // Create streamer with config
     let config = StreamerConfig {
@@ -214,7 +224,7 @@ pub async fn connect_streamer(
         ..Default::default()
     };
 
-    Ok(AudioStreamer::new(session, rx, config))
+    Ok((AudioStreamer::new(session, rx, config), transcript_rx))
 }
 
 #[cfg(test)]

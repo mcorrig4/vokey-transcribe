@@ -26,11 +26,13 @@ mod audio_buffer;
 mod audio_streamer;
 mod protocol;
 mod realtime_client;
+mod transcript_aggregator;
 
 pub use audio_buffer::{downsample, AudioBuffer, AudioChunk};
-pub use audio_streamer::{connect_streamer, AudioStreamer, StreamerConfig};
+pub use audio_streamer::{connect_streamer, AudioStreamer, StreamerConfig, TranscriptReceiver};
 pub use protocol::{ClientMessage, ServerMessage, SessionConfig};
 pub use realtime_client::{get_api_key, RealtimeSession};
+pub use transcript_aggregator::TranscriptAggregator;
 
 /// Errors that can occur during streaming transcription
 #[derive(Debug, Clone)]

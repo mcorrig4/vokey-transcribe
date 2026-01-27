@@ -15,13 +15,91 @@ use crate::audio::{cleanup_old_recordings, AudioRecorder};
 use crate::metrics::MetricsCollector;
 use crate::settings::AppSettings;
 use crate::state_machine::{Effect, Event};
-use crate::streaming::{connect_streamer, get_api_key};
+use crate::streaming::{
+    connect_streamer, get_api_key, ServerMessage, TranscriptAggregator, TranscriptReceiver,
+};
 use crate::transcription;
 
 const OPENAI_NO_SPEECH_PROB_THRESHOLD: f32 = 0.8;
 const OPENAI_NO_SPEECH_MAX_TEXT_LEN: usize = 12;
 const SHORT_CLIP_VAD_MIN_SPEECH_FRAMES: usize = 2;
 const SHORT_CLIP_MAX_CREST_FACTOR: f32 = 15.0;
+
+/// Run the transcript receiver loop
+///
+/// Receives transcript messages from the WebSocket and sends PartialDelta events
+/// to the state machine for UI updates.
+///
+/// # Arguments
+/// * `rx` - Receiver for incoming WebSocket messages
+/// * `event_tx` - Sender for state machine events
+/// * `recording_id` - ID of the current recording (for event correlation)
+async fn run_transcript_receiver(
+    mut rx: TranscriptReceiver,
+    event_tx: mpsc::Sender<Event>,
+    recording_id: Uuid,
+) {
+    let mut aggregator = TranscriptAggregator::new();
+
+    log::info!("Transcript receiver: starting for recording {}", recording_id);
+
+    while let Some(msg) = rx.recv().await {
+        match msg {
+            ServerMessage::TranscriptDelta { delta, .. } => {
+                let new_text = aggregator.process_delta(&delta);
+                log::debug!(
+                    "Transcript delta: '{}' (total: {} chars)",
+                    delta,
+                    new_text.len()
+                );
+
+                // Send PartialDelta event to state machine
+                if let Err(e) = event_tx
+                    .send(Event::PartialDelta {
+                        id: recording_id,
+                        delta,
+                    })
+                    .await
+                {
+                    log::warn!("Failed to send PartialDelta event: {}", e);
+                    break;
+                }
+            }
+            ServerMessage::TranscriptCompleted { transcript, .. } => {
+                aggregator.process_completed(&transcript);
+                log::info!(
+                    "Transcript completed: {} chars (after {} deltas)",
+                    transcript.len(),
+                    aggregator.delta_count()
+                );
+                // Final transcript is handled by batch transcription flow
+                // The streaming transcript is for real-time display only
+            }
+            ServerMessage::Error { error } => {
+                log::warn!(
+                    "Streaming error from API: {} ({})",
+                    error.message,
+                    error.error_type
+                );
+                // Don't break - continue receiving, errors may be recoverable
+            }
+            ServerMessage::SessionCreated { .. } | ServerMessage::SessionUpdated { .. } => {
+                // Session events are handled during connection setup
+                log::debug!("Ignoring session event in transcript receiver");
+            }
+            _ => {
+                // Other message types (InputAudioBufferCommitted, etc.)
+                log::trace!("Ignoring message type in transcript receiver");
+            }
+        }
+    }
+
+    log::info!(
+        "Transcript receiver: ended for recording {} ({} deltas processed)",
+        recording_id,
+        aggregator.delta_count()
+    );
+}
 
 /// Result of evaluating VAD stats for short-clip transcription gating.
 /// Contains both the final decision and intermediate values for logging/debugging.
@@ -182,15 +260,30 @@ impl EffectRunner for AudioEffectRunner {
                             // Create channel for streaming
                             let (stx, rx) = tokio::sync::mpsc::channel::<Vec<i16>>(100);
 
-                            // Clone metrics for streaming task
+                            // Clone for streaming tasks
                             let streaming_metrics = metrics.clone();
+                            let transcript_tx = tx.clone();
+                            let recording_id = id;
 
                             // Spawn streaming task
                             tokio::spawn(async move {
                                 log::info!("Streaming: connecting to OpenAI Realtime API...");
                                 match connect_streamer(&api_key, rx, source_sample_rate).await {
-                                    Ok(streamer) => {
+                                    Ok((streamer, transcript_rx)) => {
                                         log::info!("Streaming: connected, starting audio stream");
+
+                                        // Spawn transcript receiver task
+                                        let transcript_tx_clone = transcript_tx.clone();
+                                        tokio::spawn(async move {
+                                            run_transcript_receiver(
+                                                transcript_rx,
+                                                transcript_tx_clone,
+                                                recording_id,
+                                            )
+                                            .await;
+                                        });
+
+                                        // Run audio streamer (sends audio to WebSocket)
                                         match streamer.run().await {
                                             Ok(chunks_sent) => {
                                                 log::info!(

@@ -55,7 +55,8 @@ pub struct RealtimeSession {
         Message,
     >,
     /// Channel receiver for incoming messages (processed by background task)
-    incoming_rx: mpsc::Receiver<ServerMessage>,
+    /// Wrapped in Option so it can be taken for concurrent processing
+    incoming_rx: Option<mpsc::Receiver<ServerMessage>>,
     /// Session ID from OpenAI
     session_id: String,
     /// Handle to the receiver task (for cleanup on disconnect/drop)
@@ -217,7 +218,7 @@ impl RealtimeSession {
 
         let mut session = Self {
             write,
-            incoming_rx,
+            incoming_rx: Some(incoming_rx),
             session_id,
             receiver_task,
         };
@@ -235,16 +236,16 @@ impl RealtimeSession {
         let config_msg = ClientMessage::session_update();
         self.send_message(&config_msg).await?;
 
+        // Get a mutable reference to the receiver (should always be present during config)
+        let incoming_rx = self.incoming_rx.as_mut().ok_or_else(|| {
+            StreamingError::ProtocolError("Incoming receiver already taken".to_string())
+        })?;
+
         // Wait for session.updated confirmation
         let deadline = tokio::time::Instant::now() + SESSION_TIMEOUT;
 
         while tokio::time::Instant::now() < deadline {
-            match timeout(
-                deadline - tokio::time::Instant::now(),
-                self.incoming_rx.recv(),
-            )
-            .await
-            {
+            match timeout(deadline - tokio::time::Instant::now(), incoming_rx.recv()).await {
                 Ok(Some(ServerMessage::SessionUpdated { session })) => {
                     log::info!("Session configured: {:?}", session.modalities);
                     return Ok(());
@@ -311,16 +312,32 @@ impl RealtimeSession {
 
     /// Try to receive the next message (non-blocking)
     ///
-    /// Returns `None` if no message is available.
+    /// Returns `None` if no message is available or if receiver was taken.
     pub fn try_recv(&mut self) -> Option<ServerMessage> {
-        self.incoming_rx.try_recv().ok()
+        self.incoming_rx.as_mut()?.try_recv().ok()
     }
 
     /// Receive the next message (blocking)
     ///
-    /// Returns `None` if the connection is closed.
+    /// Returns `None` if the connection is closed or if receiver was taken.
     pub async fn recv(&mut self) -> Option<ServerMessage> {
-        self.incoming_rx.recv().await
+        match self.incoming_rx.as_mut() {
+            Some(rx) => rx.recv().await,
+            None => None,
+        }
+    }
+
+    /// Take ownership of the incoming message receiver
+    ///
+    /// This allows concurrent processing of incoming messages (transcripts)
+    /// while the session is being used for sending audio.
+    ///
+    /// After calling this, `recv()` and `try_recv()` will return `None`.
+    ///
+    /// # Returns
+    /// The incoming message receiver, or `None` if already taken.
+    pub fn take_incoming_receiver(&mut self) -> Option<mpsc::Receiver<ServerMessage>> {
+        self.incoming_rx.take()
     }
 
     /// Get the session ID
