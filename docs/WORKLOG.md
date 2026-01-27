@@ -6,12 +6,16 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Current Status
 
-**Phase:** Sprint 7B PLANNING — Post-processing modes
+**Phase:** Sprint 7A Frontend — HUD Component Redesign
 **Target:** Kubuntu with KDE Plasma 6.4 on Wayland
-**Branch:** `feat/no-speech-filters` (WIP)
-**Last Updated:** 2026-01-25
+**Branch:** `claude/sprint-7a-frontend-planning-ngiX4`
+**Last Updated:** 2026-01-27
 
-**Sprint 6 Status:** Phases 1-5 complete, Phase 6 (Stability Testing) needs real hardware
+**Sprint 7A Frontend Status:**
+- #73 HUD Component Scaffolding — 🧪 UAT (PR #105)
+- #74 + #77 Mic Button States + Pill Content — 🔄 IN PROGRESS
+- #75 Waveform Visualization — ⏸️ BLOCKED (needs backend #72)
+- #76 Transcript Panel Fade Scroll — ⏸️ BLOCKED (needs backend #70/#71)
 
 ---
 
@@ -49,7 +53,9 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 | 4 - OpenAI transcription + clipboard | ✅ COMPLETE | OpenAI Whisper API, arboard clipboard, tested on real hardware |
 | 5 - Full flow polish + tray controls | 🧪 UAT | Tray menu with Toggle/Cancel/Open Logs, HUD timer, auto-dismiss |
 | 6 - Hardening + UX polish | ⏸️ PAUSED | Phases 1-5 done; Phase 6 (50-cycle stability) needs real hardware |
-| 7A - Streaming transcription | 🔄 PARALLEL | Separate team implementing Option A (Realtime API) |
+| 7A - Streaming transcription | 🔄 PARALLEL | Backend: Realtime API. Frontend: HUD redesign |
+| 7A.6 - HUD Component Scaffolding | 🧪 UAT | PR #105 - modular components, CSS Modules, exit animations |
+| 7A.7+10 - Mic Button + Pill Content | 🔄 IN PROGRESS | #74 + #77 combined |
 | 7B - Post-processing modes | 📋 PLANNING | Option B chosen: Normal/Coding/Markdown/Prompt modes |
 
 ---
