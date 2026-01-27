@@ -824,7 +824,10 @@ mod tests {
         // Should stay unchanged
         assert!(matches!(
             next,
-            State::Recording { partial_text: None, .. }
+            State::Recording {
+                partial_text: None,
+                ..
+            }
         ));
         assert!(effects.is_empty());
     }

@@ -41,7 +41,10 @@ async fn run_transcript_receiver(
 ) {
     let mut aggregator = TranscriptAggregator::new();
 
-    log::info!("Transcript receiver: starting for recording {}", recording_id);
+    log::info!(
+        "Transcript receiver: starting for recording {}",
+        recording_id
+    );
 
     while let Some(msg) = rx.recv().await {
         match msg {
@@ -238,7 +241,8 @@ impl EffectRunner for AudioEffectRunner {
                                     let mut m = metrics.lock().await;
                                     m.cycle_failed(err_msg.clone());
                                     drop(m);
-                                    let _ = tx.send(Event::AudioStartFail { id, err: err_msg }).await;
+                                    let _ =
+                                        tx.send(Event::AudioStartFail { id, err: err_msg }).await;
                                     return;
                                 }
                             }
