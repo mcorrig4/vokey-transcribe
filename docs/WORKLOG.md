@@ -6,16 +6,26 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Current Status
 
-**Phase:** Sprint 7B PLANNING — Post-processing modes
+**Phase:** Sprint 7A IN PROGRESS — Real-time Streaming Transcription
 **Target:** Kubuntu with KDE Plasma 6.4 on Wayland
-**Branch:** `feat/no-speech-filters` (WIP)
-**Last Updated:** 2026-01-25
+**Branch:** `claude/issue-70-transcript-aggregation-6Uuz9`
+**Last Updated:** 2026-01-27
 
-**Sprint 6 Status:** Phases 1-5 complete, Phase 6 (Stability Testing) needs real hardware
+**Sprint 7A Status:** Issues #68, #69, #70 complete; PR #107 awaiting merge
 
 ---
 
 ## Completed Work
+
+### 2026-01-27: Sprint 7A - Transcript Reception & Aggregation (#70)
+- [x] Created TranscriptAggregator for delta text accumulation
+- [x] Added partial_text to Recording state and UiState
+- [x] Implemented PartialDelta event handler in state machine
+- [x] Modified RealtimeSession to expose incoming receiver for concurrent processing
+- [x] Updated connect_streamer to return (AudioStreamer, TranscriptReceiver) tuple
+- [x] Added run_transcript_receiver task in effects.rs
+- [x] Fixed HIGH priority bug: AudioStartFail event now sent on recorder init failure
+- [x] PR #107 created and reviewed
 
 ### 2026-01-25: No-speech filtering + settings (anti-hallucination)
 - [x] Added `NoSpeech` state so silence/very short clips don’t overwrite clipboard
@@ -49,7 +59,7 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 | 4 - OpenAI transcription + clipboard | ✅ COMPLETE | OpenAI Whisper API, arboard clipboard, tested on real hardware |
 | 5 - Full flow polish + tray controls | 🧪 UAT | Tray menu with Toggle/Cancel/Open Logs, HUD timer, auto-dismiss |
 | 6 - Hardening + UX polish | ⏸️ PAUSED | Phases 1-5 done; Phase 6 (50-cycle stability) needs real hardware |
-| 7A - Streaming transcription | 🔄 PARALLEL | Separate team implementing Option A (Realtime API) |
+| 7A - Streaming transcription | 🔄 IN PROGRESS | #68 WebSocket ✅, #69 Audio Pipeline ✅, #70 Transcript Aggregation ✅ |
 | 7B - Post-processing modes | 📋 PLANNING | Option B chosen: Normal/Coding/Markdown/Prompt modes |
 
 ---

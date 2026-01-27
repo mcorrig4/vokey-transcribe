@@ -232,7 +232,14 @@ impl EffectRunner for AudioEffectRunner {
                                 }
                                 Err(e) => {
                                     log::error!("Failed to initialize audio recorder: {}", e);
-                                    return; // Can't proceed without recorder
+                                    // Send AudioStartFail event so state machine can transition properly
+                                    let err_msg = e.to_string();
+                                    drop(recorder_guard); // Release lock before async operations
+                                    let mut m = metrics.lock().await;
+                                    m.cycle_failed(err_msg.clone());
+                                    drop(m);
+                                    let _ = tx.send(Event::AudioStartFail { id, err: err_msg }).await;
+                                    return;
                                 }
                             }
                         }
