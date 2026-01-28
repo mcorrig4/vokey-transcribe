@@ -9,6 +9,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      // Allow importing tauri-controls CSS which isn't exported in package.json
+      'tauri-controls/style.css': path.resolve(__dirname, './node_modules/tauri-controls/dist/style.css'),
     },
   },
 
