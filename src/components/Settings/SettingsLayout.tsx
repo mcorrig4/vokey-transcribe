@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { TitleBar, Separator } from '@/components/ui'
 import { UsagePage } from './UsagePage'
 import { SettingsFormPage } from './SettingsFormPage'
+import { AppearancePage } from './AppearancePage'
 import { AdvancedPage } from './AdvancedPage'
 import { AboutPage } from './AboutPage'
 import { cn } from '@/lib/utils'
 import {
   BarChart3,
   Settings,
+  Palette,
   Wrench,
   Info,
   ChevronLeft,
@@ -18,6 +20,7 @@ import {
 const navItems = [
   { id: 'usage', label: 'Usage', icon: BarChart3 },
   { id: 'settings', label: 'Settings', icon: Settings },
+  { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'advanced', label: 'Advanced', icon: Wrench },
   { id: 'about', label: 'About', icon: Info },
 ] as const
@@ -124,6 +127,8 @@ function SettingsContent({ page }: { page: PageId }): React.ReactNode {
       return <UsagePage />
     case 'settings':
       return <SettingsFormPage />
+    case 'appearance':
+      return <AppearancePage />
     case 'advanced':
       return <AdvancedPage />
     case 'about':
