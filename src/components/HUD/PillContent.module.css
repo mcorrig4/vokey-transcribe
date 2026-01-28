@@ -7,6 +7,8 @@
   padding: 0 8px;
   color: white;
   font-family: system-ui, -apple-system, sans-serif;
+  pointer-events: none; /* Allow click-through for dragging */
+  user-select: none; /* Prevent text selection */
 }
 
 .label {
