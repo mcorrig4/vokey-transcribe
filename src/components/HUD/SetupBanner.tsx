@@ -25,8 +25,8 @@ export function SetupBanner() {
       try {
         const result = await invoke<KwinSetupNeeded>('check_kwin_setup_needed')
 
-        // Show banner if: rules are applicable, setup is needed, and user hasn't been prompted
-        if (result.rules_applicable && result.needs_setup && !result.already_prompted) {
+        // Show banner if: setup is needed and user hasn't been prompted
+        if (result.needs_setup && !result.already_prompted) {
           setBannerState('prompt')
         }
       } catch (err) {
