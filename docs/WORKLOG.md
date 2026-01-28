@@ -20,8 +20,12 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
   - #117 Admin API Key Storage ✅ (PR #144)
   - #118 OpenAI Usage API Integration ✅ (PR #144)
   - #119 Usage Metrics UI ✅ (PR #144)
-- Phase 2: Settings Migration (#120-#123) ⬜ NEXT
-- Phase 3: Architecture Planning (#124) ⬜
+- Phase 2: Settings Migration (#120-#123) ✅ COMPLETE
+  - #120 Migrate Settings to SettingsFormPage ✅
+  - #121 Create AdvancedPage with debug tools ✅
+  - #122 Create AboutPage with app info ✅
+  - #123 Remove legacy Debug.tsx ✅ (1000+ lines removed)
+- Phase 3: Architecture Planning (#124) ⬜ NEXT
 
 **Sprint 7A Status (Parallel):**
 - Backend: #68 WebSocket ✅, #69 Audio Pipeline ✅, #70 Transcript Aggregation ✅ (PR #107 merged)
