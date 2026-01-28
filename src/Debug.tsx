@@ -30,6 +30,7 @@ type AppSettings = {
   short_clip_vad_enabled: boolean
   vad_check_max_ms: number
   vad_ignore_start_ms: number
+  streaming_enabled: boolean
 }
 
 // KWin status type matching Rust backend

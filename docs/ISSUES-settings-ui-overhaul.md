@@ -162,9 +162,10 @@ pnpm dlx shadcn@latest init
 - Create data structures:
   ```rust
   struct UsageMetrics {
-      cost_30d: f64,
-      cost_7d: f64,
-      cost_24h: f64,
+      // Store costs in cents (u64) to avoid floating-point precision issues
+      cost_30d_cents: u64,
+      cost_7d_cents: u64,
+      cost_24h_cents: u64,
       seconds_30d: u64,
       seconds_7d: u64,
       seconds_24h: u64,
@@ -174,6 +175,7 @@ pnpm dlx shadcn@latest init
       last_updated: DateTime<Utc>,
   }
   ```
+  **Note:** Use integer cents for currency to avoid floating-point precision issues. Format to dollars on display (e.g., `cost_30d_cents / 100.0`).
 - Implement Tauri commands:
   - `fetch_usage_metrics() -> Result<UsageMetrics, String>`
   - `get_cached_usage_metrics() -> Option<UsageMetrics>`
@@ -193,8 +195,8 @@ pnpm dlx shadcn@latest init
 curl "https://api.openai.com/v1/organization/costs?start_time=UNIX&end_time=UNIX" \
   -H "Authorization: Bearer $ADMIN_KEY"
 
-# Audio transcriptions usage
-curl "https://api.openai.com/v1/organization/usage/audio_transcriptions?start_time=UNIX" \
+# Audio transcriptions usage (include end_time for specific periods)
+curl "https://api.openai.com/v1/organization/usage/audio_transcriptions?start_time=UNIX&end_time=UNIX" \
   -H "Authorization: Bearer $ADMIN_KEY"
 ```
 
@@ -213,7 +215,9 @@ curl "https://api.openai.com/v1/organization/usage/audio_transcriptions?start_ti
   - Cost row with currency formatting
   - Audio seconds row with duration formatting
   - Requests row
-  - Estimated words row (calculated: seconds * 2.5 words/sec)
+  - Estimated words row (calculated: seconds * `ESTIMATED_WORDS_PER_SECOND`)
+
+  **Note:** Define `ESTIMATED_WORDS_PER_SECOND = 2.5` as a named constant for readability and easy adjustment.
 - Add budget configuration section:
   - Monthly budget input (stored in settings)
   - Budget reset date picker

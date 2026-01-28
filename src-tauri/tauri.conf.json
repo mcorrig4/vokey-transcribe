@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "VoKey Transcribe",
-  "version": "0.1.0",
+  "version": "0.2.0-dev",
   "identifier": "com.vokey.transcribe",
   "build": {
     "frontendDist": "../dist",
@@ -46,7 +46,7 @@
       "iconAsTemplate": false
     },
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.openai.com wss://api.openai.com; img-src 'self' data:"
     }
   },
   "bundle": {
