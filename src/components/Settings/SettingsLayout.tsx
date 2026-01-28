@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { TitleBar, Separator } from '@/components/ui'
-import { AdminKeyInput } from './AdminKeyInput'
 import { UsagePage } from './UsagePage'
+import { SettingsFormPage } from './SettingsFormPage'
+import { AdvancedPage } from './AdvancedPage'
+import { AboutPage } from './AboutPage'
 import { cn } from '@/lib/utils'
 import {
   BarChart3,
@@ -121,66 +123,12 @@ function SettingsContent({ page }: { page: PageId }): React.ReactNode {
     case 'usage':
       return <UsagePage />
     case 'settings':
-      return <SettingsPage />
+      return <SettingsFormPage />
     case 'advanced':
       return <AdvancedPage />
     case 'about':
       return <AboutPage />
   }
-}
-
-function SettingsPage() {
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold">Settings</h2>
-        <p className="text-muted-foreground">
-          Configure VoKey preferences and API credentials.
-        </p>
-      </div>
-      <AdminKeyInput />
-    </div>
-  )
-}
-
-function AdvancedPage() {
-  return (
-    <div className="space-y-4">
-      <h2 className="text-2xl font-bold">Advanced</h2>
-      <p className="text-muted-foreground">
-        Advanced configuration and debugging options.
-      </p>
-      <div className="text-sm text-muted-foreground italic">
-        Advanced options coming soon...
-      </div>
-    </div>
-  )
-}
-
-function AboutPage() {
-  return (
-    <div className="space-y-4">
-      <h2 className="text-2xl font-bold">About VoKey</h2>
-      <p className="text-muted-foreground">
-        Voice-to-text transcription via global hotkey.
-      </p>
-      <div className="space-y-2 text-sm">
-        <p><strong>Version:</strong> 0.2.0-dev</p>
-        <p><strong>License:</strong> AGPL-3.0-only</p>
-        <p>
-          <strong>Repository:</strong>{' '}
-          <a
-            href="https://github.com/mcorrig4/vokey-transcribe"
-            className="text-primary hover:underline"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            github.com/mcorrig4/vokey-transcribe
-          </a>
-        </p>
-      </div>
-    </div>
-  )
 }
 
 export default SettingsLayout

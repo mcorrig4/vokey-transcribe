@@ -1,7 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
-import Debug from './Debug'
 import Settings from './Settings'
 import './styles/index.css'
 import './styles/globals.css'
@@ -13,9 +12,8 @@ const windowType = params.get('window')
 function getRootComponent() {
   switch (windowType) {
     case 'settings':
+    case 'debug': // Legacy debug window now uses Settings UI
       return Settings
-    case 'debug':
-      return Debug
     default:
       return App
   }
