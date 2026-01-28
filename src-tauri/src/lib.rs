@@ -1,3 +1,4 @@
+mod admin_key;
 mod audio;
 mod effects;
 mod hotkey;
@@ -374,6 +375,38 @@ async fn set_settings(
 }
 
 // ============================================================================
+// Admin API Key Commands (Settings UI Overhaul)
+// ============================================================================
+
+/// Admin key status returned to frontend
+#[derive(Clone, Serialize)]
+pub struct AdminKeyStatus {
+    pub configured: bool,
+    pub masked_key: Option<String>,
+}
+
+/// Get admin API key status (configured, masked display)
+#[tauri::command]
+fn get_admin_key_status() -> AdminKeyStatus {
+    AdminKeyStatus {
+        configured: admin_key::is_admin_key_configured(),
+        masked_key: admin_key::get_masked_admin_key(),
+    }
+}
+
+/// Set admin API key (pass null/empty to delete)
+#[tauri::command]
+fn set_admin_api_key(key: Option<String>) -> Result<(), String> {
+    admin_key::set_admin_api_key(key.as_deref())
+}
+
+/// Validate an admin API key has usage read permissions
+#[tauri::command]
+async fn validate_admin_api_key(key: String) -> Result<bool, String> {
+    admin_key::validate_admin_api_key(&key).await
+}
+
+// ============================================================================
 // Metrics Commands (Sprint 6)
 // ============================================================================
 
@@ -699,6 +732,9 @@ pub fn run() {
             get_transcription_status,
             get_settings,
             set_settings,
+            get_admin_key_status,
+            set_admin_api_key,
+            validate_admin_api_key,
             get_metrics_summary,
             get_metrics_history,
             get_error_history,

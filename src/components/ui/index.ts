@@ -8,5 +8,6 @@ export {
   CardDescription,
   CardContent,
 } from './card'
+export { Input, type InputProps } from './input'
 export { Separator } from './separator'
 export { TitleBar, WindowControls } from './titlebar'

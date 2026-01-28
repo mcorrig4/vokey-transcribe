@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { TitleBar, Separator } from '@/components/ui'
+import { AdminKeyInput } from './AdminKeyInput'
 import { cn } from '@/lib/utils'
 import {
   BarChart3,
@@ -145,14 +146,14 @@ function UsagePage() {
 
 function SettingsPage() {
   return (
-    <div className="space-y-4">
-      <h2 className="text-2xl font-bold">Settings</h2>
-      <p className="text-muted-foreground">
-        Configure VoKey preferences and behavior.
-      </p>
-      <div className="text-sm text-muted-foreground italic">
-        Settings configuration coming soon...
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold">Settings</h2>
+        <p className="text-muted-foreground">
+          Configure VoKey preferences and API credentials.
+        </p>
       </div>
+      <AdminKeyInput />
     </div>
   )
 }
