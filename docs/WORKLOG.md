@@ -15,8 +15,8 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 - Epic: #114, PR: #137 (draft → develop)
 - Milestone: "Settings UI Overhaul"
 - Phase 1: Foundation + Usage Page (#115-#119)
-  - #115 Setup Tailwind + shadcn/ui 🔄 IN PROGRESS
-  - #116 tauri-controls + Layout ⬜
+  - #115 Setup Tailwind + shadcn/ui ✅ COMPLETE (PR #141 merged)
+  - #116 tauri-controls + Layout 🔄 IN PROGRESS (PR #144)
   - #117 Admin API Key Storage ⬜
   - #118 OpenAI Usage API Integration ⬜
   - #119 Usage Metrics UI ⬜
@@ -199,6 +199,44 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 ---
 
 ## Session Notes
+
+### Session 2026-01-28 (Issue #116 - tauri-controls + Settings Layout)
+**Continued Settings UI Overhaul:**
+
+**Issue #116 Implementation (PR #144):**
+
+**Completed:**
+- Merged PR #141 (Tailwind + shadcn/ui foundation) into feat/ui-overhaul
+- Added tauri-controls package for native window controls
+- Configured Settings window with custom titlebar (decorations: false)
+- Created TitleBar component with WindowTitlebar + GNOME-style controls
+- Created SettingsLayout with collapsible sidebar navigation
+- Added placeholder pages: Usage, Settings, Advanced, About
+
+**Files created:**
+- `src/Settings.tsx` - Settings window entry point
+- `src/components/Settings/SettingsLayout.tsx` - Layout with sidebar + content
+- `src/components/Settings/index.ts` - Component exports
+- `src/components/ui/titlebar.tsx` - TitleBar component
+
+**Files modified:**
+- `src-tauri/tauri.conf.json` - Added settings window config
+- `src/main.tsx` - Added settings window routing
+- `src/components/ui/index.ts` - Export TitleBar
+- `vite.config.ts` - Added tauri-controls CSS alias
+- `package.json` - Added tauri-controls dependency
+
+**Notes:**
+- tauri-controls has peer dependency warnings for React 18/19 compatibility
+- Vite alias configured to work around CSS export issue in tauri-controls
+- Build verified: 285KB JS, 40KB CSS
+
+**Still needed for Issue #116:**
+- Wayland compatibility testing
+- Window drag region verification
+- Minimize/maximize/close button testing
+
+---
 
 ### Session 2026-01-28 (Settings UI Overhaul - Phase 1 Start)
 **Started Settings UI Overhaul Epic (#114):**
