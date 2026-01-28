@@ -25,7 +25,8 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
   - #121 Create AdvancedPage with debug tools ✅
   - #122 Create AboutPage with app info ✅
   - #123 Remove legacy Debug.tsx ✅ (1000+ lines removed)
-- Phase 3: Architecture Planning (#124) ⬜ NEXT
+- Phase 3: Architecture Planning (#124) ✅ COMPLETE
+  - #124 Settings Architecture v2 document ✅
 
 **Sprint 7A Status (Parallel):**
 - Backend: #68 WebSocket ✅, #69 Audio Pipeline ✅, #70 Transcript Aggregation ✅ (PR #107 merged)
@@ -34,6 +35,27 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 ---
 
 ## Completed Work
+
+### 2026-01-28: Settings UI Overhaul Epic - Phases 2 & 3
+
+**Phase 2 - Settings Migration (Issues #120-#123):**
+- [x] Created SettingsFormPage with form controls, save/reset, state management
+- [x] Created AdvancedPage with debug tools, system status, KWin rule management
+- [x] Created AboutPage with app info, features, external links
+- [x] Removed legacy Debug.tsx (623 lines) and debug.css (416 lines)
+- [x] Added Switch and Label shadcn/ui components
+
+**Phase 3 - Architecture Planning (Issue #124):**
+- [x] Created SETTINGS-ARCHITECTURE-V2.md planning document
+- [x] Designed modular settings structure (Audio, API, Appearance, Hotkeys, Advanced)
+- [x] Proposed versioned schema with migration strategy
+- [x] Documented TypeScript and Rust types
+- [x] Identified 7 implementation issues for next sprint
+
+**Key Metrics:**
+- Lines removed: 1,039 (Debug.tsx + debug.css)
+- New components: 5 (SettingsFormPage, AdvancedPage, AboutPage, Switch, Label)
+- Issues closed: 6 (#120, #121, #122, #123, #124, #132)
 
 ### 2026-01-27: Sprint 7A - Transcript Reception & Aggregation (#70)
 - [x] Created TranscriptAggregator for delta text accumulation
