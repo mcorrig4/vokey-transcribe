@@ -86,6 +86,8 @@ impl WaveformBuffer {
         }
 
         let samples_per_bar = (self.samples.len() / NUM_BARS).max(1);
+        // Pre-calculate normalizer to avoid repeated division in inner loop
+        let normalizer = 1.0 / i16::MAX as f64;
 
         for (bar_idx, bar) in bars.iter_mut().enumerate() {
             let start = bar_idx * samples_per_bar;
@@ -105,7 +107,7 @@ impl WaveformBuffer {
             let sum_squares: f64 = (start..end)
                 .map(|i| {
                     let sample = self.samples[i];
-                    let normalized = sample as f64 / i16::MAX as f64;
+                    let normalized = sample as f64 * normalizer;
                     normalized * normalized
                 })
                 .sum();
@@ -258,7 +260,6 @@ mod tests {
 
         // Buffer should be capped at capacity
         assert_eq!(buffer.len(), BUFFER_CAPACITY);
-        assert!(buffer.len() <= BUFFER_CAPACITY);
     }
 
     #[test]
