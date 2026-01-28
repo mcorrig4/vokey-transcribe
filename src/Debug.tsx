@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { relaunch } from '@tauri-apps/plugin-process'
+import { relaunch, exit } from '@tauri-apps/plugin-process'
 import { listen } from '@tauri-apps/api/event'
 import { UiState } from './types'
 import './styles/debug.css'
@@ -337,8 +337,14 @@ function Debug() {
   }
 
   const restartApp = async () => {
-    pushLog('Restarting app...')
-    await relaunch()
+    const isDev = window.location.hostname === 'localhost'
+    if (isDev) {
+      pushLog('Dev mode: Closing app - restart with "pnpm tauri dev"')
+      await exit(0)
+    } else {
+      pushLog('Restarting app...')
+      await relaunch()
+    }
   }
 
   return (
@@ -444,7 +450,7 @@ function Debug() {
               </button>
               {kwinNeedsRestart && (
                 <button onClick={restartApp} className="kwin-restart-btn">
-                  Restart App
+                  {window.location.hostname === 'localhost' ? 'Quit App' : 'Restart App'}
                 </button>
               )}
               {kwinError && <span className="kwin-error">{kwinError}</span>}
