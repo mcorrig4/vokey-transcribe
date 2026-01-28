@@ -647,7 +647,9 @@ pub fn run() {
 
             // Create effect runner (real audio capture as of Sprint 3)
             // Pass metrics collector for tracking (Sprint 6)
-            let effect_runner = AudioEffectRunner::new(metrics_collector, settings_handle);
+            // Pass app handle for waveform events (Sprint 7)
+            let effect_runner =
+                AudioEffectRunner::new(app.handle().clone(), metrics_collector, settings_handle);
 
             // Spawn the state loop
             let app_handle = app.handle().clone();
