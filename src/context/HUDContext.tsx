@@ -1,10 +1,11 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
 import { listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
-import type { UiState } from '../types'
+import type { UiState, ProcessingMode } from '../types'
 
 interface HUDContextValue {
   state: UiState
+  processingMode: ProcessingMode
   openSettings: () => Promise<void>
 }
 
@@ -12,10 +13,29 @@ const HUDContext = createContext<HUDContextValue | null>(null)
 
 export function HUDProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<UiState>({ status: 'idle' })
+  const [processingMode, setProcessingMode] = useState<ProcessingMode>('normal')
+
+  // Fetch initial processing mode on mount
+  useEffect(() => {
+    invoke<ProcessingMode>('get_processing_mode')
+      .then(setProcessingMode)
+      .catch((e) => console.error('Failed to get processing mode:', e))
+  }, [])
 
   useEffect(() => {
     const unlisten = listen<UiState>('state-update', (event) => {
       setState(event.payload)
+    })
+
+    return () => {
+      unlisten.then((fn) => fn())
+    }
+  }, [])
+
+  // Listen for mode-changed events from backend
+  useEffect(() => {
+    const unlisten = listen<ProcessingMode>('mode-changed', (event) => {
+      setProcessingMode(event.payload)
     })
 
     return () => {
@@ -32,7 +52,7 @@ export function HUDProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <HUDContext.Provider value={{ state, openSettings }}>
+    <HUDContext.Provider value={{ state, processingMode, openSettings }}>
       {children}
     </HUDContext.Provider>
   )

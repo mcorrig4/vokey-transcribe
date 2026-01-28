@@ -1,3 +1,4 @@
+use crate::processing::ProcessingMode;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tauri::AppHandle;
@@ -32,6 +33,10 @@ pub struct AppSettings {
 
     /// Unix timestamp (seconds) when KWin rules were installed via the app.
     pub kwin_rules_installed_at: Option<u64>,
+
+    /// Post-processing mode for transcriptions.
+    /// Controls how text is transformed before clipboard copy.
+    pub processing_mode: ProcessingMode,
 }
 
 impl Default for AppSettings {
@@ -44,6 +49,7 @@ impl Default for AppSettings {
             streaming_enabled: true, // On by default
             kwin_setup_prompted: false,
             kwin_rules_installed_at: None,
+            processing_mode: ProcessingMode::default(),
         }
     }
 }

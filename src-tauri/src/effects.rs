@@ -15,6 +15,7 @@ use crate::audio::{
     cleanup_old_recordings, create_waveform_channel, run_waveform_emitter, AudioRecorder,
 };
 use crate::metrics::MetricsCollector;
+use crate::processing::{pipeline, ProcessingMode};
 use crate::settings::AppSettings;
 use crate::state_machine::{Effect, Event};
 use crate::streaming::{
@@ -684,6 +685,7 @@ impl EffectRunner for AudioEffectRunner {
 
             Effect::StartTranscription { id, wav_path } => {
                 let metrics = self.metrics.clone();
+                let settings = self.settings.clone();
 
                 tokio::spawn(async move {
                     log::info!("Starting transcription for {:?}", wav_path);
@@ -698,22 +700,22 @@ impl EffectRunner for AudioEffectRunner {
 
                     match transcription::transcribe_audio(&wav_path).await {
                         Ok(result) => {
-                            let text = result.text;
-                            let duration = start_time.elapsed();
+                            let raw_text = result.text;
+                            let transcribe_duration = start_time.elapsed();
                             log::info!(
                                 "Transcription successful: {} chars in {:?} for {:?}",
-                                text.len(),
-                                duration,
+                                raw_text.len(),
+                                transcribe_duration,
                                 wav_path
                             );
 
                             // Track transcription completed in metrics
                             {
                                 let mut m = metrics.lock().await;
-                                m.transcription_completed(text.len());
+                                m.transcription_completed(raw_text.len());
                             }
 
-                            let trimmed = text.trim();
+                            let trimmed = raw_text.trim();
                             let openai_no_speech_prob = result.openai_no_speech_prob;
                             if trimmed.is_empty()
                                 || openai_no_speech_prob.is_some_and(|p| {
@@ -740,7 +742,49 @@ impl EffectRunner for AudioEffectRunner {
                                 return;
                             }
 
-                            let _ = tx.send(Event::TranscribeOk { id, text }).await;
+                            // Apply post-processing based on current mode (Sprint 7B)
+                            let (processing_mode, api_key) = {
+                                let s = settings.lock().await;
+                                (s.processing_mode, get_api_key())
+                            };
+
+                            let final_text = if processing_mode == ProcessingMode::Normal {
+                                // Fast path: no processing needed
+                                raw_text
+                            } else {
+                                // Run through processing pipeline
+                                let pipeline_result = pipeline::process(
+                                    &raw_text,
+                                    processing_mode,
+                                    api_key.as_deref(),
+                                )
+                                .await;
+
+                                if pipeline_result.used_fallback {
+                                    log::warn!(
+                                        "Processing mode {:?} fell back to original text: {:?}",
+                                        processing_mode,
+                                        pipeline_result.fallback_reason
+                                    );
+                                } else {
+                                    log::info!(
+                                        "Processing mode {:?} completed in {}ms: {} -> {} chars",
+                                        processing_mode,
+                                        pipeline_result.duration_ms,
+                                        raw_text.len(),
+                                        pipeline_result.text.len()
+                                    );
+                                }
+
+                                pipeline_result.text
+                            };
+
+                            let _ = tx
+                                .send(Event::TranscribeOk {
+                                    id,
+                                    text: final_text,
+                                })
+                                .await;
                         }
                         Err(e) => {
                             log::error!("Transcription failed: {}", e);
