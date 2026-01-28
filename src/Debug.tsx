@@ -228,7 +228,7 @@ function Debug() {
   const changeProcessingMode = async (mode: ProcessingMode) => {
     setProcessingModeLoading(true)
     try {
-      await invoke('set_processing_mode_value', { mode })
+      await invoke('set_processing_mode', { mode })
       setProcessingMode(mode)
       pushLog(`Processing mode changed to ${mode}`)
     } catch (e) {

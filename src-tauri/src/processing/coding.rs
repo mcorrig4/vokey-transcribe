@@ -6,7 +6,7 @@
 //! - Filtering invalid characters
 
 use regex::Regex;
-use std::sync::LazyLock;
+use tracing::warn;
 
 /// Filler words to remove from transcriptions.
 /// These are common verbal fillers that don't add meaning.
@@ -28,9 +28,6 @@ static FILLER_WORDS: &[&str] = &[
     "just",
     "really",
 ];
-
-/// Compiled regex for word boundary matching.
-static WORD_BOUNDARY_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b(\w+)\b").unwrap());
 
 /// Process text for coding mode.
 ///
@@ -87,7 +84,10 @@ fn remove_word(text: &str, word: &str) -> String {
     let pattern = format!(r"(?i)\b{}\b[,\s]*", regex::escape(word));
     match Regex::new(&pattern) {
         Ok(re) => re.replace_all(text, " ").to_string(),
-        Err(_) => text.to_string(),
+        Err(e) => {
+            warn!(word = %word, error = %e, "Failed to compile regex for filler word removal");
+            text.to_string()
+        }
     }
 }
 

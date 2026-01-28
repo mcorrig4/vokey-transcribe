@@ -396,20 +396,9 @@ async fn get_processing_mode(
     Ok(settings.processing_mode)
 }
 
-/// Set the processing mode
-#[tauri::command]
-async fn set_processing_mode(
-    app: AppHandle,
-    handle: tauri::State<'_, SettingsHandle>,
-) -> Result<(), String> {
-    // This command is called with the mode in the request body
-    // But we need to accept it as a parameter
-    Err("Use set_processing_mode_value instead".to_string())
-}
-
 /// Set the processing mode to a specific value
 #[tauri::command]
-async fn set_processing_mode_value(
+async fn set_processing_mode(
     app: AppHandle,
     handle: tauri::State<'_, SettingsHandle>,
     mode: processing::ProcessingMode,
@@ -843,7 +832,6 @@ pub fn run() {
             set_settings,
             get_processing_mode,
             set_processing_mode,
-            set_processing_mode_value,
             get_metrics_summary,
             get_metrics_history,
             get_error_history,
