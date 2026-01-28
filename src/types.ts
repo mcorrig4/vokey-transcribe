@@ -6,7 +6,7 @@
 export type UiState =
   | { status: 'idle' }
   | { status: 'arming' }
-  | { status: 'recording'; elapsedSecs: number }
+  | { status: 'recording'; elapsedSecs: number; partialText: string | null }
   | { status: 'stopping' }
   | { status: 'transcribing' }
   | { status: 'noSpeech'; source: string; message: string }
