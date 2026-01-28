@@ -438,24 +438,15 @@ async fn open_recordings_folder() -> Result<(), String> {
     Ok(())
 }
 
-/// Internal implementation for opening the settings window with Wayland workaround
+/// Internal implementation for opening the settings window
 ///
-/// This handles the full window open sequence including a workaround for the
-/// TAO CSD bug (tao#1046, tauri#12685) where window control buttons don't work
-/// on KDE Plasma/Wayland until a maximize/unmaximize cycle occurs.
+/// Note: On Linux/KDE, we remove the GTK custom titlebar at startup (in setup)
+/// so KDE provides native window decorations. This avoids the maximize/unmaximize
+/// hack previously needed for tao#1046.
 async fn open_settings_window_impl(app: &AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("debug") {
         window.show().map_err(|e| e.to_string())?;
         window.set_focus().map_err(|e| e.to_string())?;
-
-        // Workaround for Wayland CSD bug (tao#1046): window control buttons
-        // don't work until a maximize/unmaximize cycle fixes hit-testing.
-        // We need a delay between maximize and unmaximize because Wayland
-        // window operations are asynchronous.
-        window.maximize().map_err(|e| e.to_string())?;
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        window.unmaximize().map_err(|e| e.to_string())?;
-
         Ok(())
     } else {
         Err("Settings window not found".to_string())
@@ -479,11 +470,69 @@ fn get_kwin_status() -> kwin::KwinStatus {
     kwin::get_status()
 }
 
+/// Response for check_kwin_setup_needed command
+#[derive(Clone, serde::Serialize)]
+pub struct KwinSetupNeeded {
+    /// Whether setup is needed (Wayland + KDE but rules not installed)
+    pub needs_setup: bool,
+    /// Whether the user has already been prompted (dismissed or installed)
+    pub already_prompted: bool,
+    /// Whether this is a Wayland + KDE environment (for conditional UI)
+    pub rules_applicable: bool,
+}
+
+/// Check if KWin setup banner should be shown
+#[tauri::command]
+async fn check_kwin_setup_needed(
+    handle: tauri::State<'_, SettingsHandle>,
+) -> Result<KwinSetupNeeded, String> {
+    let settings = handle.settings.lock().await;
+    let status = kwin::get_status();
+
+    Ok(KwinSetupNeeded {
+        needs_setup: status.rules_applicable && !status.rule_installed,
+        already_prompted: settings.kwin_setup_prompted,
+        rules_applicable: status.rules_applicable,
+    })
+}
+
+/// Mark KWin setup as prompted (user dismissed or installed)
+#[tauri::command]
+async fn mark_kwin_prompted(
+    app: AppHandle,
+    handle: tauri::State<'_, SettingsHandle>,
+) -> Result<(), String> {
+    let mut settings = handle.settings.lock().await;
+    if !settings.kwin_setup_prompted {
+        settings.kwin_setup_prompted = true;
+        settings::save_settings(&app, &settings)?;
+        log::info!("Marked KWin setup as prompted");
+    }
+    Ok(())
+}
+
 /// Install the KWin rule for proper HUD behavior on Wayland
 #[tauri::command]
-async fn install_kwin_rule() -> Result<(), String> {
+async fn install_kwin_rule(
+    app: AppHandle,
+    handle: tauri::State<'_, SettingsHandle>,
+) -> Result<(), String> {
     log::info!("Installing KWin rule");
-    kwin::install_kwin_rule()
+    kwin::install_kwin_rule()?;
+
+    // Mark as prompted and record installation time
+    let mut settings = handle.settings.lock().await;
+    settings.kwin_setup_prompted = true;
+    settings.kwin_rules_installed_at = Some(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0),
+    );
+    settings::save_settings(&app, &settings)?;
+    log::info!("KWin rule installed and settings updated");
+
+    Ok(())
 }
 
 /// Remove the KWin rule
@@ -493,6 +542,20 @@ async fn remove_kwin_rule() -> Result<(), String> {
     kwin::remove_kwin_rule()
 }
 
+/// Reset KWin setup state (for testing/development)
+#[tauri::command]
+async fn reset_kwin_setup(
+    app: AppHandle,
+    handle: tauri::State<'_, SettingsHandle>,
+) -> Result<(), String> {
+    let mut settings = handle.settings.lock().await;
+    settings.kwin_setup_prompted = false;
+    settings.kwin_rules_installed_at = None;
+    settings::save_settings(&app, &settings)?;
+    log::info!("KWin setup state reset - banner will show again on next applicable launch");
+    Ok(())
+}
+
 // ============================================================================
 // Application entry point
 // ============================================================================
@@ -500,6 +563,7 @@ async fn remove_kwin_rule() -> Result<(), String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             // Set up logging in debug mode
             if cfg!(debug_assertions) {
@@ -686,6 +750,22 @@ pub fn run() {
                 status: audio_status,
             });
 
+            // Workaround for tao#1046: On KDE Plasma/Wayland, GTK's client-side decorations
+            // cause window control buttons to not work. Remove GTK's custom titlebar so
+            // KDE can provide native server-side decorations instead.
+            #[cfg(target_os = "linux")]
+            {
+                use gtk::prelude::GtkWindowExt;
+                if let Some(window) = app.get_webview_window("debug") {
+                    if let Ok(gtk_window) = window.gtk_window() {
+                        gtk_window.set_titlebar(Option::<&gtk::Widget>::None);
+                        log::info!(
+                            "Removed GTK titlebar from settings window (tao#1046 workaround)"
+                        );
+                    }
+                }
+            }
+
             log::info!("VoKey Transcribe started");
             Ok(())
         })
@@ -706,8 +786,11 @@ pub fn run() {
             open_recordings_folder,
             open_settings_window,
             get_kwin_status,
+            check_kwin_setup_needed,
+            mark_kwin_prompted,
             install_kwin_rule,
             remove_kwin_rule,
+            reset_kwin_setup,
         ])
         .on_window_event(|window, event| {
             // Hide windows instead of closing them (except for quit)

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
+import { relaunch, exit } from '@tauri-apps/plugin-process'
 import { listen } from '@tauri-apps/api/event'
 import { UiState } from './types'
 import './styles/debug.css'
@@ -111,6 +112,7 @@ function Debug() {
   const [kwinStatus, setKwinStatus] = useState<KwinStatus | null>(null)
   const [kwinLoading, setKwinLoading] = useState(false)
   const [kwinError, setKwinError] = useState<string | null>(null)
+  const [kwinNeedsRestart, setKwinNeedsRestart] = useState(false)
   const [metricsSummary, setMetricsSummary] = useState<MetricsSummary | null>(null)
   const [metricsHistory, setMetricsHistory] = useState<CycleMetrics[]>([])
   const [errorHistory, setErrorHistory] = useState<ErrorRecord[]>([])
@@ -318,6 +320,33 @@ function Debug() {
     }
   }
 
+  const resetKwinSetup = async () => {
+    setKwinLoading(true)
+    setKwinError(null)
+    try {
+      await invoke('reset_kwin_setup')
+      setKwinNeedsRestart(true)
+      pushLog('KWin setup state reset - restart to see banner')
+    } catch (e) {
+      console.error('Failed to reset KWin setup:', e)
+      setKwinError(String(e))
+      pushLog(`KWin setup reset failed: ${String(e)}`)
+    } finally {
+      setKwinLoading(false)
+    }
+  }
+
+  const restartApp = async () => {
+    const isDev = window.location.hostname === 'localhost'
+    if (isDev) {
+      pushLog('Dev mode: Closing app - restart with "pnpm tauri dev"')
+      await exit(0)
+    } else {
+      pushLog('Restarting app...')
+      await relaunch()
+    }
+  }
+
   return (
     <div className="debug-container">
       <h3>VoKey Debug Panel</h3>
@@ -414,6 +443,14 @@ function Debug() {
               ) : (
                 <button onClick={installKwinRule} disabled={kwinLoading} className="kwin-install-btn">
                   {kwinLoading ? 'Installing...' : 'Install KWin Rule'}
+                </button>
+              )}
+              <button onClick={resetKwinSetup} disabled={kwinLoading || kwinNeedsRestart} title="Reset setup state so the setup banner shows again on next launch">
+                Reset Setup Banner
+              </button>
+              {kwinNeedsRestart && (
+                <button onClick={restartApp} className="kwin-restart-btn">
+                  {window.location.hostname === 'localhost' ? 'Quit App' : 'Restart App'}
                 </button>
               )}
               {kwinError && <span className="kwin-error">{kwinError}</span>}

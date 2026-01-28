@@ -410,6 +410,14 @@
   background: #2b6cb0;
 }
 
+.kwin-actions button.kwin-restart-btn {
+  background: #d69e2e;
+}
+
+.kwin-actions button.kwin-restart-btn:hover {
+  background: #b7791f;
+}
+
 .kwin-error {
   color: #fc8181;
   font-size: 11px;

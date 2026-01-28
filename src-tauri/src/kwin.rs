@@ -336,6 +336,12 @@ fn reload_kwin() -> Result<(), String> {
     }
 }
 
+/// Check if KWin setup is needed (Wayland + KDE but rules not installed)
+pub fn needs_setup() -> bool {
+    let status = get_status();
+    status.rules_applicable && !status.rule_installed
+}
+
 /// Get the current KWin status
 pub fn get_status() -> KwinStatus {
     let is_wayland = is_wayland();
