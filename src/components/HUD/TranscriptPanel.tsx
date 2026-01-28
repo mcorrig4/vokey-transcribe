@@ -1,4 +1,5 @@
 import { useHUD } from '../../context/HUDContext'
+import { useTranscriptLines } from '../../hooks/useTranscriptLines'
 import styles from './TranscriptPanel.module.css'
 
 interface TranscriptPanelProps {
@@ -10,19 +11,31 @@ interface TranscriptPanelProps {
  * Floating transcript panel with fade-scroll effect.
  * Shows partial transcription during recording/transcribing.
  *
- * Future enhancements (#76):
+ * Implements issue #76:
  * - Real partial transcript text from backend
- * - Word-wrap and line parsing
- * - Opacity gradient for older lines
- * - Smooth scroll animation on new text
+ * - Word-wrap and line parsing via useTranscriptLines hook
+ * - CSS gradient mask creates fade effect for older lines
+ * - Smooth animation when new lines appear
+ * - Blinking cursor at end of active text
  */
 export function TranscriptPanel({ isExiting = false }: TranscriptPanelProps) {
   const { state } = useHUD()
 
-  // Placeholder content based on state
-  const placeholderText = state.status === 'transcribing'
-    ? 'Processing audio…'
-    : 'Listening…'
+  // Extract partial text from recording state
+  const partialText = state.status === 'recording' ? state.partialText : undefined
+
+  // Parse text into display lines
+  const lines = useTranscriptLines(partialText, {
+    maxLines: 5,
+    maxCharsPerLine: 38,
+  })
+
+  // Determine display mode
+  const hasTranscriptContent = lines.length > 0
+  const isTranscribing = state.status === 'transcribing'
+
+  // Placeholder text when no partial transcript is available
+  const placeholderText = isTranscribing ? 'Processing audio…' : 'Listening…'
 
   // Combine panel class with exiting state
   const panelClassName = isExiting
@@ -32,8 +45,24 @@ export function TranscriptPanel({ isExiting = false }: TranscriptPanelProps) {
   return (
     <div className={panelClassName} data-no-drag>
       <div className={styles.content}>
-        <span className={styles.text}>{placeholderText}</span>
-        <span className={styles.cursor}>|</span>
+        {hasTranscriptContent ? (
+          <div className={styles.lines}>
+            {lines.map((line, index) => {
+              const isLastLine = index === lines.length - 1
+              return (
+                <div key={line.id} className={styles.line}>
+                  <span className={styles.text}>{line.text}</span>
+                  {isLastLine && <span className={styles.cursor}>|</span>}
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className={styles.placeholderContainer}>
+            <span className={styles.placeholder}>{placeholderText}</span>
+            {!isTranscribing && <span className={styles.cursor}>|</span>}
+          </div>
+        )}
       </div>
     </div>
   )
