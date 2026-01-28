@@ -11,6 +11,9 @@ interface KwinSetupNeeded {
 
 type BannerState = 'hidden' | 'prompt' | 'installing' | 'success' | 'error'
 
+// Constant: dev mode is determined once at module load
+const isDev = ['localhost', '127.0.0.1'].includes(window.location.hostname)
+
 /**
  * SetupBanner displays a one-time banner prompting users on Wayland/KDE
  * to install KWin rules for proper HUD behavior (positioning, always-on-top, no focus steal).
@@ -61,8 +64,6 @@ export function SetupBanner() {
     setBannerState('hidden')
   }, [])
 
-  const isDev = window.location.hostname === 'localhost'
-
   const handleRestart = useCallback(async () => {
     try {
       if (isDev) {
@@ -75,7 +76,7 @@ export function SetupBanner() {
       // Fallback message if restart fails
       setErrorMsg(isDev ? 'Please restart with "pnpm tauri dev"' : 'Please restart the app manually')
     }
-  }, [isDev])
+  }, [])
 
   if (bannerState === 'hidden') {
     return null
