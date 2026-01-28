@@ -36,16 +36,22 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Completed Work
 
-### 2026-01-28: Testing Infrastructure + Appearance Page
+### 2026-01-28: Testing Infrastructure + Appearance Page + Test Extensions
 
 **Testing Infrastructure (Issues #148, #149, #150, #151):**
 - [x] Setup Vitest + React Testing Library with jsdom environment
 - [x] Created Tauri IPC mock utilities (mockInvoke, emitMockEvent, setupDefaultTauriMocks)
 - [x] Added test scripts to package.json (test, test:run, test:coverage)
-- [x] 25 passing tests:
+
+**Test Suite Expansion:**
+- [x] 77 passing tests across 5 test files:
   - 7 utility tests (cn function)
   - 11 SettingsFormPage component tests
   - 7 HUD component tests
+  - 16 AppearancePage component tests
+  - 36 parseTranscriptLines utility tests
+- [x] Created parseTranscriptLines utility for word-wrapping (#146)
+- [x] Added data-testid attributes for E2E testing (#154)
 
 **Appearance Settings Page:**
 - [x] Created AppearancePage with theme selection (System/Light/Dark)
@@ -54,7 +60,7 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 - [x] Integrated into Settings navigation with Palette icon
 - [x] Real-time theme switching with system detection
 
-**Issues Closed:** #116, #117, #118, #119, #148, #149, #150, #151
+**Issues Closed:** #116, #117, #118, #119, #146, #148, #149, #150, #151
 
 ### 2026-01-28: Settings UI Overhaul Epic - Phases 2 & 3
 
