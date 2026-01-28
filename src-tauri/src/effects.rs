@@ -202,6 +202,20 @@ impl AudioEffectRunner {
 impl EffectRunner for AudioEffectRunner {
     fn spawn(&self, effect: Effect, tx: mpsc::Sender<Event>) {
         match effect {
+            // StartAudio: Starts audio recording with optional real-time streaming.
+            //
+            // # Streaming Integration (AD-71-001)
+            // Streaming is embedded in StartAudio rather than separate effects because:
+            // 1. Audio and streaming share the same lifecycle (start/stop together)
+            // 2. Channel-based termination leverages Rust ownership model
+            // 3. Streaming failures must not affect audio recording (fallback strategy)
+            //
+            // When `settings.streaming_enabled` is true and API key is available,
+            // this handler:
+            // 1. Creates a streaming channel for audio samples
+            // 2. Spawns the WebSocket connection and streaming task
+            // 3. Spawns the transcript receiver task (sends PartialDelta events)
+            // 4. Starts the audio recorder with the streaming channel
             Effect::StartAudio { id } => {
                 let recorder = self.recorder.clone();
                 let active = self.active_recordings.clone();
