@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
 import Debug from './Debug'
+import Settings from './Settings'
 import './styles/index.css'
 import './styles/globals.css'
 
@@ -9,7 +10,18 @@ import './styles/globals.css'
 const params = new URLSearchParams(window.location.search)
 const windowType = params.get('window')
 
-const RootComponent = windowType === 'debug' ? Debug : App
+function getRootComponent() {
+  switch (windowType) {
+    case 'settings':
+      return Settings
+    case 'debug':
+      return Debug
+    default:
+      return App
+  }
+}
+
+const RootComponent = getRootComponent()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

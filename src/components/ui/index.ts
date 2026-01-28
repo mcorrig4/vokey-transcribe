@@ -9,3 +9,4 @@ export {
   CardContent,
 } from './card'
 export { Separator } from './separator'
+export { TitleBar, WindowControls } from './titlebar'
