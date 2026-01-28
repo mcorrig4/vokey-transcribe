@@ -3,6 +3,7 @@ import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window'
 import { useHUD } from '../../context/HUDContext'
 import { ControlPill } from './ControlPill'
 import { TranscriptPanel } from './TranscriptPanel'
+import { SetupBanner } from './SetupBanner'
 import styles from './HUD.module.css'
 
 // Window sizes for different states
@@ -76,6 +77,7 @@ export function HUD() {
   return (
     <div className={styles.layout} onMouseDown={handleMouseDown}>
       <ControlPill />
+      <SetupBanner />
       {panelState !== 'hidden' && (
         <TranscriptPanel isExiting={panelState === 'exiting'} />
       )}

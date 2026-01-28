@@ -470,11 +470,69 @@ fn get_kwin_status() -> kwin::KwinStatus {
     kwin::get_status()
 }
 
+/// Response for check_kwin_setup_needed command
+#[derive(Clone, serde::Serialize)]
+pub struct KwinSetupNeeded {
+    /// Whether setup is needed (Wayland + KDE but rules not installed)
+    pub needs_setup: bool,
+    /// Whether the user has already been prompted (dismissed or installed)
+    pub already_prompted: bool,
+    /// Whether this is a Wayland + KDE environment (for conditional UI)
+    pub rules_applicable: bool,
+}
+
+/// Check if KWin setup banner should be shown
+#[tauri::command]
+async fn check_kwin_setup_needed(
+    handle: tauri::State<'_, SettingsHandle>,
+) -> Result<KwinSetupNeeded, String> {
+    let settings = handle.settings.lock().await;
+    let status = kwin::get_status();
+
+    Ok(KwinSetupNeeded {
+        needs_setup: status.rules_applicable && !status.rule_installed,
+        already_prompted: settings.kwin_setup_prompted,
+        rules_applicable: status.rules_applicable,
+    })
+}
+
+/// Mark KWin setup as prompted (user dismissed or installed)
+#[tauri::command]
+async fn mark_kwin_prompted(
+    app: AppHandle,
+    handle: tauri::State<'_, SettingsHandle>,
+) -> Result<(), String> {
+    let mut settings = handle.settings.lock().await;
+    if !settings.kwin_setup_prompted {
+        settings.kwin_setup_prompted = true;
+        settings::save_settings(&app, &settings)?;
+        log::info!("Marked KWin setup as prompted");
+    }
+    Ok(())
+}
+
 /// Install the KWin rule for proper HUD behavior on Wayland
 #[tauri::command]
-async fn install_kwin_rule() -> Result<(), String> {
+async fn install_kwin_rule(
+    app: AppHandle,
+    handle: tauri::State<'_, SettingsHandle>,
+) -> Result<(), String> {
     log::info!("Installing KWin rule");
-    kwin::install_kwin_rule()
+    kwin::install_kwin_rule()?;
+
+    // Mark as prompted and record installation time
+    let mut settings = handle.settings.lock().await;
+    settings.kwin_setup_prompted = true;
+    settings.kwin_rules_installed_at = Some(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0),
+    );
+    settings::save_settings(&app, &settings)?;
+    log::info!("KWin rule installed and settings updated");
+
+    Ok(())
 }
 
 /// Remove the KWin rule
@@ -491,6 +549,7 @@ async fn remove_kwin_rule() -> Result<(), String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             // Set up logging in debug mode
             if cfg!(debug_assertions) {
@@ -711,6 +770,8 @@ pub fn run() {
             open_recordings_folder,
             open_settings_window,
             get_kwin_status,
+            check_kwin_setup_needed,
+            mark_kwin_prompted,
             install_kwin_rule,
             remove_kwin_rule,
         ])
