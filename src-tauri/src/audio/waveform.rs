@@ -51,13 +51,27 @@ impl WaveformBuffer {
     }
 
     /// Add samples to the buffer, removing oldest samples if at capacity
+    ///
+    /// Uses bulk operations (drain + extend) for better cache locality
+    /// compared to individual push/pop operations.
     pub fn push_samples(&mut self, samples: &[i16]) {
-        for &sample in samples {
-            if self.samples.len() >= self.capacity {
-                self.samples.pop_front();
-            }
-            self.samples.push_back(sample);
+        let len = samples.len();
+
+        // If incoming samples exceed capacity, just keep the last part
+        if len >= self.capacity {
+            self.samples.clear();
+            self.samples.extend(&samples[len - self.capacity..]);
+            return;
         }
+
+        // Remove enough old samples to make room for new ones
+        let current_len = self.samples.len();
+        let to_remove = (current_len + len).saturating_sub(self.capacity);
+        if to_remove > 0 {
+            self.samples.drain(0..to_remove);
+        }
+
+        self.samples.extend(samples);
     }
 
     /// Compute visualization data as 24 normalized RMS values (0.0-1.0)
@@ -82,23 +96,24 @@ impl WaveformBuffer {
             }
 
             // Compute RMS for this segment
-            let mut sum_squares: f64 = 0.0;
-            let mut count = 0;
+            // Loop bounds are guaranteed to be within buffer length
+            let count = end - start;
+            if count == 0 {
+                continue;
+            }
 
-            for i in start..end {
-                if let Some(&sample) = self.samples.get(i) {
+            let sum_squares: f64 = (start..end)
+                .map(|i| {
+                    let sample = self.samples[i];
                     let normalized = sample as f64 / i16::MAX as f64;
-                    sum_squares += normalized * normalized;
-                    count += 1;
-                }
-            }
+                    normalized * normalized
+                })
+                .sum();
 
-            if count > 0 {
-                let rms = (sum_squares / count as f64).sqrt();
-                // RMS is already normalized to 0.0-1.0 range
-                // Clamp to ensure valid range
-                *bar = (rms as f32).clamp(0.0, 1.0);
-            }
+            let rms = (sum_squares / count as f64).sqrt();
+            // RMS is already normalized to 0.0-1.0 range
+            // Clamp to ensure valid range
+            *bar = (rms as f32).clamp(0.0, 1.0);
         }
 
         bars

@@ -18,10 +18,10 @@ use std::thread::{self, JoinHandle};
 /// Sender type for streaming audio samples to the streaming pipeline
 pub type StreamingSender = tokio::sync::mpsc::Sender<Vec<i16>>;
 
-/// Sender type for waveform visualization samples
-pub type WaveformSender = tokio::sync::mpsc::Sender<Vec<i16>>;
-
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+
+// Import WaveformSender from waveform module to avoid duplicate type definition
+use super::waveform::WaveformSender;
 use cpal::{Device, SampleFormat, Stream, StreamConfig};
 use hound::{WavSpec, WavWriter};
 use uuid::Uuid;

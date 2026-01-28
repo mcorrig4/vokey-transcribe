@@ -111,8 +111,6 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 - [ ] Memory bounded (10K sample buffer)
 - [ ] Frontend renders animated bars with CSS transitions
 - [ ] No jank or memory leaks
-- [ ] Prompt mode calls Chat API and falls back gracefully
-- [ ] HUD shows current mode indicator
 
 ### Sprint 6 Status (Paused):
 - Phases 1-5 complete
