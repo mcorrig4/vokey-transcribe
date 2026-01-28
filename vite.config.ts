@@ -26,9 +26,10 @@ export default defineConfig({
   // Build options for Tauri
   build: {
     // Tauri uses Chromium on Windows and WebKit on macOS and Linux
+    // Updated to safari16 for oklch() color support (requires WebKitGTK 2.38+)
     target: process.env.TAURI_ENV_PLATFORM === 'windows'
       ? 'chrome105'
-      : 'safari14',
+      : 'safari16',
     // don't minify for debug builds
     minify: !process.env.TAURI_ENV_DEBUG ? 'esbuild' : false,
     // produce sourcemaps for debug builds
