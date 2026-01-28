@@ -438,24 +438,15 @@ async fn open_recordings_folder() -> Result<(), String> {
     Ok(())
 }
 
-/// Internal implementation for opening the settings window with Wayland workaround
+/// Internal implementation for opening the settings window
 ///
-/// This handles the full window open sequence including a workaround for the
-/// TAO CSD bug (tao#1046, tauri#12685) where window control buttons don't work
-/// on KDE Plasma/Wayland until a maximize/unmaximize cycle occurs.
+/// Note: On Linux/KDE, we remove the GTK custom titlebar at startup (in setup)
+/// so KDE provides native window decorations. This avoids the maximize/unmaximize
+/// hack previously needed for tao#1046.
 async fn open_settings_window_impl(app: &AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("debug") {
         window.show().map_err(|e| e.to_string())?;
         window.set_focus().map_err(|e| e.to_string())?;
-
-        // Workaround for Wayland CSD bug (tao#1046): window control buttons
-        // don't work until a maximize/unmaximize cycle fixes hit-testing.
-        // We need a delay between maximize and unmaximize because Wayland
-        // window operations are asynchronous.
-        window.maximize().map_err(|e| e.to_string())?;
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        window.unmaximize().map_err(|e| e.to_string())?;
-
         Ok(())
     } else {
         Err("Settings window not found".to_string())
@@ -685,6 +676,20 @@ pub fn run() {
             app.manage(AudioStatusHolder {
                 status: audio_status,
             });
+
+            // Workaround for tao#1046: On KDE Plasma/Wayland, GTK's client-side decorations
+            // cause window control buttons to not work. Remove GTK's custom titlebar so
+            // KDE can provide native server-side decorations instead.
+            #[cfg(target_os = "linux")]
+            {
+                use gtk::prelude::GtkWindowExt;
+                if let Some(window) = app.get_webview_window("debug") {
+                    if let Ok(gtk_window) = window.gtk_window() {
+                        gtk_window.set_titlebar(Option::<&gtk::Widget>::None);
+                        log::info!("Removed GTK titlebar from settings window (tao#1046 workaround)");
+                    }
+                }
+            }
 
             log::info!("VoKey Transcribe started");
             Ok(())

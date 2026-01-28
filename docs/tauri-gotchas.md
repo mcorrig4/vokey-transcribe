@@ -319,115 +319,32 @@ let mut guard = match writer.lock() {
 
 ---
 
-### 11) Window control buttons don't work on Wayland (decorated windows)
+### 11) Window control buttons don't work on Wayland (KDE Plasma)
 
-On Wayland (especially KDE Plasma), window control buttons (minimize, maximize, close) may not respond to clicks when a decorated Tauri window is first shown. The buttons start working after maximizing/restoring the window manually.
+**Bug:** [tao#1046](https://github.com/tauri-apps/tao/issues/1046) — GTK's client-side decorations (CSD) break window control button hit-testing on KDE Plasma.
 
-**Root cause:**
-
-This is a known bug in Tauri's TAO windowing library related to Client-Side Decorations (CSD):
-
-- **GitHub Issues:** [tauri-apps/tao#1046](https://github.com/tauri-apps/tao/issues/1046), [tauri-apps/tauri#12685](https://github.com/tauri-apps/tauri/issues/12685)
-- **Cause:** PR #979 added CSD support to TAO for Wayland, which broke window control button hit-testing on KDE Plasma
-- **Status:** Still open as of January 2025, affects latest Tauri/TAO versions
-
-The issue is that TAO's CSD implementation doesn't correctly calculate hit-test regions for window controls until a maximize/unmaximize cycle occurs.
-
-**Solution: Async maximize/unmaximize with delay**
-
-Since manually maximizing and unmaximizing the window fixes the buttons, we can do this programmatically. **Critical:** There must be a delay between maximize and unmaximize because Wayland window operations are asynchronous.
-
-Create a shared async function that can be called from both Rust (tray menu) and frontend (buttons):
+**Solution:** Remove GTK's custom titlebar so KDE provides native server-side decorations:
 
 ```rust
-/// Internal implementation for opening a window with Wayland CSD workaround
-async fn open_settings_window_impl(app: &AppHandle) -> Result<(), String> {
+// In setup(), after windows are created:
+#[cfg(target_os = "linux")]
+{
+    use gtk::prelude::GtkWindowExt;
     if let Some(window) = app.get_webview_window("debug") {
-        window.show().map_err(|e| e.to_string())?;
-        window.set_focus().map_err(|e| e.to_string())?;
-
-        // Workaround for Wayland CSD bug (tao#1046): window control buttons
-        // don't work until a maximize/unmaximize cycle fixes hit-testing.
-        // IMPORTANT: Need delay between maximize and unmaximize because
-        // Wayland window operations are asynchronous.
-        window.maximize().map_err(|e| e.to_string())?;
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        window.unmaximize().map_err(|e| e.to_string())?;
-
-        Ok(())
-    } else {
-        Err("Window not found".to_string())
+        if let Ok(gtk_window) = window.gtk_window() {
+            gtk_window.set_titlebar(Option::<&gtk::Widget>::None);
+        }
     }
 }
-
-/// Tauri command for frontend to call
-#[tauri::command]
-async fn open_settings_window(app: AppHandle) -> Result<(), String> {
-    open_settings_window_impl(&app).await
-}
 ```
 
-For tray menu handlers (which are synchronous), spawn the async function:
+**Notes:**
+- Requires `gtk = "0.18"` in Cargo.toml
+- May show GTK warning about "already-realized window" (harmless)
+- Works on KDE; on GNOME you may want to keep CSD
+- See [#112](https://github.com/mcorrig4/vokey-transcribe/issues/112) for future tauri-controls implementation
 
-```rust
-.on_menu_event(|app, event| match event.id.as_ref() {
-    "settings" => {
-        let app_handle = app.clone();
-        tauri::async_runtime::spawn(async move {
-            if let Err(e) = open_settings_window_impl(&app_handle).await {
-                log::error!("Failed to open settings: {}", e);
-            }
-        });
-    }
-    // ...
-})
-```
-
-From the frontend, call the Tauri command:
-
-```typescript
-import { invoke } from '@tauri-apps/api/core'
-
-const openSettings = async () => {
-    await invoke('open_settings_window')
-}
-```
-
-**Why the delay is critical:** Without the delay, unmaximize is called before maximize completes, causing the window to stay maximized. The 50ms delay gives Wayland time to process the maximize before we unmaximize.
-
-**Additional CSS recommendation:**
-
-Avoid `100vh` in decorated windows as it can cause overflow issues:
-
-```css
-/* BAD: 100vh may include decoration height on some systems */
-.container {
-  min-height: 100vh;
-}
-
-/* GOOD: inherit from parent, allow scrolling */
-.container {
-  height: 100%;
-  overflow-y: auto;
-}
-```
-
-**When this applies:**
-
-- Tauri windows with `decorations: true` (native window decorations)
-- Running on Wayland (KDE Plasma specifically affected)
-- Window is hidden and then shown (not destroyed and recreated)
-
-**When this doesn't apply:**
-
-- Frameless windows (`decorations: false`) with custom title bars
-- X11 sessions (use `GDK_BACKEND=x11` as alternative workaround)
-- Windows/macOS
-
-**Alternative workarounds:**
-
-1. **Force X11:** Set `std::env::set_var("GDK_BACKEND", "x11")` before Tauri initializes (loses Wayland benefits)
-2. **Custom title bar:** Use `decorations: false` and implement window controls in React (significant effort)
+**Deprecated:** The old maximize/unmaximize hack was unreliable and caused visual glitches
 
 ---
 
