@@ -6,12 +6,24 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Current Status
 
-**Phase:** Sprint 7A — Real-time Streaming Transcription
+**Phase:** Settings UI Overhaul — shadcn/ui + Tailwind CSS
 **Target:** Kubuntu with KDE Plasma 6.4 on Wayland
-**Branch:** `claude/sprint-7a-mic-button-pill-content-ngiX4`
-**Last Updated:** 2026-01-27
+**Branch:** `feat/ui-overhaul` (long-running feature branch)
+**Last Updated:** 2026-01-28
 
-**Sprint 7A Status:**
+**Settings UI Overhaul Status:**
+- Epic: #114, PR: #137 (draft → develop)
+- Milestone: "Settings UI Overhaul"
+- Phase 1: Foundation + Usage Page (#115-#119)
+  - #115 Setup Tailwind + shadcn/ui 🔄 IN PROGRESS
+  - #116 tauri-controls + Layout ⬜
+  - #117 Admin API Key Storage ⬜
+  - #118 OpenAI Usage API Integration ⬜
+  - #119 Usage Metrics UI ⬜
+- Phase 2: Settings Migration (#120-#123) ⬜
+- Phase 3: Architecture Planning (#124) ⬜
+
+**Sprint 7A Status (Parallel):**
 - Backend: #68 WebSocket ✅, #69 Audio Pipeline ✅, #70 Transcript Aggregation ✅ (PR #107 merged)
 - Frontend: #73 HUD Scaffolding 🧪 UAT (PR #105), #74+#77 Mic Button+Pill 🧪 UAT (PR #108)
 
@@ -63,6 +75,7 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 | 6 - Hardening + UX polish | ⏸️ PAUSED | Phases 1-5 done; Phase 6 (50-cycle stability) needs real hardware |
 | 7A - Streaming transcription | 🧪 UAT | Backend: #68-#70 ✅ (PR #107 merged). Frontend: PR #105, #108 in UAT |
 | 7B - Post-processing modes | 📋 PLANNING | Option B chosen: Normal/Coding/Markdown/Prompt modes |
+| Settings UI Overhaul | 🔄 IN PROGRESS | Epic #114, shadcn/ui + Tailwind, multi-page settings |
 
 ---
 
@@ -186,6 +199,51 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 ---
 
 ## Session Notes
+
+### Session 2026-01-28 (Settings UI Overhaul - Phase 1 Start)
+**Started Settings UI Overhaul Epic (#114):**
+
+**Planning:**
+- Created detailed issue documentation (`docs/ISSUES-settings-ui-overhaul.md`)
+- Created 11 GitHub issues (#114-#124) across 3 phases
+- Created GitHub Milestone "Settings UI Overhaul"
+- Set up `feat/ui-overhaul` as long-running feature branch
+- Draft PR #137 tracks full epic progress
+
+**Issue #115 - Tailwind + shadcn/ui Foundation:**
+
+**Dependencies added:**
+- `tailwindcss` + `@tailwindcss/vite` (Tailwind v4)
+- `clsx`, `tailwind-merge`, `class-variance-authority` (utilities)
+- `lucide-react` (icons)
+- `@radix-ui/react-slot`, `@radix-ui/react-separator` (primitives)
+
+**Files created:**
+- `src/styles/globals.css` - Tailwind + shadcn dark theme CSS variables
+- `src/lib/utils.ts` - `cn()` utility function
+- `src/components/ui/button.tsx` - Button component
+- `src/components/ui/card.tsx` - Card component family
+- `src/components/ui/separator.tsx` - Separator component
+- `src/components/ui/index.ts` - Component exports
+
+**Files modified:**
+- `vite.config.ts` - Added Tailwind plugin + path aliases
+- `tsconfig.json` - Added `@/*` path alias
+- `src/main.tsx` - Import globals.css
+- `package.json` - New dependencies
+
+**Build verification:**
+- TypeScript compiles without errors
+- Vite build succeeds (229KB JS, 26KB CSS)
+- HUD window unaffected
+
+**Deferred issues created from code review:**
+- #132 - Refactor Debug.tsx into smaller components
+- #133 - Add React component tests
+- #134 - Improve clipboard thread timeout handling
+- #139 - Investigate CSP hardening
+
+---
 
 ### Session 2026-01-27 (Git Workflow Setup)
 **Implemented GitHub Flow + Develop branch strategy:**

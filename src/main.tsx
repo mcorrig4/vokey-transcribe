@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import Debug from './Debug'
 import './styles/index.css'
+import './styles/globals.css'
 
 // Determine which window to render based on URL parameter
 const params = new URLSearchParams(window.location.search)
