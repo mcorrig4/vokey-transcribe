@@ -6,12 +6,14 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Current Status
 
-**Phase:** Sprint 7A IN PROGRESS — Real-time Streaming Transcription
+**Phase:** Sprint 7A — Real-time Streaming Transcription
 **Target:** Kubuntu with KDE Plasma 6.4 on Wayland
-**Branch:** `claude/issue-70-transcript-aggregation-6Uuz9`
+**Branch:** `claude/sprint-7a-mic-button-pill-content-ngiX4`
 **Last Updated:** 2026-01-27
 
-**Sprint 7A Status:** Issues #68, #69, #70 complete; PR #107 awaiting merge
+**Sprint 7A Status:**
+- Backend: #68 WebSocket ✅, #69 Audio Pipeline ✅, #70 Transcript Aggregation ✅ (PR #107 merged)
+- Frontend: #73 HUD Scaffolding 🧪 UAT (PR #105), #74+#77 Mic Button+Pill 🧪 UAT (PR #108)
 
 ---
 
@@ -59,7 +61,7 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 | 4 - OpenAI transcription + clipboard | ✅ COMPLETE | OpenAI Whisper API, arboard clipboard, tested on real hardware |
 | 5 - Full flow polish + tray controls | 🧪 UAT | Tray menu with Toggle/Cancel/Open Logs, HUD timer, auto-dismiss |
 | 6 - Hardening + UX polish | ⏸️ PAUSED | Phases 1-5 done; Phase 6 (50-cycle stability) needs real hardware |
-| 7A - Streaming transcription | 🔄 IN PROGRESS | #68 WebSocket ✅, #69 Audio Pipeline ✅, #70 Transcript Aggregation ✅ |
+| 7A - Streaming transcription | 🧪 UAT | Backend: #68-#70 ✅ (PR #107 merged). Frontend: PR #105, #108 in UAT |
 | 7B - Post-processing modes | 📋 PLANNING | Option B chosen: Normal/Coding/Markdown/Prompt modes |
 
 ---
