@@ -12,7 +12,7 @@ interface KwinSetupNeeded {
 type BannerState = 'hidden' | 'prompt' | 'installing' | 'success' | 'error'
 
 // Constant: dev mode is determined once at module load
-const isDev = window.location.hostname === 'localhost'
+const isDev = ['localhost', '127.0.0.1'].includes(window.location.hostname)
 
 /**
  * SetupBanner displays a one-time banner prompting users on Wayland/KDE
