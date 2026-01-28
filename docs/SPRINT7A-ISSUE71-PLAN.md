@@ -316,7 +316,7 @@ From issue #71:
 │  │  const { state } = useHUD()                                        │  │
 │  │  const text = state.status === 'recording'                         │  │
 │  │    ? state.partialText ?? 'Listening...'                           │  │
-│  │    : 'Processing...'                                               │  │
+│  │    : state.status === 'done' ? state.text : 'Processing...'        │  │
 │  │                                                                    │  │
 │  └────────────────────────────────────────────────────────────────────┘  │
 │                                                                          │
