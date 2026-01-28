@@ -19,16 +19,11 @@
   text-overflow: ellipsis;
 }
 
-/* Recording state: dot + timer */
+/* Recording state: waveform + timer */
 .recording {
   display: flex;
   align-items: center;
-  gap: 8px;
-}
-
-.dot {
-  font-size: 12px;
-  animation: dot-blink 1s ease-in-out infinite;
+  gap: 12px;
 }
 
 .timer {
@@ -107,16 +102,6 @@
   }
 }
 
-/* Animations */
-@keyframes dot-blink {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.3;
-  }
-}
-
 /* State-specific content transitions */
 .content[data-state="transcribing"] .label {
   animation: pulse-text 1.2s ease-in-out infinite;
@@ -133,7 +118,6 @@
 
 /* Accessibility: Respect user's motion preferences */
 @media (prefers-reduced-motion: reduce) {
-  .dot,
   .spinner,
   .content[data-state="transcribing"] .label {
     animation: none;

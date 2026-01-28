@@ -11,7 +11,9 @@ use std::time::Instant;
 use tokio::sync::{mpsc, Mutex};
 use uuid::Uuid;
 
-use crate::audio::{cleanup_old_recordings, AudioRecorder};
+use crate::audio::{
+    cleanup_old_recordings, create_waveform_channel, run_waveform_emitter, AudioRecorder,
+};
 use crate::metrics::MetricsCollector;
 use crate::settings::AppSettings;
 use crate::state_machine::{Effect, Event};
@@ -159,12 +161,16 @@ pub trait EffectRunner: Send + Sync + 'static {
 /// RecordingHandle is now Send+Sync safe (uses channel to dedicated audio thread).
 struct ActiveRecording {
     handle: Option<crate::audio::recorder::RecordingHandle>,
+    /// Sender to stop the waveform emitter task
+    waveform_stop_tx: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
 /// Real effect runner with CPAL audio capture.
 /// Sprint 4: Real transcription via OpenAI Whisper.
 /// Sprint 6: Metrics collection for performance tracking.
+/// Sprint 7: Waveform visualization support.
 pub struct AudioEffectRunner {
+    app: tauri::AppHandle,
     recorder: Arc<Mutex<Option<AudioRecorder>>>,
     active_recordings: Arc<Mutex<HashMap<Uuid, ActiveRecording>>>,
     metrics: Arc<Mutex<MetricsCollector>>,
@@ -175,6 +181,7 @@ impl AudioEffectRunner {
     /// Create a new AudioEffectRunner with metrics collection.
     /// Returns Ok even if audio device isn't available - errors happen at record time.
     pub fn new(
+        app: tauri::AppHandle,
         metrics: Arc<Mutex<MetricsCollector>>,
         settings: Arc<Mutex<AppSettings>>,
     ) -> Arc<Self> {
@@ -191,6 +198,7 @@ impl AudioEffectRunner {
         };
 
         Arc::new(Self {
+            app,
             recorder: Arc::new(Mutex::new(recorder)),
             active_recordings: Arc::new(Mutex::new(HashMap::new())),
             metrics,
@@ -221,6 +229,7 @@ impl EffectRunner for AudioEffectRunner {
                 let active = self.active_recordings.clone();
                 let metrics = self.metrics.clone();
                 let settings = self.settings.clone();
+                let app = self.app.clone();
 
                 tokio::spawn(async move {
                     // Start metrics tracking for this cycle
@@ -350,11 +359,24 @@ impl EffectRunner for AudioEffectRunner {
                         None
                     };
 
-                    // Start recording with the streaming channel
+                    // Create waveform visualization channel and emitter
+                    let (waveform_tx, waveform_rx) = create_waveform_channel();
+                    let (waveform_stop_tx, waveform_stop_rx) =
+                        tokio::sync::oneshot::channel::<()>();
+
+                    // Spawn waveform emitter task
+                    let app_for_waveform = app.clone();
+                    tokio::spawn(async move {
+                        run_waveform_emitter(app_for_waveform, waveform_rx, waveform_stop_rx).await;
+                    });
+
+                    // Start recording with the streaming and waveform channels
                     let start_result = {
                         let recorder_guard = recorder.lock().await;
                         match recorder_guard.as_ref() {
-                            Some(rec) => rec.start(id, streaming_tx).map_err(|e| e.to_string()),
+                            Some(rec) => rec
+                                .start(id, streaming_tx, Some(waveform_tx))
+                                .map_err(|e| e.to_string()),
                             None => {
                                 log::error!("Audio recorder is unavailable");
                                 Err("Audio recorder unavailable".to_string())
@@ -379,6 +401,7 @@ impl EffectRunner for AudioEffectRunner {
                                 id,
                                 ActiveRecording {
                                     handle: Some(handle),
+                                    waveform_stop_tx: Some(waveform_stop_tx),
                                 },
                             );
                             drop(active_guard); // Explicitly drop before await
@@ -404,12 +427,20 @@ impl EffectRunner for AudioEffectRunner {
                 let settings = self.settings.clone();
 
                 tokio::spawn(async move {
-                    let handle = {
+                    let (handle, waveform_stop_tx) = {
                         let mut active_guard = active.lock().await;
-                        active_guard
-                            .remove(&id)
-                            .and_then(|mut recording| recording.handle.take())
+                        match active_guard.remove(&id) {
+                            Some(mut recording) => {
+                                (recording.handle.take(), recording.waveform_stop_tx.take())
+                            }
+                            None => (None, None),
+                        }
                     };
+
+                    // Stop waveform emitter first
+                    if let Some(stop_tx) = waveform_stop_tx {
+                        let _ = stop_tx.send(());
+                    }
 
                     let Some(handle) = handle else {
                         log::warn!("StopAudio: no active handle for id={}", id);

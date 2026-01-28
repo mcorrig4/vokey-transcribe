@@ -20,6 +20,7 @@ use tauri::{
     AppHandle, Emitter, Manager, WindowEvent,
 };
 use tokio::sync::{mpsc, Mutex};
+use rustls::crypto::{ring, CryptoProvider};
 
 use effects::{AudioEffectRunner, EffectRunner};
 use hotkey::{Hotkey, HotkeyManager, HotkeyStatus};
@@ -120,6 +121,12 @@ pub struct HotkeyStatusHolder {
 /// Holds cached audio status to avoid expensive re-initialization (Sprint 6 #25)
 pub struct AudioStatusHolder {
     status: AudioStatusResponse,
+}
+
+fn install_rustls_provider() {
+    if CryptoProvider::install_default(ring::default_provider()).is_err() {
+        log::debug!("Rustls crypto provider already installed");
+    }
 }
 
 impl StateLoopHandle {
@@ -562,6 +569,7 @@ async fn reset_kwin_setup(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    install_rustls_provider();
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
@@ -711,7 +719,9 @@ pub fn run() {
 
             // Create effect runner (real audio capture as of Sprint 3)
             // Pass metrics collector for tracking (Sprint 6)
-            let effect_runner = AudioEffectRunner::new(metrics_collector, settings_handle);
+            // Pass app handle for waveform events (Sprint 7)
+            let effect_runner =
+                AudioEffectRunner::new(app.handle().clone(), metrics_collector, settings_handle);
 
             // Spawn the state loop
             let app_handle = app.handle().clone();

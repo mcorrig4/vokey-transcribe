@@ -6,14 +6,19 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Current Status
 
-**Phase:** Sprint 7A — Real-time Streaming Transcription
+**Phase:** Sprint 7 — Waveform Visualization (Issue #72 + #75)
 **Target:** Kubuntu with KDE Plasma 6.4 on Wayland
-**Branch:** `claude/sprint-7a-mic-button-pill-content-ngiX4`
-**Last Updated:** 2026-01-27
+**Branch:** `claude/sprint-7-issue-72-A3r3C`
+**Last Updated:** 2026-01-28
 
-**Sprint 7A Status:**
+**Sprint 7 Waveform Status:**
+- Tracking Issue: #130 (Sprint 7 Waveform Visualization)
+- Phase 1: #72 Backend Waveform Buffer 📋 PLANNING
+- Phase 2: #75 Frontend Waveform Component 📋 PLANNING (blocked by #72)
+
+**Sprint 7A Status (Previous):**
 - Backend: #68 WebSocket ✅, #69 Audio Pipeline ✅, #70 Transcript Aggregation ✅ (PR #107 merged)
-- Frontend: #73 HUD Scaffolding 🧪 UAT (PR #105), #74+#77 Mic Button+Pill 🧪 UAT (PR #108)
+- Frontend: #73 HUD Scaffolding ✅, #74+#77 Mic Button+Pill 🧪 UAT (PR #125)
 
 ---
 
@@ -61,45 +66,51 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 | 4 - OpenAI transcription + clipboard | ✅ COMPLETE | OpenAI Whisper API, arboard clipboard, tested on real hardware |
 | 5 - Full flow polish + tray controls | 🧪 UAT | Tray menu with Toggle/Cancel/Open Logs, HUD timer, auto-dismiss |
 | 6 - Hardening + UX polish | ⏸️ PAUSED | Phases 1-5 done; Phase 6 (50-cycle stability) needs real hardware |
-| 7A - Streaming transcription | 🧪 UAT | Backend: #68-#70 ✅ (PR #107 merged). Frontend: PR #105, #108 in UAT |
+| 7A - Streaming transcription | 🧪 UAT | Backend: #68-#70 ✅. Frontend: PR #125 in UAT |
+| 7-Waveform - Real-time visualization | 🚧 ACTIVE | #130 tracking; Phase 1 (#72) + Phase 2 (#75) |
 | 7B - Post-processing modes | 📋 PLANNING | Option B chosen: Normal/Coding/Markdown/Prompt modes |
 
 ---
 
 ## Current Task Context
 
-### Active Sprint: Sprint 7B - Post-processing Modes
+### Active Sprint: Sprint 7 — Waveform Visualization
 
-**Implementation Plan:** See `docs/SPRINT7B-PLAN.md` for detailed breakdown.
+**Tracking Issue:** #130
+**Implementation Plan:** See `docs/SPRINT7-WAVEFORM-PLAN.md` for detailed breakdown.
 
-**Note:** Sprint 7A (Streaming) is being developed in parallel by another team.
+### Two-Phase Implementation:
 
-### Decision Made:
-- **Sprint 7B: Post-processing Modes** — this team
-- **Sprint 7A: Streaming Transcription** — parallel team
-- Both features can be combined after completion
+#### Phase 1: Backend Waveform Buffer (#72)
+1. ⬜ Create `src-tauri/src/audio/waveform.rs`
+   - WaveformBuffer ring buffer (VecDeque, 10K capacity)
+   - RMS computation for 24 bars
+   - EMA smoothing (alpha=0.3)
+   - Event emitter task (30fps)
+2. ⬜ Modify `audio/recorder.rs` - add waveform_tx channel
+3. ⬜ Modify `effects.rs` - manage emitter lifecycle
+4. ⬜ Unit tests for buffer, normalization, smoothing
 
-### Sprint 7B Phases:
-1. ⬜ Mode Selection Infrastructure - ProcessingMode enum, state, tray menu
-2. ⬜ Processing Engines - Coding, Markdown, Prompt processors
-3. ⬜ Pipeline Integration - Post-processing after transcription
-4. ⬜ UI Integration - Mode indicator in HUD, selector in Debug panel
-5. ⬜ Prompt Configuration (stretch) - Custom prompt storage
+#### Phase 2: Frontend Waveform Component (#75)
+1. ⬜ Create `src/hooks/useWaveform.ts` - event listener hook
+2. ⬜ Create `src/components/HUD/Waveform.tsx` - 24-bar component
+3. ⬜ Create CSS module with transitions
+4. ⬜ Integrate into `PillContent.tsx`
 
-### Modes to Implement:
-| Mode | Description | Processing |
-|------|-------------|------------|
-| Normal | Raw transcription, no changes | Passthrough |
-| Coding | snake_case, remove fillers | Local regex |
-| Markdown | Format as lists/structure | Local parsing |
-| Prompt | Custom LLM transformation | OpenAI Chat API |
+### Consolidated Architecture Decisions:
+| Aspect | Original | Updated |
+|--------|----------|---------|
+| Bar count | 64 bars | **24 bars** |
+| Update method | Polling | **Event-based** |
+| Frame rate | 20 FPS | **30 FPS** |
+| Smoothing | None | **EMA (alpha=0.3)** |
 
-### Acceptance Criteria (from ISSUES-v1.0.0.md):
-- [ ] Mode selection works via tray menu and Debug panel
-- [ ] Coding mode produces valid identifiers (snake_case)
-- [ ] Markdown mode formats list items correctly
-- [ ] Prompt mode calls Chat API and falls back gracefully
-- [ ] HUD shows current mode indicator
+### Acceptance Criteria:
+- [ ] Backend emits `waveform-update` events at 30fps during recording
+- [ ] 24 normalized amplitude bars (0.0-1.0)
+- [ ] Memory bounded (10K sample buffer)
+- [ ] Frontend renders animated bars with CSS transitions
+- [ ] No jank or memory leaks
 
 ### Sprint 6 Status (Paused):
 - Phases 1-5 complete
@@ -182,10 +193,48 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 | Technical gotchas | docs/tauri-gotchas.md |
 | Setup instructions | docs/notes.md |
 | This work log | docs/WORKLOG.md |
+| Waveform implementation plan | docs/SPRINT7-WAVEFORM-PLAN.md |
 
 ---
 
 ## Session Notes
+
+### Session 2026-01-28 (Sprint 7 Waveform Planning)
+**Planned real-time waveform visualization feature (Issue #72 + #75):**
+
+**Architecture Analysis:**
+- Explored audio module structure and data flow
+- Reviewed consolidated architecture decisions
+- Determined optimal channel-based design (non-blocking audio callback)
+
+**Consolidated Architecture Decisions:**
+- 24 bars (reduced from 64) for cleaner visuals
+- Event-based updates at 30fps (not polling at 20fps)
+- EMA smoothing (alpha=0.3) to prevent jitter
+- 10K sample buffer (~200ms) instead of 96K (2s)
+
+**Documentation Created:**
+- `docs/SPRINT7-WAVEFORM-PLAN.md` — Detailed 2-phase implementation plan
+
+**GitHub Issues:**
+- Created #130 — Sprint 7 Waveform Visualization (Tracking)
+- Updated #72 with consolidated architecture notes
+- Updated #75 with consolidated architecture notes
+
+**Two-Phase Plan:**
+1. Phase 1 (#72): Backend waveform buffer in Rust
+   - WaveformBuffer ring buffer (VecDeque)
+   - RMS computation for 24 bars
+   - Tauri event emission at 30fps
+2. Phase 2 (#75): Frontend waveform component in React
+   - useWaveform hook with event listener
+   - CSS-animated bar visualization
+
+**Next Steps:**
+- Implement Phase 1 (Issue #72)
+- Create PR for waveform backend
+
+---
 
 ### Session 2026-01-27 (Git Workflow Setup)
 **Implemented GitHub Flow + Develop branch strategy:**
