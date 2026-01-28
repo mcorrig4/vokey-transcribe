@@ -200,6 +200,8 @@ curl "https://api.openai.com/v1/organization/usage/audio_transcriptions?start_ti
   -H "Authorization: Bearer $ADMIN_KEY"
 ```
 
+**API Note:** These endpoints are part of the [official OpenAI Usage API](https://platform.openai.com/docs/api-reference/usage) (not undocumented). They require an **Admin API key** with `api.usage.read` scope, not a regular API key. Handle errors gracefully as the API may evolve.
+
 #### Dependencies
 - Requires Issue 1.3 complete (admin key storage)
 
