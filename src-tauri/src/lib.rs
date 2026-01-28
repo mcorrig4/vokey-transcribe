@@ -542,6 +542,20 @@ async fn remove_kwin_rule() -> Result<(), String> {
     kwin::remove_kwin_rule()
 }
 
+/// Reset KWin setup state (for testing/development)
+#[tauri::command]
+async fn reset_kwin_setup(
+    app: AppHandle,
+    handle: tauri::State<'_, SettingsHandle>,
+) -> Result<(), String> {
+    let mut settings = handle.settings.lock().await;
+    settings.kwin_setup_prompted = false;
+    settings.kwin_rules_installed_at = None;
+    settings::save_settings(&app, &settings)?;
+    log::info!("KWin setup state reset - banner will show again on next applicable launch");
+    Ok(())
+}
+
 // ============================================================================
 // Application entry point
 // ============================================================================
@@ -745,7 +759,9 @@ pub fn run() {
                 if let Some(window) = app.get_webview_window("debug") {
                     if let Ok(gtk_window) = window.gtk_window() {
                         gtk_window.set_titlebar(Option::<&gtk::Widget>::None);
-                        log::info!("Removed GTK titlebar from settings window (tao#1046 workaround)");
+                        log::info!(
+                            "Removed GTK titlebar from settings window (tao#1046 workaround)"
+                        );
                     }
                 }
             }
@@ -774,6 +790,7 @@ pub fn run() {
             mark_kwin_prompted,
             install_kwin_rule,
             remove_kwin_rule,
+            reset_kwin_setup,
         ])
         .on_window_event(|window, event| {
             // Hide windows instead of closing them (except for quit)
