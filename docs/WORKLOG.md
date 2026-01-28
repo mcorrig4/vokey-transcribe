@@ -33,6 +33,46 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Completed Work
 
+### 2026-01-28: Sprint 7B — Post-processing Modes (PR #162)
+
+**Processing Pipeline Implementation**
+- [x] Created `processing/` module with mod.rs, coding.rs, markdown.rs, prompt.rs, pipeline.rs
+- [x] ProcessingMode enum: Normal, Coding, Markdown, Prompt
+- [x] Coding processor: snake_case conversion, filler word removal
+- [x] Markdown processor: list detection, structure formatting
+- [x] Prompt processor: OpenAI gpt-4o-mini with XML safety, retry logic
+- [x] Pipeline integration in effects.rs after transcription completion
+- [x] Tauri commands: get_processing_mode, set_processing_mode
+- [x] Mode persisted in AppSettings
+
+**Frontend Mode Selector**
+- [x] ProcessingMode type and ProcessingModeInfo metadata in types.ts
+- [x] Mode selector in Debug panel with button group
+- [x] Mode badge in HUD PillContent (shown when idle, non-normal mode)
+- [x] HUDContext tracks processingMode state via events
+
+**Code Review Fixes**
+- [x] Removed unused WORD_BOUNDARY_REGEX static
+- [x] Strengthened prompt injection guardrails
+- [x] Added warning log for regex compilation failures
+- [x] Added keyboard focus states for accessibility
+
+### 2026-01-28: Sprint 7A Refinements & E2E Prep
+
+**Issue #147: Preserve Partial Transcript**
+- [x] Cache last partial text via useRef in TranscriptPanel
+- [x] Show cached text during transcribing instead of placeholder
+- [x] Pulsing ellipsis indicator during processing
+
+**Issue #154: Data-testid Attributes (Partial)**
+- [x] hud-container, hud-status, hud-timer, hud-error-message
+- [x] hud-transcript-panel, hud-transcript-preview, hud-mic-button
+- [x] debug-simulate-start/stop/error/cancel, debug-metrics-section
+
+**PR #145 Maintenance**
+- [x] Rebased onto develop to resolve conflicts
+- [x] PR now mergeable
+
 ### 2026-01-28: Sprint 7A Completion — Transcript Panel & Error Handling
 
 **PR #145: Real-time Transcript Display (#76)**
