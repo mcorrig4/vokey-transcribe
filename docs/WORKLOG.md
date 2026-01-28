@@ -44,7 +44,7 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 - [x] Added test scripts to package.json (test, test:run, test:coverage)
 
 **Test Suite Expansion:**
-- [x] 99 passing tests across 7 test files:
+- [x] 120 passing tests across 8 test files:
   - 7 utility tests (cn function)
   - 11 SettingsFormPage component tests
   - 7 HUD component tests
@@ -52,6 +52,7 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
   - 36 parseTranscriptLines utility tests
   - 10 UsagePage component tests
   - 12 AboutPage component tests
+  - 21 AdvancedPage component tests
 - [x] Created parseTranscriptLines utility for word-wrapping (#146)
 - [x] Added data-testid attributes for E2E testing (#154)
 
