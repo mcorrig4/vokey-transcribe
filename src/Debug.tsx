@@ -5,6 +5,9 @@ import { listen } from '@tauri-apps/api/event'
 import { UiState } from './types'
 import './styles/debug.css'
 
+// Constant: dev mode is determined once at module load
+const isDev = ['localhost', '127.0.0.1'].includes(window.location.hostname)
+
 // Hotkey status type matching Rust backend
 type HotkeyStatus = {
   active: boolean
@@ -337,7 +340,6 @@ function Debug() {
   }
 
   const restartApp = async () => {
-    const isDev = window.location.hostname === 'localhost'
     if (isDev) {
       pushLog('Dev mode: Closing app - restart with "pnpm tauri dev"')
       await exit(0)
@@ -450,7 +452,7 @@ function Debug() {
               </button>
               {kwinNeedsRestart && (
                 <button onClick={restartApp} className="kwin-restart-btn">
-                  {window.location.hostname === 'localhost' ? 'Quit App' : 'Restart App'}
+                  {isDev ? 'Quit App' : 'Restart App'}
                 </button>
               )}
               {kwinError && <span className="kwin-error">{kwinError}</span>}
