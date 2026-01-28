@@ -18,20 +18,21 @@ const navItems = [
   { id: 'about', label: 'About', icon: Info },
 ] as const
 
-type PageId = typeof navItems[number]['id']
+type NavItem = typeof navItems[number]
+type PageId = NavItem['id']
 
 interface SettingsLayoutProps {
   children?: React.ReactNode
 }
 
 interface NavItemProps {
-  item: typeof navItems[number]
+  item: NavItem
   isActive: boolean
   isCollapsed: boolean
   onClick: () => void
 }
 
-function NavItem({ item, isActive, isCollapsed, onClick }: NavItemProps) {
+function NavItemButton({ item, isActive, isCollapsed, onClick }: NavItemProps) {
   const Icon = item.icon
   return (
     <button
@@ -43,6 +44,7 @@ function NavItem({ item, isActive, isCollapsed, onClick }: NavItemProps) {
         isCollapsed && "justify-center px-2"
       )}
       title={isCollapsed ? item.label : undefined}
+      aria-label={item.label}
     >
       <Icon className="h-4 w-4 shrink-0" />
       {!isCollapsed && <span>{item.label}</span>}
@@ -68,7 +70,7 @@ export function SettingsLayout({ children }: SettingsLayoutProps) {
         >
           <nav className="flex-1 p-2 space-y-1">
             {navItems.map((item) => (
-              <NavItem
+              <NavItemButton
                 key={item.id}
                 item={item}
                 isActive={activePage === item.id}
@@ -88,6 +90,7 @@ export function SettingsLayout({ children }: SettingsLayoutProps) {
               isCollapsed && "justify-center"
             )}
             title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             {isCollapsed ? (
               <ChevronRight className="h-4 w-4" />
@@ -110,8 +113,8 @@ export function SettingsLayout({ children }: SettingsLayoutProps) {
   )
 }
 
-// Placeholder content components for each page
-function SettingsContent({ page }: { page: PageId }) {
+// Placeholder content components for each page - exhaustive switch for type safety
+function SettingsContent({ page }: { page: PageId }): React.ReactNode {
   switch (page) {
     case 'usage':
       return <UsagePage />
@@ -121,8 +124,6 @@ function SettingsContent({ page }: { page: PageId }) {
       return <AdvancedPage />
     case 'about':
       return <AboutPage />
-    default:
-      return null
   }
 }
 
