@@ -14,13 +14,13 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 **Settings UI Overhaul Status:**
 - Epic: #114, PR: #137 (draft → develop)
 - Milestone: "Settings UI Overhaul"
-- Phase 1: Foundation + Usage Page (#115-#119)
-  - #115 Setup Tailwind + shadcn/ui ✅ COMPLETE (PR #141 merged)
-  - #116 tauri-controls + Layout 🔄 IN PROGRESS (PR #144)
-  - #117 Admin API Key Storage ⬜
-  - #118 OpenAI Usage API Integration ⬜
-  - #119 Usage Metrics UI ⬜
-- Phase 2: Settings Migration (#120-#123) ⬜
+- Phase 1: Foundation + Usage Page (#115-#119) ✅ COMPLETE
+  - #115 Setup Tailwind + shadcn/ui ✅ (PR #141 merged)
+  - #116 tauri-controls + Layout ✅ (PR #144)
+  - #117 Admin API Key Storage ✅ (PR #144)
+  - #118 OpenAI Usage API Integration ✅ (PR #144)
+  - #119 Usage Metrics UI ✅ (PR #144)
+- Phase 2: Settings Migration (#120-#123) ⬜ NEXT
 - Phase 3: Architecture Planning (#124) ⬜
 
 **Sprint 7A Status (Parallel):**
@@ -199,6 +199,51 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 ---
 
 ## Session Notes
+
+### Session 2026-01-28 (Phase 1 Complete - Settings UI Overhaul)
+**Completed entire Phase 1: Foundation + Usage Page**
+
+**Issues Completed:**
+- #115 Setup Tailwind + shadcn/ui ✅ (PR #141 merged)
+- #116 tauri-controls + Settings Layout ✅
+- #117 Admin API Key Storage ✅
+- #118 OpenAI Usage API Integration ✅
+- #119 Usage Metrics UI ✅
+
+**Major Features Implemented:**
+
+1. **Admin API Key Storage (Issue #117):**
+   - Rust `admin_key` module with keyring crate for secure OS-level storage
+   - Tauri commands: get_admin_key_status, set_admin_api_key, validate_admin_api_key
+   - AdminKeyInput UI component with validation, masked display, reveal toggle
+
+2. **OpenAI Usage API Integration (Issue #118):**
+   - Rust `usage` module with API client, types, and caching
+   - Fetches costs and audio transcription usage from OpenAI org endpoints
+   - 5-minute cache to avoid API spam
+   - Tauri commands: fetch_usage_metrics, get_cached_usage_metrics
+
+3. **Usage Metrics UI (Issue #119):**
+   - UsagePage component with metrics grid (30d/7d/24h)
+   - Budget progress bar with color indicators
+   - Loading skeletons, error states, "not configured" state
+   - Formatting utilities for currency, duration, numbers
+
+**New UI Components:**
+- Progress (shadcn + @radix-ui/react-progress)
+- Skeleton for loading states
+- Input component
+
+**Files Created:**
+- `src-tauri/src/admin_key.rs`
+- `src-tauri/src/usage/mod.rs`, `types.rs`, `client.rs`, `cache.rs`
+- `src/components/Settings/AdminKeyInput.tsx`
+- `src/components/Settings/UsagePage.tsx`
+- `src/components/ui/input.tsx`, `progress.tsx`, `skeleton.tsx`
+
+**Next:** Phase 2 - Settings Migration (#120-#123)
+
+---
 
 ### Session 2026-01-28 (Issue #116 - tauri-controls + Settings Layout)
 **Continued Settings UI Overhaul:**
