@@ -75,7 +75,7 @@ export function HUD() {
   }, [])
 
   return (
-    <div className={styles.layout} onMouseDown={handleMouseDown}>
+    <div className={styles.layout} onMouseDown={handleMouseDown} data-testid="hud-container">
       <ControlPill />
       <SetupBanner />
       {panelState !== 'hidden' && (

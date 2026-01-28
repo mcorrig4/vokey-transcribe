@@ -65,7 +65,7 @@ export function TranscriptPanel({ isExiting = false }: TranscriptPanelProps) {
     : styles.panel
 
   return (
-    <div className={panelClassName} data-no-drag>
+    <div className={panelClassName} data-no-drag data-testid="hud-transcript-panel">
       <div className={styles.content}>
         {hasTranscriptContent ? (
           <div
@@ -74,6 +74,7 @@ export function TranscriptPanel({ isExiting = false }: TranscriptPanelProps) {
             aria-live="polite"
             aria-relevant="additions"
             aria-label="Transcript"
+            data-testid="hud-transcript-preview"
           >
             {lines.map((line, index) => {
               const isLastLine = index === lines.length - 1
