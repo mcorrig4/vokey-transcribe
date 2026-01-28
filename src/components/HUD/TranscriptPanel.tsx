@@ -1,3 +1,4 @@
+import { useRef, useEffect } from 'react'
 import { useHUD } from '../../context/HUDContext'
 import { useTranscriptLines } from '../../hooks/useTranscriptLines'
 import styles from './TranscriptPanel.module.css'
@@ -17,12 +18,33 @@ interface TranscriptPanelProps {
  * - CSS gradient mask creates fade effect for older lines
  * - Smooth animation when new lines appear
  * - Blinking cursor at end of active text
+ *
+ * Issue #147: Preserves partial transcript during transcribing state
+ * for visual continuity (caches last known text via ref).
  */
 export function TranscriptPanel({ isExiting = false }: TranscriptPanelProps) {
   const { state } = useHUD()
 
+  // Cache last known partial text to preserve during transcribing (issue #147)
+  const lastPartialTextRef = useRef<string | undefined>(undefined)
+
   // Extract partial text from recording state
-  const partialText = state.status === 'recording' ? state.partialText : undefined
+  const currentPartialText = state.status === 'recording' ? state.partialText : undefined
+
+  // Update cache when we have new partial text during recording
+  useEffect(() => {
+    if (currentPartialText) {
+      lastPartialTextRef.current = currentPartialText
+    }
+    // Clear cache when returning to idle (cycle complete)
+    if (state.status === 'idle' || state.status === 'done') {
+      lastPartialTextRef.current = undefined
+    }
+  }, [currentPartialText, state.status])
+
+  // Use current partial text, or cached text during transcribing
+  const partialText =
+    currentPartialText ?? (state.status === 'transcribing' ? lastPartialTextRef.current : undefined)
 
   // Parse text into display lines
   const lines = useTranscriptLines(partialText, {
@@ -58,7 +80,13 @@ export function TranscriptPanel({ isExiting = false }: TranscriptPanelProps) {
               return (
                 <div key={line.id} className={styles.line}>
                   <span className={styles.text}>{line.text}</span>
-                  {isLastLine && <span className={styles.cursor}>|</span>}
+                  {isLastLine && (
+                    isTranscribing ? (
+                      <span className={styles.processingIndicator} title="Processing...">⋯</span>
+                    ) : (
+                      <span className={styles.cursor}>|</span>
+                    )
+                  )}
                 </div>
               )
             })}

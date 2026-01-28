@@ -79,6 +79,15 @@
   animation: cursor-blink 0.8s step-end infinite;
 }
 
+/* Processing indicator when transcribing with cached text (#147) */
+.processingIndicator {
+  display: inline;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 400;
+  margin-left: 4px;
+  animation: processing-pulse 1.2s ease-in-out infinite;
+}
+
 /* Placeholder container when no transcript */
 .placeholderContainer {
   display: flex;
@@ -125,6 +134,15 @@
   }
   50% {
     opacity: 0;
+  }
+}
+
+@keyframes processing-pulse {
+  0%, 100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
   }
 }
 
