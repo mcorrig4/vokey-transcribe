@@ -4293,6 +4293,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tauri-plugin-process"
+version = "2.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d55511a7bf6cd70c8767b02c97bf8134fa434daf3926cfc1be0a0f94132d165a"
+dependencies = [
+ "tauri",
+ "tauri-plugin",
+]
+
+[[package]]
 name = "tauri-runtime"
 version = "2.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4979,6 +4989,7 @@ dependencies = [
  "dotenvy",
  "evdev",
  "futures-util",
+ "gtk",
  "hound",
  "log",
  "once_cell",
@@ -4988,6 +4999,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-log",
+ "tauri-plugin-process",
  "tempfile",
  "tokio",
  "tokio-tungstenite",
