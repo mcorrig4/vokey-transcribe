@@ -1,5 +1,6 @@
 import { useHUD } from '../../context/HUDContext'
 import { formatTime } from '../../utils/formatTime'
+import { Waveform } from './Waveform'
 import type { UiState } from '../../types'
 import styles from './PillContent.module.css'
 
@@ -8,14 +9,12 @@ import styles from './PillContent.module.css'
  * Displays state-appropriate content following issue #77 spec:
  * - Idle: "Ready" text
  * - Arming: "Starting..." text
- * - Recording: Dot + Timer (MM:SS)
+ * - Recording: Waveform + Timer (MM:SS) - Issue #75
  * - Stopping: "Finishing..." text
  * - Transcribing: Spinner + "Transcribing..." text
  * - Done: "Copied ✓" text
  * - Error: Truncated error message
  * - NoSpeech: "No speech" + source
- *
- * Waveform visualization deferred until backend provides data (#75).
  */
 export function PillContent() {
   const { state } = useHUD()
@@ -38,7 +37,7 @@ function renderContent(state: UiState) {
     case 'recording':
       return (
         <div className={styles.recording}>
-          <span className={styles.dot} aria-hidden="true">●</span>
+          <Waveform isRecording={true} />
           <span className={styles.timer}>{formatTime(state.elapsedSecs)}</span>
         </div>
       )
