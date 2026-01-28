@@ -6,6 +6,7 @@ mod kwin;
 mod metrics;
 mod settings;
 mod state_machine;
+mod usage;
 
 // Public for integration tests
 pub mod transcription;
@@ -36,6 +37,11 @@ pub struct MetricsHandle {
 /// Thread-safe wrapper for app settings
 pub struct SettingsHandle {
     settings: Arc<Mutex<AppSettings>>,
+}
+
+/// Thread-safe wrapper for usage cache
+pub struct UsageHandle {
+    cache: Arc<Mutex<usage::UsageCache>>,
 }
 
 /// UI state sent to the frontend via Tauri events.
@@ -407,6 +413,54 @@ async fn validate_admin_api_key(key: String) -> Result<bool, String> {
 }
 
 // ============================================================================
+// Usage API Commands (Settings UI Overhaul)
+// ============================================================================
+
+/// Fetch usage metrics from OpenAI API.
+/// Uses cache if available and not expired (5 minute TTL).
+/// Returns cached data with force_refresh=false, fresh data with force_refresh=true.
+#[tauri::command]
+async fn fetch_usage_metrics(
+    handle: tauri::State<'_, UsageHandle>,
+    force_refresh: bool,
+) -> Result<usage::UsageMetrics, String> {
+    // Check cache first (unless force refresh)
+    if !force_refresh {
+        let cache = handle.cache.lock().await;
+        if let Some(metrics) = cache.get() {
+            log::debug!("Usage: returning cached metrics");
+            return Ok(metrics.clone());
+        }
+    }
+
+    // Get admin key
+    let admin_key = admin_key::get_admin_api_key()
+        .ok_or_else(|| "Admin API key not configured".to_string())?;
+
+    // Fetch fresh metrics
+    log::info!("Usage: fetching fresh metrics from OpenAI API");
+    let metrics = usage::fetch_usage_metrics(&admin_key).await?;
+
+    // Update cache
+    {
+        let mut cache = handle.cache.lock().await;
+        cache.set(metrics.clone());
+    }
+
+    Ok(metrics)
+}
+
+/// Get cached usage metrics without making an API call.
+/// Returns None if no cached data is available.
+#[tauri::command]
+async fn get_cached_usage_metrics(
+    handle: tauri::State<'_, UsageHandle>,
+) -> Option<usage::UsageMetrics> {
+    let cache = handle.cache.lock().await;
+    cache.get_stale().cloned()
+}
+
+// ============================================================================
 // Metrics Commands (Sprint 6)
 // ============================================================================
 
@@ -678,6 +732,11 @@ pub fn run() {
                 settings: settings_handle.clone(),
             });
 
+            // Initialize usage cache for OpenAI usage metrics
+            app.manage(UsageHandle {
+                cache: Arc::new(Mutex::new(usage::UsageCache::new())),
+            });
+
             // Create effect runner (real audio capture as of Sprint 3)
             // Pass metrics collector for tracking (Sprint 6)
             let effect_runner = AudioEffectRunner::new(metrics_collector, settings_handle);
@@ -735,6 +794,8 @@ pub fn run() {
             get_admin_key_status,
             set_admin_api_key,
             validate_admin_api_key,
+            fetch_usage_metrics,
+            get_cached_usage_metrics,
             get_metrics_summary,
             get_metrics_history,
             get_error_history,
