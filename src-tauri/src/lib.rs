@@ -12,6 +12,7 @@ pub mod transcription;
 // Streaming transcription (Sprint 7A)
 pub mod streaming;
 
+use rustls::crypto::{ring, CryptoProvider};
 use serde::Serialize;
 use std::sync::Arc;
 use tauri::{
@@ -20,7 +21,6 @@ use tauri::{
     AppHandle, Emitter, Manager, WindowEvent,
 };
 use tokio::sync::{mpsc, Mutex};
-use rustls::crypto::{ring, CryptoProvider};
 
 use effects::{AudioEffectRunner, EffectRunner};
 use hotkey::{Hotkey, HotkeyManager, HotkeyStatus};
