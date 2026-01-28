@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react'
-import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import { listen } from '@tauri-apps/api/event'
+
+/** Number of visualization bars (must match backend NUM_BARS) */
+export const NUM_BARS = 24
+
+/** Initial/empty state for waveform bars */
+const EMPTY_BARS = new Array(NUM_BARS).fill(0) as number[]
 
 interface WaveformData {
   bars: number[]
@@ -12,32 +18,26 @@ interface WaveformData {
  * during active recording. Values are normalized 0.0-1.0 amplitudes.
  *
  * @param enabled - Whether to listen for updates (true only during recording)
- * @returns Array of 24 normalized amplitude values (0.0 - 1.0)
+ * @returns Array of NUM_BARS normalized amplitude values (0.0 - 1.0)
  */
 export function useWaveform(enabled: boolean): number[] {
-  const [bars, setBars] = useState<number[]>(new Array(24).fill(0))
+  const [bars, setBars] = useState<number[]>([...EMPTY_BARS])
 
   useEffect(() => {
     if (!enabled) {
       // Reset to flat bars when not recording
-      setBars(new Array(24).fill(0))
+      setBars([...EMPTY_BARS])
       return
     }
 
-    let unlisten: UnlistenFn | null = null
-
-    const setupListener = async () => {
-      unlisten = await listen<WaveformData>('waveform-update', (event) => {
-        setBars(event.payload.bars)
-      })
-    }
-
-    setupListener()
+    // Use promise-based cleanup to avoid race condition where
+    // cleanup runs before listen() resolves (matches HUDContext.tsx pattern)
+    const unlistenPromise = listen<WaveformData>('waveform-update', (event) => {
+      setBars(event.payload.bars)
+    })
 
     return () => {
-      if (unlisten) {
-        unlisten()
-      }
+      unlistenPromise.then((unlisten) => unlisten())
     }
   }, [enabled])
 

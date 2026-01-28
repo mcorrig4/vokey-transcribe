@@ -2,19 +2,25 @@ import { memo } from 'react'
 import { useWaveform } from '../../hooks/useWaveform'
 import styles from './styles/waveform.module.css'
 
+/** Minimum bar height in pixels (matches CSS min-height) */
+const MIN_BAR_HEIGHT = 4
+
+/** Maximum bar height in pixels (matches CSS max-height) */
+const MAX_BAR_HEIGHT = 28
+
 interface WaveformProps {
   isRecording: boolean
 }
 
 /**
  * Individual waveform bar, memoized to prevent unnecessary re-renders.
- * Height is calculated from amplitude: minimum 4px, maximum 28px.
+ * Height is calculated from amplitude: minimum MIN_BAR_HEIGHT, maximum MAX_BAR_HEIGHT.
  */
 const Bar = memo(({ height }: { height: number }) => (
   <div
     className={styles.bar}
     style={{
-      height: `${Math.max(4, height * 28)}px`,
+      height: `${Math.max(MIN_BAR_HEIGHT, height * MAX_BAR_HEIGHT)}px`,
     }}
   />
 ))
