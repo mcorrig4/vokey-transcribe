@@ -25,10 +25,15 @@ function hashString(str: string): string {
  * Attempts to break at word boundaries when possible.
  *
  * @param text - Text to wrap (should not contain newlines)
- * @param maxChars - Maximum characters per line
+ * @param maxChars - Maximum characters per line (must be > 0)
  * @returns Array of wrapped line strings
  */
 function wrapLine(text: string, maxChars: number): string[] {
+  // Guard against invalid maxChars to prevent infinite loop
+  if (maxChars <= 0) {
+    return text ? [text] : []
+  }
+
   if (text.length <= maxChars) {
     return [text]
   }
@@ -113,10 +118,14 @@ export function parseTranscriptLines(
   // Take only the last maxLines (newest content)
   const visibleLines = allLines.slice(-maxLines)
 
-  // Generate stable IDs based on content and position
-  // We include a position suffix to handle duplicate lines
+  // Calculate the starting absolute index for visible lines
+  // This ensures stable IDs as lines scroll (older lines keep their index)
+  const startIndex = Math.max(0, allLines.length - maxLines)
+
+  // Generate stable IDs based on content and absolute position
+  // Using absolute index prevents key changes when lines scroll up
   return visibleLines.map((text, index) => ({
-    id: `${hashString(text)}-${index}`,
+    id: `${hashString(text)}-${startIndex + index}`,
     text,
   }))
 }

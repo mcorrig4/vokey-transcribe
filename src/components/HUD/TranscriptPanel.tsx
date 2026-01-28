@@ -46,7 +46,13 @@ export function TranscriptPanel({ isExiting = false }: TranscriptPanelProps) {
     <div className={panelClassName} data-no-drag>
       <div className={styles.content}>
         {hasTranscriptContent ? (
-          <div className={styles.lines}>
+          <div
+            className={styles.lines}
+            role="log"
+            aria-live="polite"
+            aria-relevant="additions"
+            aria-label="Transcript"
+          >
             {lines.map((line, index) => {
               const isLastLine = index === lines.length - 1
               return (
