@@ -36,6 +36,26 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Completed Work
 
+### 2026-01-28: Testing Infrastructure + Appearance Page
+
+**Testing Infrastructure (Issues #148, #149, #150, #151):**
+- [x] Setup Vitest + React Testing Library with jsdom environment
+- [x] Created Tauri IPC mock utilities (mockInvoke, emitMockEvent, setupDefaultTauriMocks)
+- [x] Added test scripts to package.json (test, test:run, test:coverage)
+- [x] 25 passing tests:
+  - 7 utility tests (cn function)
+  - 11 SettingsFormPage component tests
+  - 7 HUD component tests
+
+**Appearance Settings Page:**
+- [x] Created AppearancePage with theme selection (System/Light/Dark)
+- [x] Added HUD position configuration (4 corners)
+- [x] Added animation toggle and auto-hide delay settings
+- [x] Integrated into Settings navigation with Palette icon
+- [x] Real-time theme switching with system detection
+
+**Issues Closed:** #116, #117, #118, #119, #148, #149, #150, #151
+
 ### 2026-01-28: Settings UI Overhaul Epic - Phases 2 & 3
 
 **Phase 2 - Settings Migration (Issues #120-#123):**
