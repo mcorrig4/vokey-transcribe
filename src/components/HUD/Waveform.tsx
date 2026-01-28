@@ -2,11 +2,8 @@ import { memo } from 'react'
 import { useWaveform } from '../../hooks/useWaveform'
 import styles from './styles/waveform.module.css'
 
-/** Minimum bar height in pixels (matches CSS min-height) */
-const MIN_BAR_HEIGHT = 4
-
-/** Maximum bar height in pixels (matches CSS max-height) */
-const MAX_BAR_HEIGHT = 28
+/** Minimum scale factor for bars (min-height / max-height = 4/28) */
+const MIN_SCALE = 4 / 28 // ~0.143
 
 interface WaveformProps {
   isRecording: boolean
@@ -14,16 +11,19 @@ interface WaveformProps {
 
 /**
  * Individual waveform bar, memoized to prevent unnecessary re-renders.
- * Height is calculated from amplitude: minimum MIN_BAR_HEIGHT, maximum MAX_BAR_HEIGHT.
+ * Uses CSS transform: scaleY() for GPU-accelerated animation (issue #138).
+ * Scale ranges from MIN_SCALE (~0.143) to 1.0 based on amplitude.
  */
-const Bar = memo(({ height }: { height: number }) => (
-  <div
-    className={styles.bar}
-    style={{
-      height: `${Math.max(MIN_BAR_HEIGHT, height * MAX_BAR_HEIGHT)}px`,
-    }}
-  />
-))
+const Bar = memo(({ amplitude }: { amplitude: number }) => {
+  // Scale from MIN_SCALE to 1.0 based on amplitude (0 to 1)
+  const scale = MIN_SCALE + amplitude * (1 - MIN_SCALE)
+  return (
+    <div
+      className={styles.bar}
+      style={{ '--amplitude': scale } as React.CSSProperties}
+    />
+  )
+})
 
 Bar.displayName = 'WaveformBar'
 
@@ -48,7 +48,7 @@ export function Waveform({ isRecording }: WaveformProps) {
   return (
     <div className={`${styles.container} ${isRecording ? styles.active : ''}`}>
       {bars.map((amplitude, index) => (
-        <Bar key={index} height={amplitude} />
+        <Bar key={index} amplitude={amplitude} />
       ))}
     </div>
   )

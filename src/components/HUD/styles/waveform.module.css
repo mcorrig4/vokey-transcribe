@@ -18,8 +18,7 @@
 
 .bar {
   width: 4px;
-  min-height: 4px;
-  max-height: 28px;
+  height: 28px;
   background: linear-gradient(
     to top,
     #ef4444 0%,
@@ -27,7 +26,14 @@
     #fca5a5 100%
   );
   border-radius: 2px;
-  transition: height 33ms linear;
+
+  /* GPU-accelerated scaling (issue #138) */
+  transform-origin: bottom center;
+  transform: scaleY(var(--amplitude, 0.143));
+  transition: transform 33ms linear;
+
+  /* Optimize compositing: hint browser to put on own layer */
+  will-change: transform;
 }
 
 /* Active state: add glow effect to bars */
@@ -44,5 +50,6 @@
 @media (prefers-reduced-motion: reduce) {
   .bar {
     transition: none;
+    will-change: auto;
   }
 }

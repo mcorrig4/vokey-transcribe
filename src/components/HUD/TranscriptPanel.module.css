@@ -42,25 +42,85 @@
   overflow: hidden;
 }
 
+/* Container for transcript lines */
+.lines {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 2px;
+  min-height: 100%;
+}
+
+/* Individual transcript line */
+.line {
+  display: flex;
+  align-items: baseline;
+  flex-shrink: 0;
+  /* Smooth entry animation for new lines */
+  animation: lineEnter 150ms ease-out;
+}
+
+/* Transcript text styling */
 .text {
   color: rgba(255, 255, 255, 0.85);
   font-size: 14px;
   font-weight: 400;
   line-height: 1.5;
   font-family: system-ui, -apple-system, sans-serif;
+  word-break: break-word;
 }
 
+/* Blinking cursor at end of text */
 .cursor {
   display: inline;
   color: rgba(255, 255, 255, 0.9);
   font-weight: 400;
+  margin-left: 1px;
   animation: cursor-blink 0.8s step-end infinite;
 }
 
+/* Processing indicator when transcribing with cached text (#147) */
+.processingIndicator {
+  display: inline;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 400;
+  margin-left: 4px;
+  animation: processing-pulse 1.2s ease-in-out infinite;
+}
+
+/* Placeholder container when no transcript */
+.placeholderContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+/* Placeholder text styling */
+.placeholder {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+  font-weight: 400;
+  font-style: italic;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* Animations */
 @keyframes slideIn {
   from {
     opacity: 0;
     transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes lineEnter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
@@ -74,6 +134,15 @@
   }
   50% {
     opacity: 0;
+  }
+}
+
+@keyframes processing-pulse {
+  0%, 100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
   }
 }
 
@@ -96,6 +165,9 @@
 /* Accessibility: Respect user's motion preferences */
 @media (prefers-reduced-motion: reduce) {
   .panel {
+    animation: none;
+  }
+  .line {
     animation: none;
   }
   .cursor {

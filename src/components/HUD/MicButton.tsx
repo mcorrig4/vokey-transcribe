@@ -23,6 +23,7 @@ export function MicButton() {
       className={styles.button}
       data-state={state.status}
       data-no-drag
+      data-testid="hud-mic-button"
       aria-label={getAriaLabel(state)}
       aria-live="polite"
       disabled

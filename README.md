@@ -8,7 +8,8 @@ A lightweight desktop tool that:
 - Sends the audio to OpenAI Speech-to-Text (cloud) for transcription
 - Copies the transcript to the clipboard (user pastes manually)
 - Shows a minimal always-on-top HUD (Idle / Arming / Recording / Stopping / Transcribing / No speech / Done / Error)
-- Phase 2: optional streaming partial transcript + post-processing for "coding mode"
+- **Real-time streaming** (Sprint 7A): Shows words as you speak via OpenAI Realtime API
+- **Post-processing modes** (Sprint 7B): Coding mode, Markdown mode, custom prompts
 
 **Target platform:** Kubuntu with KDE Plasma 6.4 on Wayland. Windows support is future/best-effort.
 
@@ -59,6 +60,65 @@ Short-clip VAD uses WebRTC VAD (PCM 16-bit mono, 8/16/32/48kHz).
 
 ---
 
+## Real-time Streaming Transcription (Sprint 7A)
+
+VoKey supports **real-time streaming transcription** via the OpenAI Realtime API, showing words as you speak.
+
+### Architecture (Dual-Stream)
+
+```
+Audio Input (CPAL)
+      │
+      ├──▶ WAV File (backup for batch transcription)
+      │
+      └──▶ WebSocket Stream ──▶ OpenAI Realtime API
+                                      │
+                                      ▼
+                              Partial Transcripts ──▶ HUD TranscriptPanel
+```
+
+### Key Features
+
+- **Live feedback**: See words appear as you speak
+- **Dual-stream backup**: Audio is saved to WAV AND streamed simultaneously
+- **Graceful fallback**: If streaming fails, batch transcription (Whisper API) takes over
+- **Trust-final strategy**: Partials are for display; final clipboard uses batch result for accuracy
+
+### HUD Redesign
+
+The HUD features a modern floating panel design:
+
+```
+┌─────────────────────────────────┐
+│ [Mic]  ●  Recording  00:05      │   ◀─ Control Pill (mic button + status)
+└─────────────────────────────────┘
+
+┌─────────────────────────────────┐
+│ Hello, this is a test of the    │   ◀─ Transcript Panel (fade-scroll)
+│ real-time streaming feature...  │
+│ It shows words as you speak▌    │
+└─────────────────────────────────┘
+```
+
+### Configuration
+
+Streaming is enabled by default when `OPENAI_API_KEY` is set. To disable:
+
+1. Open Settings window (tray menu → Settings)
+2. Toggle "Enable Streaming" off
+3. VoKey will use batch-only mode
+
+### Fallback Behavior
+
+| Scenario | Behavior |
+|----------|----------|
+| Streaming connects successfully | Partials shown in real-time |
+| WebSocket connection fails | Falls back to batch-only (no partials) |
+| WebSocket disconnects mid-recording | WAV continues, batch transcription works |
+| Both streaming AND batch fail | Error shown with partial text as fallback |
+
+---
+
 ## Linux/Wayland approach
 
 ### Global hotkey
@@ -104,6 +164,23 @@ src/                                  # React UI (TSX)
   main.tsx                            # Boot React app, route HUD vs Debug window
   App.tsx                             # HUD component with state-aware display
   Debug.tsx                           # Debug panel with simulate buttons + status
+  types.ts                            # Shared TypeScript types (UiState)
+  context/
+    HUDContext.tsx                    # React context for HUD state
+  components/HUD/
+    HUD.tsx                           # Main HUD container
+    ControlPill.tsx                   # Pill-shaped control with mic button
+    MicButton.tsx                     # Microphone button with state styling
+    PillContent.tsx                   # Dynamic content (timer, status)
+    TranscriptPanel.tsx               # Real-time transcript with fade-scroll
+    SettingsButton.tsx                # Settings gear button
+    SetupBanner.tsx                   # KWin setup reminder banner
+  hooks/
+    useTranscriptLines.ts             # Memoized transcript text processing
+  utils/
+    formatTime.ts                     # Timer formatting (MM:SS)
+    stateColors.ts                    # State-aware color mapping
+    parseTranscriptLines.ts           # Word-wrap and line parsing
   styles/
     hud.css                           # HUD overlay styling
     debug.css                         # Debug panel styling
@@ -134,9 +211,20 @@ src-tauri/                            # Rust backend (Tauri host)
       recorder.rs                     # AudioRecorder with dedicated thread
       vad.rs                          # Short-clip speech detection (WebRTC VAD)
 
-# Future/Planned:
-#   openai/                           # Sprint 4: transcription
-#   clipboard/                        # Sprint 4: arboard clipboard
+    transcription/                    # OpenAI Whisper batch transcription
+      mod.rs                          # Module exports
+      openai.rs                       # Whisper API client (multipart upload)
+
+    streaming/                        # Real-time streaming (Sprint 7A)
+      mod.rs                          # Module exports
+      realtime_client.rs              # WebSocket connection with retry logic
+      realtime_session.rs             # Session management and audio streaming
+      audio_streamer.rs               # Audio sample buffering and encoding
+      transcript_aggregator.rs        # Delta text accumulation
+      resampler.rs                    # Sample rate conversion (if needed)
+      api_types.rs                    # OpenAI Realtime API message types
+
+    metrics.rs                        # Performance metrics collection
 
 docs/
   WORKLOG.md                          # Progress tracking, session notes

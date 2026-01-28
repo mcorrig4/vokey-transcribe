@@ -780,6 +780,99 @@ VoKey stores no-speech filter settings in a small JSON file under the per-user T
 
 ---
 
+### 10) WebSocket Streaming with Dual-Stream Architecture (Sprint 7A)
+
+When implementing real-time streaming alongside existing file-based workflows, use a **dual-stream architecture** where audio is written to WAV AND streamed simultaneously. This provides fallback if streaming fails.
+
+#### Connection Retry with Exponential Backoff
+
+```rust
+const MAX_RETRIES: u32 = 3;
+const RETRY_BASE_DELAY: Duration = Duration::from_secs(1);
+
+async fn connect_with_retry(url: &str) -> Result<WebSocket> {
+    for attempt in 1..=MAX_RETRIES {
+        match connect_async(url).await {
+            Ok(ws) => return Ok(ws),
+            Err(e) if attempt < MAX_RETRIES => {
+                let delay = RETRY_BASE_DELAY * 2u32.pow(attempt - 1);
+                log::warn!("Connection attempt {} failed, retrying in {:?}", attempt, delay);
+                tokio::time::sleep(delay).await;
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    unreachable!()
+}
+```
+
+#### Non-Blocking Audio Streaming
+
+Never block the audio recording thread for network operations:
+
+```rust
+// Good: Fire-and-forget channel send
+if let Err(_) = streaming_tx.try_send(samples) {
+    log::debug!("Streaming channel full, dropping samples");
+    // WAV recording continues normally
+}
+
+// Bad: Blocking send that could stall audio capture
+streaming_tx.send(samples).await; // DON'T DO THIS
+```
+
+#### State Machine Integration for Streaming
+
+Preserve streaming state through transitions for fallback:
+
+```rust
+// Add partial_text to Stopping and Transcribing states
+Stopping {
+    recording_id: Uuid,
+    wav_path: PathBuf,
+    partial_text: Option<String>,  // Preserved for fallback
+},
+
+// Use partial_text as fallback when batch transcription fails
+(Transcribing { partial_text, .. }, TranscribeFail { err, .. }) => (
+    Error {
+        message: err,
+        last_good_text: partial_text.clone(),  // Fallback to streaming result
+    },
+    ...
+)
+```
+
+#### React Keys for Streaming Updates
+
+When displaying rapidly-updating streaming text, use stable keys based on absolute position:
+
+```typescript
+// Bad: Relative index changes as lines scroll
+id: `${hash}-${index}`  // "abc-0" becomes "abc-1" when new line added
+
+// Good: Absolute index is stable
+const startIndex = allLines.length - visibleLines.length
+id: `${hash}-${startIndex + index}`  // "abc-5" stays "abc-5"
+```
+
+#### ARIA Live Regions for Accessibility
+
+Screen readers need `aria-live` to announce streaming updates:
+
+```tsx
+<div
+  role="log"
+  aria-live="polite"
+  aria-relevant="additions"
+  aria-label="Transcript"
+>
+  {lines.map(line => <div key={line.id}>{line.text}</div>)}
+</div>
+```
+
+---
+
 ## Windows notes (for future reference)
 
 If Windows support is added later, these are the key differences:

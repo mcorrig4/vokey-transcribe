@@ -43,10 +43,14 @@ pub enum State {
     Stopping {
         recording_id: Uuid,
         wav_path: PathBuf,
+        /// Preserved partial transcript for fallback if batch transcription fails
+        partial_text: Option<String>,
     },
     Transcribing {
         recording_id: Uuid,
         wav_path: PathBuf,
+        /// Preserved partial transcript for fallback if batch transcription fails
+        partial_text: Option<String>,
     },
     NoSpeech {
         recording_id: Uuid,
@@ -263,6 +267,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             Recording {
                 recording_id,
                 wav_path,
+                partial_text,
                 ..
             },
             HotkeyToggle,
@@ -270,6 +275,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             Stopping {
                 recording_id: *recording_id,
                 wav_path: wav_path.clone(),
+                partial_text: partial_text.clone(),
             },
             vec![StopAudio { id: *recording_id }, EmitUi],
         ),
@@ -298,7 +304,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
                 recording_id,
                 wav_path,
                 started_at,
-                ..
+                partial_text,
             },
             RecordingTick { id },
         ) if *recording_id == id => {
@@ -315,6 +321,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
                     Stopping {
                         recording_id: *recording_id,
                         wav_path: wav_path.clone(),
+                        partial_text: partial_text.clone(),
                     },
                     vec![StopAudio { id: *recording_id }, EmitUi],
                 )
@@ -362,12 +369,14 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             Stopping {
                 recording_id,
                 wav_path,
+                partial_text,
             },
             AudioStopOk { id },
         ) if *recording_id == id => (
             Transcribing {
                 recording_id: *recording_id,
                 wav_path: wav_path.clone(),
+                partial_text: partial_text.clone(),
             },
             vec![
                 StartTranscription {
@@ -381,6 +390,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             Stopping {
                 recording_id,
                 wav_path,
+                ..
             },
             NoSpeechDetected {
                 id,
@@ -406,12 +416,13 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             Stopping {
                 recording_id,
                 wav_path,
+                partial_text,
             },
             AudioStopFail { id, err },
         ) if *recording_id == id => (
             Error {
                 message: err,
-                last_good_text: None,
+                last_good_text: partial_text.clone(),
             },
             vec![
                 Cleanup {
@@ -471,12 +482,14 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             Transcribing {
                 recording_id,
                 wav_path,
+                partial_text,
             },
             TranscribeFail { id, err },
         ) if *recording_id == id => (
             Error {
                 message: err,
-                last_good_text: None,
+                // Use partial transcript from streaming as fallback when batch fails
+                last_good_text: partial_text.clone(),
             },
             vec![
                 Cleanup {

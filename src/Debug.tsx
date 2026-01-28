@@ -553,7 +553,7 @@ function Debug() {
 
       {/* Metrics Summary */}
       {metricsSummary && (
-        <div className="debug-section metrics-summary">
+        <div className="debug-section metrics-summary" data-testid="debug-metrics-section">
           <strong>Performance Metrics:</strong>
           <div className="metrics-grid">
             <div className="metric-item">
@@ -638,10 +638,10 @@ function Debug() {
       )}
 
       <div className="debug-buttons">
-        <button onClick={simulateRecordStart}>Simulate Recording</button>
-        <button onClick={simulateRecordStop}>Simulate Stop</button>
-        <button onClick={simulateError}>Simulate Error</button>
-        <button onClick={simulateCancel}>Reset/Cancel</button>
+        <button onClick={simulateRecordStart} data-testid="debug-simulate-start">Simulate Recording</button>
+        <button onClick={simulateRecordStop} data-testid="debug-simulate-stop">Simulate Stop</button>
+        <button onClick={simulateError} data-testid="debug-simulate-error">Simulate Error</button>
+        <button onClick={simulateCancel} data-testid="debug-simulate-cancel">Reset/Cancel</button>
       </div>
 
       <div className="debug-log">
