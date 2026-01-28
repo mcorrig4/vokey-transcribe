@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { TitleBar, Separator } from '@/components/ui'
 import { AdminKeyInput } from './AdminKeyInput'
+import { UsagePage } from './UsagePage'
 import { cn } from '@/lib/utils'
 import {
   BarChart3,
@@ -114,7 +115,7 @@ export function SettingsLayout({ children }: SettingsLayoutProps) {
   )
 }
 
-// Placeholder content components for each page - exhaustive switch for type safety
+// Content components for each page - exhaustive switch for type safety
 function SettingsContent({ page }: { page: PageId }): React.ReactNode {
   switch (page) {
     case 'usage':
@@ -126,22 +127,6 @@ function SettingsContent({ page }: { page: PageId }): React.ReactNode {
     case 'about':
       return <AboutPage />
   }
-}
-
-function UsagePage() {
-  return (
-    <div className="space-y-4">
-      <h2 className="text-2xl font-bold">API Usage</h2>
-      <p className="text-muted-foreground">
-        View your OpenAI API usage metrics and spending.
-      </p>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <PlaceholderCard title="Current Month Spend" value="$0.00" />
-        <PlaceholderCard title="Audio Transcribed" value="0 seconds" />
-        <PlaceholderCard title="API Requests" value="0" />
-      </div>
-    </div>
-  )
 }
 
 function SettingsPage() {
@@ -194,15 +179,6 @@ function AboutPage() {
           </a>
         </p>
       </div>
-    </div>
-  )
-}
-
-function PlaceholderCard({ title, value }: { title: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-border bg-card p-4">
-      <p className="text-sm text-muted-foreground">{title}</p>
-      <p className="text-2xl font-bold mt-1">{value}</p>
     </div>
   )
 }

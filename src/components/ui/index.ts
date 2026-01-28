@@ -9,5 +9,7 @@ export {
   CardContent,
 } from './card'
 export { Input, type InputProps } from './input'
+export { Progress } from './progress'
 export { Separator } from './separator'
+export { Skeleton } from './skeleton'
 export { TitleBar, WindowControls } from './titlebar'
