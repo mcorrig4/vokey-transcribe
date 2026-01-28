@@ -6,23 +6,45 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Current Status
 
-**Phase:** Sprint 7 — Waveform Visualization (Issue #72 + #75)
+**Phase:** Sprint 7B — Post-processing Modes
 **Target:** Kubuntu with KDE Plasma 6.4 on Wayland
-**Branch:** `claude/sprint-7-issue-72-A3r3C`
+**Branch:** `claude/sprint-7b-postprocessing-YHEWs`
 **Last Updated:** 2026-01-28
 
-**Sprint 7 Waveform Status:**
-- Tracking Issue: #130 (Sprint 7 Waveform Visualization)
-- Phase 1: #72 Backend Waveform Buffer 📋 PLANNING
-- Phase 2: #75 Frontend Waveform Component 📋 PLANNING (blocked by #72)
+**Sprint 7B Status:**
+- 7B.1: Processing Module Infrastructure 🚧 IN PROGRESS
+- 7B.2: Coding Mode Processor 📋 PLANNED
+- 7B.3: Markdown Mode Processor 📋 PLANNED
+- 7B.4: Prompt Mode Processor (LLM) 📋 PLANNED
+- 7B.5: Processing Pipeline Integration 📋 PLANNED
+- 7B.6: Tray Menu Mode Selection 📋 PLANNED
+- 7B.7: Debug Panel Mode Selector 📋 PLANNED
+- 7B.8: HUD Mode Indicator 📋 PLANNED
 
-**Sprint 7A Status (Previous):**
-- Backend: #68 WebSocket ✅, #69 Audio Pipeline ✅, #70 Transcript Aggregation ✅ (PR #107 merged)
-- Frontend: #73 HUD Scaffolding ✅, #74+#77 Mic Button+Pill 🧪 UAT (PR #125)
+**Sprint 7A Status (Parallel - UAT):**
+- PR #145 in UAT on real hardware
+- All backend + frontend issues complete
 
 ---
 
 ## Completed Work
+
+### 2026-01-28: Sprint 7B Planning & Implementation Start
+
+**Planning:**
+- [x] Created architecture plan with 8 decisions (AD-7B-001 through AD-7B-008)
+- [x] Created `docs/SPRINT7B-ISSUES.md` with 8 issue breakdowns
+- [x] Created feature branch `claude/sprint-7b-postprocessing-YHEWs`
+
+**Architecture Decisions:**
+- AD-7B-001: Local processing for Coding/Markdown, LLM for Prompt
+- AD-7B-002: gpt-4o-mini for Prompt mode with fallback
+- AD-7B-003: Mode state in AppSettings (persisted)
+- AD-7B-004: Tray submenu for mode selection
+- AD-7B-005: Pipeline integration after TranscribeOk
+- AD-7B-006: Dedicated processing/ module structure
+- AD-7B-007: XML tags for prompt injection prevention
+- AD-7B-008: Mode indicator in HUD when idle
 
 ### 2026-01-27: Sprint 7A - Transcript Reception & Aggregation (#70)
 - [x] Created TranscriptAggregator for delta text accumulation
@@ -61,14 +83,14 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 |--------|--------|-------|
 | 0 - Project skeleton + HUD + tray | ✅ COMPLETE | HUD shows "Ready", tray icon works, Quit exits cleanly |
 | 1 - State machine + UI wiring | ✅ COMPLETE | Full state machine, debug panel, simulate commands |
-| 2 - Global hotkey (evdev) | ✅ COMPLETE | evdev module implemented, needs testing on real hardware |
+| 2 - Global hotkey (evdev) | ✅ COMPLETE | evdev module implemented, tested on real hardware |
 | 3 - Audio capture (CPAL + Hound) | ✅ COMPLETE | CPAL capture, hound WAV writing, XDG paths |
 | 4 - OpenAI transcription + clipboard | ✅ COMPLETE | OpenAI Whisper API, arboard clipboard, tested on real hardware |
-| 5 - Full flow polish + tray controls | 🧪 UAT | Tray menu with Toggle/Cancel/Open Logs, HUD timer, auto-dismiss |
+| 5 - Full flow polish + tray controls | ✅ COMPLETE | Tray menu with Toggle/Cancel/Open Logs, HUD timer, auto-dismiss |
 | 6 - Hardening + UX polish | ⏸️ PAUSED | Phases 1-5 done; Phase 6 (50-cycle stability) needs real hardware |
-| 7A - Streaming transcription | 🧪 UAT | Backend: #68-#70 ✅. Frontend: PR #125 in UAT |
-| 7-Waveform - Real-time visualization | 🚧 ACTIVE | #130 tracking; Phase 1 (#72) + Phase 2 (#75) |
-| 7B - Post-processing modes | 📋 PLANNING | Option B chosen: Normal/Coding/Markdown/Prompt modes |
+| 7A - Streaming transcription | 🧪 UAT | All complete. PR #145 in UAT |
+| 7-Waveform - Real-time visualization | ✅ COMPLETE | #72 + #75 done |
+| 7B - Post-processing modes | 🚧 ACTIVE | Normal/Coding/Markdown/Prompt modes - 8 issues |
 
 ---
 
