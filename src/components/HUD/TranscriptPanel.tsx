@@ -30,7 +30,7 @@ export function TranscriptPanel({ isExiting = false }: TranscriptPanelProps) {
     : styles.panel
 
   return (
-    <div className={panelClassName} data-no-drag>
+    <div className={panelClassName} data-no-drag data-testid="hud-transcript-preview">
       <div className={styles.content}>
         <span className={styles.text}>{placeholderText}</span>
         <span className={styles.cursor}>|</span>

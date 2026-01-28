@@ -134,6 +134,7 @@ export function SettingsFormPage() {
               size="sm"
               onClick={resetToOriginal}
               disabled={loadingState === 'saving'}
+              data-testid="settings-reset-btn"
             >
               <RotateCcw className="h-4 w-4 mr-2" />
               Reset
@@ -144,6 +145,7 @@ export function SettingsFormPage() {
             onClick={saveSettings}
             disabled={!hasChanges || loadingState === 'saving'}
             className={cn(saveSuccess && "bg-green-600 hover:bg-green-700")}
+            data-testid="settings-save-btn"
           >
             {loadingState === 'saving' ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />

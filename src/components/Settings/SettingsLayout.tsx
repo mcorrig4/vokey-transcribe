@@ -52,6 +52,7 @@ function NavItemButton({ item, isActive, isCollapsed, onClick }: NavItemProps) {
       )}
       title={isCollapsed ? item.label : undefined}
       aria-label={item.label}
+      data-testid={`settings-nav-${item.id}`}
     >
       <Icon className="h-4 w-4 shrink-0" />
       {!isCollapsed && <span>{item.label}</span>}
@@ -74,6 +75,7 @@ export function SettingsLayout({ children }: SettingsLayoutProps) {
             "flex flex-col border-r border-border transition-all duration-200",
             isCollapsed ? "w-14" : "w-48"
           )}
+          data-testid="settings-sidebar"
         >
           <nav className="flex-1 p-2 space-y-1">
             {navItems.map((item) => (
@@ -111,7 +113,7 @@ export function SettingsLayout({ children }: SettingsLayoutProps) {
         </aside>
 
         {/* Main content area */}
-        <main className="flex-1 overflow-auto p-6">
+        <main className="flex-1 overflow-auto p-6" data-testid="settings-content">
           <SettingsContent page={activePage} />
           {children}
         </main>
