@@ -20,6 +20,7 @@ use tauri::{
     AppHandle, Emitter, Manager, WindowEvent,
 };
 use tokio::sync::{mpsc, Mutex};
+use rustls::crypto::{ring, CryptoProvider};
 
 use effects::{AudioEffectRunner, EffectRunner};
 use hotkey::{Hotkey, HotkeyManager, HotkeyStatus};
@@ -120,6 +121,12 @@ pub struct HotkeyStatusHolder {
 /// Holds cached audio status to avoid expensive re-initialization (Sprint 6 #25)
 pub struct AudioStatusHolder {
     status: AudioStatusResponse,
+}
+
+fn install_rustls_provider() {
+    if CryptoProvider::install_default(ring::default_provider()).is_err() {
+        log::debug!("Rustls crypto provider already installed");
+    }
 }
 
 impl StateLoopHandle {
@@ -499,6 +506,7 @@ async fn remove_kwin_rule() -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    install_rustls_provider();
     tauri::Builder::default()
         .setup(|app| {
             // Set up logging in debug mode

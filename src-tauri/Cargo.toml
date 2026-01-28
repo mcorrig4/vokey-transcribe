@@ -45,6 +45,7 @@ webrtc-vad = "0.4"
 tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
 base64 = "0.22"
 futures-util = "0.3"
+rustls = { version = "0.23", features = ["ring"] }
 
 # XDG paths
 dirs = "5"
