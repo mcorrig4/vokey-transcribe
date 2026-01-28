@@ -6,23 +6,65 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Current Status
 
-**Phase:** Sprint 7 — Waveform Visualization (Issue #72 + #75)
+**Phase:** Sprint 7A — Real-time Streaming Transcription (COMPLETING)
 **Target:** Kubuntu with KDE Plasma 6.4 on Wayland
-**Branch:** `claude/sprint-7-issue-72-A3r3C`
+**Branch:** `claude/fix-transcription-ui-display-YHEWs`
 **Last Updated:** 2026-01-28
 
-**Sprint 7 Waveform Status:**
-- Tracking Issue: #130 (Sprint 7 Waveform Visualization)
-- Phase 1: #72 Backend Waveform Buffer 📋 PLANNING
-- Phase 2: #75 Frontend Waveform Component 📋 PLANNING (blocked by #72)
-
-**Sprint 7A Status (Previous):**
-- Backend: #68 WebSocket ✅, #69 Audio Pipeline ✅, #70 Transcript Aggregation ✅ (PR #107 merged)
-- Frontend: #73 HUD Scaffolding ✅, #74+#77 Mic Button+Pill 🧪 UAT (PR #125)
+**Sprint 7A Status:**
+- Backend: All issues complete ✅
+  - #68 WebSocket Infrastructure ✅
+  - #69 Audio Streaming Pipeline ✅
+  - #70 Transcript Aggregation ✅
+  - #71 State Machine Integration ✅
+  - #72 Waveform Data Buffer ✅
+  - #100 Error Handling & Fallback ✅ (verified + gap fixed)
+- Frontend: All issues complete ✅
+  - #73 HUD Scaffolding ✅
+  - #74 Mic Button States ✅
+  - #75 Waveform Visualization ✅
+  - #76 Transcript Panel ✅ (PR #145)
+  - #77 Pill Content States ✅
+- Final:
+  - #78 Integration Testing — 🧪 Ready for UAT
+  - #79 Documentation & Polish — ✅ Complete
 
 ---
 
 ## Completed Work
+
+### 2026-01-28: Sprint 7A Completion — Transcript Panel & Error Handling
+
+**PR #145: Real-time Transcript Display (#76)**
+- [x] Created `parseTranscriptLines` utility for word-wrap and line parsing
+- [x] Created `useTranscriptLines` custom hook for memoized text processing
+- [x] Updated `TranscriptPanel.tsx` to display real `partialText` from state
+- [x] Added CSS animations for smooth line entry with fade-scroll effect
+- [x] Added ARIA live region for screen reader accessibility
+- [x] Fixed unstable React keys (use absolute index for stable reconciliation)
+- [x] Added maxChars guard to prevent infinite loop edge case
+
+**Error Handling Gap Fixed (#100)**
+- [x] Added `partial_text` field to `Stopping` and `Transcribing` states
+- [x] Partial text now preserved through state transitions
+- [x] `TranscribeFail` now uses partial text as `last_good_text` fallback
+- [x] Graceful degradation when batch transcription fails
+
+**Documentation Updates (#79)**
+- [x] Updated README.md with streaming transcription section
+- [x] Updated repo layout with new modules (streaming/, hooks/, utils/)
+- [x] Updated WORKLOG.md with Sprint 7A completion status
+
+**Architecture Decisions:**
+- AD-76-001: Pure frontend implementation for transcript display
+- AD-76-002: Custom hook pattern for separation of concerns
+- AD-76-003: CSS-based animations (no JS animation libraries)
+- AD-76-004: Character-count heuristic for word-wrap
+- AD-76-005: CSS mask gradient for fade effect
+
+**Deferred Issues Created:**
+- #146: Unit tests for parseTranscriptLines (priority:medium)
+- #147: UX for preserving partial text during transcribing (priority:low)
 
 ### 2026-01-27: Sprint 7A - Transcript Reception & Aggregation (#70)
 - [x] Created TranscriptAggregator for delta text accumulation
@@ -61,13 +103,17 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 |--------|--------|-------|
 | 0 - Project skeleton + HUD + tray | ✅ COMPLETE | HUD shows "Ready", tray icon works, Quit exits cleanly |
 | 1 - State machine + UI wiring | ✅ COMPLETE | Full state machine, debug panel, simulate commands |
-| 2 - Global hotkey (evdev) | ✅ COMPLETE | evdev module implemented, needs testing on real hardware |
+| 2 - Global hotkey (evdev) | ✅ COMPLETE | evdev module implemented, tested on real hardware |
 | 3 - Audio capture (CPAL + Hound) | ✅ COMPLETE | CPAL capture, hound WAV writing, XDG paths |
 | 4 - OpenAI transcription + clipboard | ✅ COMPLETE | OpenAI Whisper API, arboard clipboard, tested on real hardware |
-| 5 - Full flow polish + tray controls | 🧪 UAT | Tray menu with Toggle/Cancel/Open Logs, HUD timer, auto-dismiss |
+| 5 - Full flow polish + tray controls | ✅ COMPLETE | Tray menu with Toggle/Cancel/Open Logs, HUD timer, auto-dismiss |
 | 6 - Hardening + UX polish | ⏸️ PAUSED | Phases 1-5 done; Phase 6 (50-cycle stability) needs real hardware |
+<<<<<<< HEAD
 | 7A - Streaming transcription | 🧪 UAT | Backend: #68-#70 ✅. Frontend: PR #125 in UAT |
 | 7-Waveform - Real-time visualization | 🚧 ACTIVE | #130 tracking; Phase 1 (#72) + Phase 2 (#75) |
+=======
+| 7A - Streaming transcription | 🧪 UAT | All backend+frontend complete. PR #145 ready. Needs hardware testing |
+>>>>>>> f2e80d1 (docs: Sprint 7A completion - documentation & error handling)
 | 7B - Post-processing modes | 📋 PLANNING | Option B chosen: Normal/Coding/Markdown/Prompt modes |
 
 ---
