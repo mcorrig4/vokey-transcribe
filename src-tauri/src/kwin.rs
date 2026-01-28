@@ -184,7 +184,7 @@ fn install_rule(path: &PathBuf) -> Result<(), String> {
     rule_section.insert("acceptfocus".to_string(), "false".to_string());
     rule_section.insert("acceptfocusrule".to_string(), "2".to_string());
     rule_section.insert("position".to_string(), "20,20".to_string());
-    rule_section.insert("positionrule".to_string(), "2".to_string());
+    rule_section.insert("positionrule".to_string(), "4".to_string());
     rule_section.insert("wmclass".to_string(), WMCLASS.to_string());
     rule_section.insert("wmclassmatch".to_string(), "1".to_string());
 

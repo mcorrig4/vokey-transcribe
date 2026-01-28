@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { relaunch } from '@tauri-apps/plugin-process'
+import { relaunch, exit } from '@tauri-apps/plugin-process'
 import styles from './SetupBanner.module.css'
 
 interface KwinSetupNeeded {
@@ -61,15 +61,21 @@ export function SetupBanner() {
     setBannerState('hidden')
   }, [])
 
+  const isDev = window.location.hostname === 'localhost'
+
   const handleRestart = useCallback(async () => {
     try {
-      await relaunch()
+      if (isDev) {
+        await exit(0)
+      } else {
+        await relaunch()
+      }
     } catch (err) {
       console.error('[SetupBanner] Failed to restart app:', err)
       // Fallback message if restart fails
-      setErrorMsg('Please restart the app manually')
+      setErrorMsg(isDev ? 'Please restart with "pnpm tauri dev"' : 'Please restart the app manually')
     }
-  }, [])
+  }, [isDev])
 
   if (bannerState === 'hidden') {
     return null
@@ -89,7 +95,7 @@ export function SetupBanner() {
             onClick={handleRestart}
             data-no-drag
           >
-            Restart Now
+            {isDev ? 'Quit App' : 'Restart Now'}
           </button>
         </div>
       </div>
