@@ -422,3 +422,51 @@
   color: #fc8181;
   font-size: 11px;
 }
+
+/* Processing Mode Selector (Sprint 7B) */
+.processing-mode-selector {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mode-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.mode-button {
+  flex: 1;
+  padding: 8px 12px;
+  border: 2px solid #2d3748;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  background: #1a1a2e;
+  color: #a0aec0;
+  transition: all 0.15s;
+}
+
+.mode-button:hover {
+  border-color: #4a5568;
+  color: #eee;
+}
+
+.mode-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.mode-button.active {
+  border-color: #3182ce;
+  background: rgba(49, 130, 206, 0.15);
+  color: #63b3ed;
+}
+
+.mode-description {
+  font-size: 11px;
+  color: #a0aec0;
+  font-style: italic;
+}

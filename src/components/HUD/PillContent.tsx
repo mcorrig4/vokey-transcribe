@@ -1,13 +1,14 @@
 import { useHUD } from '../../context/HUDContext'
 import { formatTime } from '../../utils/formatTime'
 import { Waveform } from './Waveform'
-import type { UiState } from '../../types'
+import type { UiState, ProcessingMode } from '../../types'
+import { ProcessingModeInfo } from '../../types'
 import styles from './PillContent.module.css'
 
 /**
  * Dynamic content area for the control pill.
  * Displays state-appropriate content following issue #77 spec:
- * - Idle: "Ready" text
+ * - Idle: "Ready" text + mode badge (Sprint 7B)
  * - Arming: "Starting..." text
  * - Recording: Waveform + Timer (MM:SS) - Issue #75
  * - Stopping: "Finishing..." text
@@ -17,19 +18,28 @@ import styles from './PillContent.module.css'
  * - NoSpeech: "No speech" + source
  */
 export function PillContent() {
-  const { state } = useHUD()
+  const { state, processingMode } = useHUD()
 
   return (
     <div className={styles.content} data-state={state.status}>
-      {renderContent(state)}
+      {renderContent(state, processingMode)}
     </div>
   )
 }
 
-function renderContent(state: UiState) {
+function renderContent(state: UiState, processingMode: ProcessingMode) {
   switch (state.status) {
     case 'idle':
-      return <span className={styles.label}>Ready</span>
+      return (
+        <div className={styles.idle}>
+          <span className={styles.label}>Ready</span>
+          {processingMode !== 'normal' && (
+            <span className={styles.modeBadge} data-mode={processingMode}>
+              {ProcessingModeInfo[processingMode].badgeText}
+            </span>
+          )}
+        </div>
+      )
 
     case 'arming':
       return <span className={styles.label}>Starting…</span>

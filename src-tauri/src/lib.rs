@@ -12,6 +12,10 @@ pub mod transcription;
 // Streaming transcription (Sprint 7A)
 pub mod streaming;
 
+// Post-processing modes (Sprint 7B)
+pub mod processing;
+
+use rustls::crypto::{ring, CryptoProvider};
 use serde::Serialize;
 use std::sync::Arc;
 use tauri::{
@@ -20,7 +24,6 @@ use tauri::{
     AppHandle, Emitter, Manager, WindowEvent,
 };
 use tokio::sync::{mpsc, Mutex};
-use rustls::crypto::{ring, CryptoProvider};
 
 use effects::{AudioEffectRunner, EffectRunner};
 use hotkey::{Hotkey, HotkeyManager, HotkeyStatus};
@@ -381,6 +384,54 @@ async fn set_settings(
 }
 
 // ============================================================================
+// Processing Mode Commands (Sprint 7B)
+// ============================================================================
+
+/// Get the current processing mode
+#[tauri::command]
+async fn get_processing_mode(
+    handle: tauri::State<'_, SettingsHandle>,
+) -> Result<processing::ProcessingMode, String> {
+    let settings = handle.settings.lock().await;
+    Ok(settings.processing_mode)
+}
+
+/// Set the processing mode
+#[tauri::command]
+async fn set_processing_mode(
+    app: AppHandle,
+    handle: tauri::State<'_, SettingsHandle>,
+) -> Result<(), String> {
+    // This command is called with the mode in the request body
+    // But we need to accept it as a parameter
+    Err("Use set_processing_mode_value instead".to_string())
+}
+
+/// Set the processing mode to a specific value
+#[tauri::command]
+async fn set_processing_mode_value(
+    app: AppHandle,
+    handle: tauri::State<'_, SettingsHandle>,
+    mode: processing::ProcessingMode,
+) -> Result<(), String> {
+    let mut settings = handle.settings.lock().await;
+    let old_mode = settings.processing_mode;
+
+    if old_mode != mode {
+        settings.processing_mode = mode;
+        settings::save_settings(&app, &settings)?;
+        log::info!("Processing mode changed: {} -> {}", old_mode, mode);
+
+        // Emit mode-changed event to frontend
+        if let Err(e) = app.emit("mode-changed", &mode) {
+            log::warn!("Failed to emit mode-changed event: {}", e);
+        }
+    }
+
+    Ok(())
+}
+
+// ============================================================================
 // Metrics Commands (Sprint 6)
 // ============================================================================
 
@@ -708,9 +759,10 @@ pub fn run() {
             // Load and manage settings
             let loaded_settings = settings::load_settings(&app.handle());
             log::info!(
-                "Settings loaded: min_transcribe_ms={}, short_clip_vad_enabled={}",
+                "Settings loaded: min_transcribe_ms={}, short_clip_vad_enabled={}, processing_mode={}",
                 loaded_settings.min_transcribe_ms,
-                loaded_settings.short_clip_vad_enabled
+                loaded_settings.short_clip_vad_enabled,
+                loaded_settings.processing_mode
             );
             let settings_handle = Arc::new(Mutex::new(loaded_settings));
             app.manage(SettingsHandle {
@@ -789,6 +841,9 @@ pub fn run() {
             get_transcription_status,
             get_settings,
             set_settings,
+            get_processing_mode,
+            set_processing_mode,
+            set_processing_mode_value,
             get_metrics_summary,
             get_metrics_history,
             get_error_history,

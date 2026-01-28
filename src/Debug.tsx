@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { relaunch, exit } from '@tauri-apps/plugin-process'
 import { listen } from '@tauri-apps/api/event'
-import { UiState } from './types'
+import { UiState, ProcessingMode, ProcessingModeInfo } from './types'
 import './styles/debug.css'
 
 // Hotkey status type matching Rust backend
@@ -116,6 +116,8 @@ function Debug() {
   const [metricsSummary, setMetricsSummary] = useState<MetricsSummary | null>(null)
   const [metricsHistory, setMetricsHistory] = useState<CycleMetrics[]>([])
   const [errorHistory, setErrorHistory] = useState<ErrorRecord[]>([])
+  const [processingMode, setProcessingMode] = useState<ProcessingMode>('normal')
+  const [processingModeLoading, setProcessingModeLoading] = useState(false)
 
   const pushLog = (message: string) => {
     setLog((prev) => [...prev.slice(-9), `${new Date().toLocaleTimeString()}: ${message}`])
@@ -198,6 +200,44 @@ function Debug() {
     }
     loadKwinStatus()
   }, [])
+
+  // Load processing mode on mount
+  useEffect(() => {
+    const loadProcessingMode = async () => {
+      try {
+        const mode = await invoke<ProcessingMode>('get_processing_mode')
+        setProcessingMode(mode)
+      } catch (e) {
+        console.error('Failed to get processing mode:', e)
+      }
+    }
+    loadProcessingMode()
+  }, [])
+
+  // Listen for mode-changed events
+  useEffect(() => {
+    const unlisten = listen<ProcessingMode>('mode-changed', (event) => {
+      setProcessingMode(event.payload)
+    })
+
+    return () => {
+      unlisten.then((fn) => fn())
+    }
+  }, [])
+
+  const changeProcessingMode = async (mode: ProcessingMode) => {
+    setProcessingModeLoading(true)
+    try {
+      await invoke('set_processing_mode_value', { mode })
+      setProcessingMode(mode)
+      pushLog(`Processing mode changed to ${mode}`)
+    } catch (e) {
+      console.error('Failed to set processing mode:', e)
+      pushLog(`Failed to set processing mode: ${String(e)}`)
+    } finally {
+      setProcessingModeLoading(false)
+    }
+  }
 
   const saveSettings = async (next: AppSettings) => {
     setSettingsSaving(true)
@@ -415,6 +455,29 @@ function Debug() {
             Set <code>OPENAI_API_KEY</code> environment variable
           </div>
         )}
+      </div>
+
+      {/* Processing Mode section (Sprint 7B) */}
+      <div className="debug-section">
+        <strong>Processing Mode:</strong>
+        <div className="processing-mode-selector">
+          <div className="mode-buttons">
+            {(Object.keys(ProcessingModeInfo) as ProcessingMode[]).map((mode) => (
+              <button
+                key={mode}
+                className={`mode-button ${processingMode === mode ? 'active' : ''}`}
+                onClick={() => changeProcessingMode(mode)}
+                disabled={processingModeLoading}
+                title={ProcessingModeInfo[mode].description}
+              >
+                {ProcessingModeInfo[mode].label}
+              </button>
+            ))}
+          </div>
+          <div className="mode-description">
+            {ProcessingModeInfo[processingMode].description}
+          </div>
+        </div>
       </div>
 
       {/* KWin Rules section - only shown on Wayland + KDE */}

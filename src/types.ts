@@ -14,3 +14,34 @@ export type UiState =
   | { status: 'error'; message: string; lastText: string | null }
 
 export type Status = UiState['status']
+
+// Processing modes for post-transcription text transformation (Sprint 7B)
+// Matches Rust: #[serde(rename_all = "lowercase")]
+export type ProcessingMode = 'normal' | 'coding' | 'markdown' | 'prompt'
+
+// Processing mode metadata for UI display
+export const ProcessingModeInfo: Record<
+  ProcessingMode,
+  { label: string; description: string; badgeText: string }
+> = {
+  normal: {
+    label: 'Normal',
+    description: 'Raw transcription, no changes',
+    badgeText: 'READY',
+  },
+  coding: {
+    label: 'Coding',
+    description: 'Code-friendly: snake_case, remove fillers',
+    badgeText: 'CODING',
+  },
+  markdown: {
+    label: 'Markdown',
+    description: 'Format as markdown lists and structure',
+    badgeText: 'MARKDOWN',
+  },
+  prompt: {
+    label: 'Prompt',
+    description: 'Apply custom transformation prompt',
+    badgeText: 'PROMPT',
+  },
+}
