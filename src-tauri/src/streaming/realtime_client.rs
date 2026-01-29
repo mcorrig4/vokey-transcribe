@@ -21,11 +21,7 @@ use tokio::sync::mpsc;
 use tokio::time::timeout;
 use tokio_tungstenite::{
     connect_async_with_config,
-    tungstenite::{
-        client::IntoClientRequest,
-        http::HeaderValue,
-        Message,
-    },
+    tungstenite::{client::IntoClientRequest, http::HeaderValue, Message},
     MaybeTlsStream, WebSocketStream,
 };
 

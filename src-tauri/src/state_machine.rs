@@ -342,9 +342,9 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             },
             PartialDelta { id, delta },
         ) if *recording_id == id => {
-            // Append delta to existing partial text
+            // Append delta to existing partial text (with space separator between segments)
             let new_partial = match partial_text {
-                Some(existing) => Some(format!("{}{}", existing, delta)),
+                Some(existing) => Some(format!("{} {}", existing, delta)),
                 None => Some(delta),
             };
             (
@@ -800,11 +800,13 @@ mod tests {
             partial_text: Some("Hello".to_string()),
         };
 
+        // OpenAI Realtime API sends complete segments without leading spaces,
+        // so the state machine adds a space separator between segments
         let (next, _) = reduce(
             &state,
             Event::PartialDelta {
                 id,
-                delta: " world".to_string(),
+                delta: "world".to_string(),
             },
         );
 
