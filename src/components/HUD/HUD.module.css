@@ -11,7 +11,7 @@
   /* Transparent background for window */
   background: transparent;
 
-  /* Allow dragging by default */
-  -webkit-app-region: drag;
+  /* Do not allow dragging by default */
+  -webkit-app-region: no-drag;
   user-select: none;
 }
