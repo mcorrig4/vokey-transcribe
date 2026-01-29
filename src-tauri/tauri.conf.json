@@ -29,8 +29,21 @@
         "visible": true
       },
       {
-        "label": "debug",
+        "label": "settings",
         "title": "VoKey Settings",
+        "url": "index.html?window=settings",
+        "width": 800,
+        "height": 600,
+        "minWidth": 600,
+        "minHeight": 400,
+        "resizable": true,
+        "decorations": false,
+        "alwaysOnTop": false,
+        "visible": false
+      },
+      {
+        "label": "debug",
+        "title": "VoKey Debug",
         "url": "index.html?window=debug",
         "width": 450,
         "height": 700,

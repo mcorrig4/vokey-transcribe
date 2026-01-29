@@ -1,7 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
-import Debug from './Debug'
+import Settings from './Settings'
 import './styles/index.css'
 import './styles/globals.css'
 
@@ -9,7 +9,13 @@ import './styles/globals.css'
 const params = new URLSearchParams(window.location.search)
 const windowType = params.get('window')
 
-const RootComponent = windowType === 'debug' ? Debug : App
+// Component map - explicit relationship between window type and component
+const componentMap: Record<string, React.ComponentType> = {
+  settings: Settings,
+  debug: Settings, // Legacy debug window now uses Settings UI
+}
+
+const RootComponent = (windowType && componentMap[windowType]) || App
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

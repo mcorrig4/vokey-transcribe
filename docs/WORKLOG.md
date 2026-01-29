@@ -14,14 +14,19 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 **Settings UI Overhaul Status:**
 - Epic: #114, PR: #137 (draft → develop)
 - Milestone: "Settings UI Overhaul"
-- Phase 1: Foundation + Usage Page (#115-#119)
-  - #115 Setup Tailwind + shadcn/ui 🔄 IN PROGRESS
-  - #116 tauri-controls + Layout ⬜
-  - #117 Admin API Key Storage ⬜
-  - #118 OpenAI Usage API Integration ⬜
-  - #119 Usage Metrics UI ⬜
-- Phase 2: Settings Migration (#120-#123) ⬜
-- Phase 3: Architecture Planning (#124) ⬜
+- Phase 1: Foundation + Usage Page (#115-#119) ✅ COMPLETE
+  - #115 Setup Tailwind + shadcn/ui ✅ (PR #141 merged)
+  - #116 tauri-controls + Layout ✅ (PR #144)
+  - #117 Admin API Key Storage ✅ (PR #144)
+  - #118 OpenAI Usage API Integration ✅ (PR #144)
+  - #119 Usage Metrics UI ✅ (PR #144)
+- Phase 2: Settings Migration (#120-#123) ✅ COMPLETE
+  - #120 Migrate Settings to SettingsFormPage ✅
+  - #121 Create AdvancedPage with debug tools ✅
+  - #122 Create AboutPage with app info ✅
+  - #123 Remove legacy Debug.tsx ✅ (1000+ lines removed)
+- Phase 3: Architecture Planning (#124) ✅ COMPLETE
+  - #124 Settings Architecture v2 document ✅
 
 **Sprint 7A Status (Parallel):**
 - Backend: #68 WebSocket ✅, #69 Audio Pipeline ✅, #70 Transcript Aggregation ✅ (PR #107 merged)
@@ -30,6 +35,56 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 ---
 
 ## Completed Work
+
+### 2026-01-28: Testing Infrastructure + Appearance Page + Test Extensions
+
+**Testing Infrastructure (Issues #148, #149, #150, #151):**
+- [x] Setup Vitest + React Testing Library with jsdom environment
+- [x] Created Tauri IPC mock utilities (mockInvoke, emitMockEvent, setupDefaultTauriMocks)
+- [x] Added test scripts to package.json (test, test:run, test:coverage)
+
+**Test Suite Expansion:**
+- [x] 120 passing tests across 8 test files:
+  - 7 utility tests (cn function)
+  - 11 SettingsFormPage component tests
+  - 7 HUD component tests
+  - 16 AppearancePage component tests
+  - 36 parseTranscriptLines utility tests
+  - 10 UsagePage component tests
+  - 12 AboutPage component tests
+  - 21 AdvancedPage component tests
+- [x] Created parseTranscriptLines utility for word-wrapping (#146)
+- [x] Added data-testid attributes for E2E testing (#154)
+
+**Appearance Settings Page:**
+- [x] Created AppearancePage with theme selection (System/Light/Dark)
+- [x] Added HUD position configuration (4 corners)
+- [x] Added animation toggle and auto-hide delay settings
+- [x] Integrated into Settings navigation with Palette icon
+- [x] Real-time theme switching with system detection
+
+**Issues Closed:** #116, #117, #118, #119, #146, #148, #149, #150, #151
+
+### 2026-01-28: Settings UI Overhaul Epic - Phases 2 & 3
+
+**Phase 2 - Settings Migration (Issues #120-#123):**
+- [x] Created SettingsFormPage with form controls, save/reset, state management
+- [x] Created AdvancedPage with debug tools, system status, KWin rule management
+- [x] Created AboutPage with app info, features, external links
+- [x] Removed legacy Debug.tsx (623 lines) and debug.css (416 lines)
+- [x] Added Switch and Label shadcn/ui components
+
+**Phase 3 - Architecture Planning (Issue #124):**
+- [x] Created SETTINGS-ARCHITECTURE-V2.md planning document
+- [x] Designed modular settings structure (Audio, API, Appearance, Hotkeys, Advanced)
+- [x] Proposed versioned schema with migration strategy
+- [x] Documented TypeScript and Rust types
+- [x] Identified 7 implementation issues for next sprint
+
+**Key Metrics:**
+- Lines removed: 1,039 (Debug.tsx + debug.css)
+- New components: 5 (SettingsFormPage, AdvancedPage, AboutPage, Switch, Label)
+- Issues closed: 6 (#120, #121, #122, #123, #124, #132)
 
 ### 2026-01-27: Sprint 7A - Transcript Reception & Aggregation (#70)
 - [x] Created TranscriptAggregator for delta text accumulation
@@ -199,6 +254,89 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 ---
 
 ## Session Notes
+
+### Session 2026-01-28 (Phase 1 Complete - Settings UI Overhaul)
+**Completed entire Phase 1: Foundation + Usage Page**
+
+**Issues Completed:**
+- #115 Setup Tailwind + shadcn/ui ✅ (PR #141 merged)
+- #116 tauri-controls + Settings Layout ✅
+- #117 Admin API Key Storage ✅
+- #118 OpenAI Usage API Integration ✅
+- #119 Usage Metrics UI ✅
+
+**Major Features Implemented:**
+
+1. **Admin API Key Storage (Issue #117):**
+   - Rust `admin_key` module with keyring crate for secure OS-level storage
+   - Tauri commands: get_admin_key_status, set_admin_api_key, validate_admin_api_key
+   - AdminKeyInput UI component with validation, masked display, reveal toggle
+
+2. **OpenAI Usage API Integration (Issue #118):**
+   - Rust `usage` module with API client, types, and caching
+   - Fetches costs and audio transcription usage from OpenAI org endpoints
+   - 5-minute cache to avoid API spam
+   - Tauri commands: fetch_usage_metrics, get_cached_usage_metrics
+
+3. **Usage Metrics UI (Issue #119):**
+   - UsagePage component with metrics grid (30d/7d/24h)
+   - Budget progress bar with color indicators
+   - Loading skeletons, error states, "not configured" state
+   - Formatting utilities for currency, duration, numbers
+
+**New UI Components:**
+- Progress (shadcn + @radix-ui/react-progress)
+- Skeleton for loading states
+- Input component
+
+**Files Created:**
+- `src-tauri/src/admin_key.rs`
+- `src-tauri/src/usage/mod.rs`, `types.rs`, `client.rs`, `cache.rs`
+- `src/components/Settings/AdminKeyInput.tsx`
+- `src/components/Settings/UsagePage.tsx`
+- `src/components/ui/input.tsx`, `progress.tsx`, `skeleton.tsx`
+
+**Next:** Phase 2 - Settings Migration (#120-#123)
+
+---
+
+### Session 2026-01-28 (Issue #116 - tauri-controls + Settings Layout)
+**Continued Settings UI Overhaul:**
+
+**Issue #116 Implementation (PR #144):**
+
+**Completed:**
+- Merged PR #141 (Tailwind + shadcn/ui foundation) into feat/ui-overhaul
+- Added tauri-controls package for native window controls
+- Configured Settings window with custom titlebar (decorations: false)
+- Created TitleBar component with WindowTitlebar + GNOME-style controls
+- Created SettingsLayout with collapsible sidebar navigation
+- Added placeholder pages: Usage, Settings, Advanced, About
+
+**Files created:**
+- `src/Settings.tsx` - Settings window entry point
+- `src/components/Settings/SettingsLayout.tsx` - Layout with sidebar + content
+- `src/components/Settings/index.ts` - Component exports
+- `src/components/ui/titlebar.tsx` - TitleBar component
+
+**Files modified:**
+- `src-tauri/tauri.conf.json` - Added settings window config
+- `src/main.tsx` - Added settings window routing
+- `src/components/ui/index.ts` - Export TitleBar
+- `vite.config.ts` - Added tauri-controls CSS alias
+- `package.json` - Added tauri-controls dependency
+
+**Notes:**
+- tauri-controls has peer dependency warnings for React 18/19 compatibility
+- Vite alias configured to work around CSS export issue in tauri-controls
+- Build verified: 285KB JS, 40KB CSS
+
+**Still needed for Issue #116:**
+- Wayland compatibility testing
+- Window drag region verification
+- Minimize/maximize/close button testing
+
+---
 
 ### Session 2026-01-28 (Settings UI Overhaul - Phase 1 Start)
 **Started Settings UI Overhaul Epic (#114):**

@@ -19,6 +19,7 @@ export function ControlPill() {
       className={styles.pill}
       style={{ backgroundColor }}
       data-state={state.status}
+      data-testid="hud-pill"
     >
       <MicButton />
       <PillContent />
