@@ -12,6 +12,7 @@ pub mod transcription;
 // Streaming transcription (Sprint 7A)
 pub mod streaming;
 
+use rustls::crypto::{ring, CryptoProvider};
 use serde::Serialize;
 use std::sync::Arc;
 use tauri::{
@@ -20,7 +21,6 @@ use tauri::{
     AppHandle, Emitter, Manager, WindowEvent,
 };
 use tokio::sync::{mpsc, Mutex};
-use rustls::crypto::{ring, CryptoProvider};
 
 use effects::{AudioEffectRunner, EffectRunner};
 use hotkey::{Hotkey, HotkeyManager, HotkeyStatus};
@@ -706,7 +706,7 @@ pub fn run() {
             });
 
             // Load and manage settings
-            let loaded_settings = settings::load_settings(&app.handle());
+            let loaded_settings = settings::load_settings(app.handle());
             log::info!(
                 "Settings loaded: min_transcribe_ms={}, short_clip_vad_enabled={}",
                 loaded_settings.min_transcribe_ms,

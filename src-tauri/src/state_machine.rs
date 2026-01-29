@@ -27,8 +27,9 @@ impl NoSpeechSource {
 
 /// Internal state of the recording workflow.
 /// This is the authoritative state - all transitions go through the reducer.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum State {
+    #[default]
     Idle,
     Arming {
         recording_id: Uuid,
@@ -43,10 +44,14 @@ pub enum State {
     Stopping {
         recording_id: Uuid,
         wav_path: PathBuf,
+        /// Preserved partial transcript for fallback if batch transcription fails
+        partial_text: Option<String>,
     },
     Transcribing {
         recording_id: Uuid,
         wav_path: PathBuf,
+        /// Preserved partial transcript for fallback if batch transcription fails
+        partial_text: Option<String>,
     },
     NoSpeech {
         recording_id: Uuid,
@@ -62,12 +67,6 @@ pub enum State {
         message: String,
         last_good_text: Option<String>,
     },
-}
-
-impl Default for State {
-    fn default() -> Self {
-        State::Idle
-    }
 }
 
 /// Events that can trigger state transitions.
@@ -162,6 +161,7 @@ pub enum Effect {
         wav_path: PathBuf,
     },
     CopyToClipboard {
+        #[allow(dead_code)] // Kept for consistency with other effects and Debug output
         id: Uuid,
         text: String,
     },
@@ -263,6 +263,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             Recording {
                 recording_id,
                 wav_path,
+                partial_text,
                 ..
             },
             HotkeyToggle,
@@ -270,6 +271,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             Stopping {
                 recording_id: *recording_id,
                 wav_path: wav_path.clone(),
+                partial_text: partial_text.clone(),
             },
             vec![StopAudio { id: *recording_id }, EmitUi],
         ),
@@ -298,7 +300,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
                 recording_id,
                 wav_path,
                 started_at,
-                ..
+                partial_text,
             },
             RecordingTick { id },
         ) if *recording_id == id => {
@@ -315,6 +317,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
                     Stopping {
                         recording_id: *recording_id,
                         wav_path: wav_path.clone(),
+                        partial_text: partial_text.clone(),
                     },
                     vec![StopAudio { id: *recording_id }, EmitUi],
                 )
@@ -339,9 +342,9 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             },
             PartialDelta { id, delta },
         ) if *recording_id == id => {
-            // Append delta to existing partial text
+            // Append delta to existing partial text (with space separator between segments)
             let new_partial = match partial_text {
-                Some(existing) => Some(format!("{}{}", existing, delta)),
+                Some(existing) => Some(format!("{} {}", existing, delta)),
                 None => Some(delta),
             };
             (
@@ -362,12 +365,14 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             Stopping {
                 recording_id,
                 wav_path,
+                partial_text,
             },
             AudioStopOk { id },
         ) if *recording_id == id => (
             Transcribing {
                 recording_id: *recording_id,
                 wav_path: wav_path.clone(),
+                partial_text: partial_text.clone(),
             },
             vec![
                 StartTranscription {
@@ -381,6 +386,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             Stopping {
                 recording_id,
                 wav_path,
+                ..
             },
             NoSpeechDetected {
                 id,
@@ -406,12 +412,13 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             Stopping {
                 recording_id,
                 wav_path,
+                partial_text,
             },
             AudioStopFail { id, err },
         ) if *recording_id == id => (
             Error {
                 message: err,
-                last_good_text: None,
+                last_good_text: partial_text.clone(),
             },
             vec![
                 Cleanup {
@@ -446,6 +453,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             Transcribing {
                 recording_id,
                 wav_path,
+                ..
             },
             NoSpeechDetected {
                 id,
@@ -471,12 +479,14 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             Transcribing {
                 recording_id,
                 wav_path,
+                partial_text,
             },
             TranscribeFail { id, err },
         ) if *recording_id == id => (
             Error {
                 message: err,
-                last_good_text: None,
+                // Use partial transcript from streaming as fallback when batch fails
+                last_good_text: partial_text.clone(),
             },
             vec![
                 Cleanup {
@@ -490,6 +500,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             Transcribing {
                 recording_id,
                 wav_path,
+                ..
             },
             Cancel,
         ) => (
@@ -692,6 +703,7 @@ mod tests {
         let state = State::Transcribing {
             recording_id: id,
             wav_path: PathBuf::from("/tmp/test.wav"),
+            partial_text: None,
         };
         let (next, effects) = reduce(&state, Event::Cancel);
 
@@ -788,11 +800,13 @@ mod tests {
             partial_text: Some("Hello".to_string()),
         };
 
+        // OpenAI Realtime API sends complete segments without leading spaces,
+        // so the state machine adds a space separator between segments
         let (next, _) = reduce(
             &state,
             Event::PartialDelta {
                 id,
-                delta: " world".to_string(),
+                delta: "world".to_string(),
             },
         );
 

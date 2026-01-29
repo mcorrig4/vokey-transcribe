@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window'
 import { useHUD } from '../../context/HUDContext'
 import { ControlPill } from './ControlPill'
@@ -61,8 +61,25 @@ export function HUD() {
     return () => cancelAnimationFrame(rafId)
   }, [panelState])
 
+  // Handle drag for Wayland compatibility
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    // Don't drag if clicking on interactive elements
+    const target = e.target as HTMLElement
+    if (target.closest('[data-no-drag]') || target.closest('button')) {
+      return
+    }
+    getCurrentWindow().startDragging().catch((err) => {
+      // Log metric for drag failures (may indicate Wayland compositor issues)
+      console.warn('[HUD] Window drag failed - this may indicate compositor compatibility issues:', {
+        error: err,
+        timestamp: new Date().toISOString(),
+        platform: navigator.platform,
+      })
+    })
+  }, [])
+
   return (
-    <div className={styles.layout}>
+    <div className={styles.layout} onMouseDown={handleMouseDown} data-testid="hud-container">
       <ControlPill />
       <SetupBanner />
       {panelState !== 'hidden' && (

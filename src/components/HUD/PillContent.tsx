@@ -20,7 +20,7 @@ export function PillContent() {
   const { state } = useHUD()
 
   return (
-    <div className={styles.content} data-state={state.status}>
+    <div className={styles.content} data-state={state.status} data-testid="hud-status">
       {renderContent(state)}
     </div>
   )
@@ -38,7 +38,7 @@ function renderContent(state: UiState) {
       return (
         <div className={styles.recording}>
           <Waveform isRecording={true} />
-          <span className={styles.timer}>{formatTime(state.elapsedSecs)}</span>
+          <span className={styles.timer} data-testid="hud-timer">{formatTime(state.elapsedSecs)}</span>
         </div>
       )
 
@@ -65,7 +65,7 @@ function renderContent(state: UiState) {
       return (
         <div className={styles.error}>
           <span className={styles.label}>Error</span>
-          <span className={styles.detail} title={state.message}>
+          <span className={styles.detail} data-testid="hud-error-message" title={state.message}>
             {truncate(state.message, 30)}
           </span>
         </div>
