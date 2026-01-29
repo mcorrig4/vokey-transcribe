@@ -6,105 +6,85 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Current Status
 
-**Phase:** Sprint 7A — Real-time Streaming Transcription (COMPLETING)
+**Phase:** Settings UI Overhaul — shadcn/ui + Tailwind CSS
 **Target:** Kubuntu with KDE Plasma 6.4 on Wayland
-**Branch:** `claude/fix-transcription-ui-display-YHEWs`
+**Branch:** `feat/ui-overhaul` (long-running feature branch)
 **Last Updated:** 2026-01-28
 
-**Sprint 7A Status:**
-- Backend: All issues complete ✅
-  - #68 WebSocket Infrastructure ✅
-  - #69 Audio Streaming Pipeline ✅
-  - #70 Transcript Aggregation ✅
-  - #71 State Machine Integration ✅
-  - #72 Waveform Data Buffer ✅
-  - #100 Error Handling & Fallback ✅ (verified + gap fixed)
-- Frontend: All issues complete ✅
-  - #73 HUD Scaffolding ✅
-  - #74 Mic Button States ✅
-  - #75 Waveform Visualization ✅
-  - #76 Transcript Panel ✅ (PR #145)
-  - #77 Pill Content States ✅
-- Final:
-  - #78 Integration Testing — 🧪 Ready for UAT
-  - #79 Documentation & Polish — ✅ Complete
+**Settings UI Overhaul Status:**
+- Epic: #114, PR: #137 (draft → develop)
+- Milestone: "Settings UI Overhaul"
+- Phase 1: Foundation + Usage Page (#115-#119) ✅ COMPLETE
+  - #115 Setup Tailwind + shadcn/ui ✅ (PR #141 merged)
+  - #116 tauri-controls + Layout ✅ (PR #144)
+  - #117 Admin API Key Storage ✅ (PR #144)
+  - #118 OpenAI Usage API Integration ✅ (PR #144)
+  - #119 Usage Metrics UI ✅ (PR #144)
+- Phase 2: Settings Migration (#120-#123) ✅ COMPLETE
+  - #120 Migrate Settings to SettingsFormPage ✅
+  - #121 Create AdvancedPage with debug tools ✅
+  - #122 Create AboutPage with app info ✅
+  - #123 Remove legacy Debug.tsx ✅ (1000+ lines removed)
+- Phase 3: Architecture Planning (#124) ✅ COMPLETE
+  - #124 Settings Architecture v2 document ✅
+
+**Sprint 7A Status (Parallel):**
+- Backend: #68 WebSocket ✅, #69 Audio Pipeline ✅, #70 Transcript Aggregation ✅ (PR #107 merged)
+- Frontend: #73 HUD Scaffolding 🧪 UAT (PR #105), #74+#77 Mic Button+Pill 🧪 UAT (PR #108)
 
 ---
 
 ## Completed Work
 
-### 2026-01-28: Sprint 7B — Post-processing Modes (PR #162)
+### 2026-01-28: Testing Infrastructure + Appearance Page + Test Extensions
 
-**Processing Pipeline Implementation**
-- [x] Created `processing/` module with mod.rs, coding.rs, markdown.rs, prompt.rs, pipeline.rs
-- [x] ProcessingMode enum: Normal, Coding, Markdown, Prompt
-- [x] Coding processor: snake_case conversion, filler word removal
-- [x] Markdown processor: list detection, structure formatting
-- [x] Prompt processor: OpenAI gpt-4o-mini with XML safety, retry logic
-- [x] Pipeline integration in effects.rs after transcription completion
-- [x] Tauri commands: get_processing_mode, set_processing_mode
-- [x] Mode persisted in AppSettings
+**Testing Infrastructure (Issues #148, #149, #150, #151):**
+- [x] Setup Vitest + React Testing Library with jsdom environment
+- [x] Created Tauri IPC mock utilities (mockInvoke, emitMockEvent, setupDefaultTauriMocks)
+- [x] Added test scripts to package.json (test, test:run, test:coverage)
 
-**Frontend Mode Selector**
-- [x] ProcessingMode type and ProcessingModeInfo metadata in types.ts
-- [x] Mode selector in Debug panel with button group
-- [x] Mode badge in HUD PillContent (shown when idle, non-normal mode)
-- [x] HUDContext tracks processingMode state via events
+**Test Suite Expansion:**
+- [x] 120 passing tests across 8 test files:
+  - 7 utility tests (cn function)
+  - 11 SettingsFormPage component tests
+  - 7 HUD component tests
+  - 16 AppearancePage component tests
+  - 36 parseTranscriptLines utility tests
+  - 10 UsagePage component tests
+  - 12 AboutPage component tests
+  - 21 AdvancedPage component tests
+- [x] Created parseTranscriptLines utility for word-wrapping (#146)
+- [x] Added data-testid attributes for E2E testing (#154)
 
-**Code Review Fixes**
-- [x] Removed unused WORD_BOUNDARY_REGEX static
-- [x] Strengthened prompt injection guardrails
-- [x] Added warning log for regex compilation failures
-- [x] Added keyboard focus states for accessibility
+**Appearance Settings Page:**
+- [x] Created AppearancePage with theme selection (System/Light/Dark)
+- [x] Added HUD position configuration (4 corners)
+- [x] Added animation toggle and auto-hide delay settings
+- [x] Integrated into Settings navigation with Palette icon
+- [x] Real-time theme switching with system detection
 
-### 2026-01-28: Sprint 7A Refinements & E2E Prep
+**Issues Closed:** #116, #117, #118, #119, #146, #148, #149, #150, #151
 
-**Issue #147: Preserve Partial Transcript**
-- [x] Cache last partial text via useRef in TranscriptPanel
-- [x] Show cached text during transcribing instead of placeholder
-- [x] Pulsing ellipsis indicator during processing
+### 2026-01-28: Settings UI Overhaul Epic - Phases 2 & 3
 
-**Issue #154: Data-testid Attributes (Partial)**
-- [x] hud-container, hud-status, hud-timer, hud-error-message
-- [x] hud-transcript-panel, hud-transcript-preview, hud-mic-button
-- [x] debug-simulate-start/stop/error/cancel, debug-metrics-section
+**Phase 2 - Settings Migration (Issues #120-#123):**
+- [x] Created SettingsFormPage with form controls, save/reset, state management
+- [x] Created AdvancedPage with debug tools, system status, KWin rule management
+- [x] Created AboutPage with app info, features, external links
+- [x] Removed legacy Debug.tsx (623 lines) and debug.css (416 lines)
+- [x] Added Switch and Label shadcn/ui components
 
-**PR #145 Maintenance**
-- [x] Rebased onto develop to resolve conflicts
-- [x] PR now mergeable
+**Phase 3 - Architecture Planning (Issue #124):**
+- [x] Created SETTINGS-ARCHITECTURE-V2.md planning document
+- [x] Designed modular settings structure (Audio, API, Appearance, Hotkeys, Advanced)
+- [x] Proposed versioned schema with migration strategy
+- [x] Documented TypeScript and Rust types
+- [x] Identified 7 implementation issues for next sprint
 
-### 2026-01-28: Sprint 7A Completion — Transcript Panel & Error Handling
-
-**PR #145: Real-time Transcript Display (#76)**
-- [x] Created `parseTranscriptLines` utility for word-wrap and line parsing
-- [x] Created `useTranscriptLines` custom hook for memoized text processing
-- [x] Updated `TranscriptPanel.tsx` to display real `partialText` from state
-- [x] Added CSS animations for smooth line entry with fade-scroll effect
-- [x] Added ARIA live region for screen reader accessibility
-- [x] Fixed unstable React keys (use absolute index for stable reconciliation)
-- [x] Added maxChars guard to prevent infinite loop edge case
-
-**Error Handling Gap Fixed (#100)**
-- [x] Added `partial_text` field to `Stopping` and `Transcribing` states
-- [x] Partial text now preserved through state transitions
-- [x] `TranscribeFail` now uses partial text as `last_good_text` fallback
-- [x] Graceful degradation when batch transcription fails
-
-**Documentation Updates (#79)**
-- [x] Updated README.md with streaming transcription section
-- [x] Updated repo layout with new modules (streaming/, hooks/, utils/)
-- [x] Updated WORKLOG.md with Sprint 7A completion status
-
-**Architecture Decisions:**
-- AD-76-001: Pure frontend implementation for transcript display
-- AD-76-002: Custom hook pattern for separation of concerns
-- AD-76-003: CSS-based animations (no JS animation libraries)
-- AD-76-004: Character-count heuristic for word-wrap
-- AD-76-005: CSS mask gradient for fade effect
-
-**Deferred Issues Created:**
-- #146: Unit tests for parseTranscriptLines (priority:medium)
-- #147: UX for preserving partial text during transcribing (priority:low)
+**Key Metrics:**
+- Lines removed: 1,039 (Debug.tsx + debug.css)
+- New components: 5 (SettingsFormPage, AdvancedPage, AboutPage, Switch, Label)
+- Issues closed: 6 (#120, #121, #122, #123, #124, #132)
 
 ### 2026-01-27: Sprint 7A - Transcript Reception & Aggregation (#70)
 - [x] Created TranscriptAggregator for delta text accumulation
@@ -143,60 +123,51 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 |--------|--------|-------|
 | 0 - Project skeleton + HUD + tray | ✅ COMPLETE | HUD shows "Ready", tray icon works, Quit exits cleanly |
 | 1 - State machine + UI wiring | ✅ COMPLETE | Full state machine, debug panel, simulate commands |
-| 2 - Global hotkey (evdev) | ✅ COMPLETE | evdev module implemented, tested on real hardware |
+| 2 - Global hotkey (evdev) | ✅ COMPLETE | evdev module implemented, needs testing on real hardware |
 | 3 - Audio capture (CPAL + Hound) | ✅ COMPLETE | CPAL capture, hound WAV writing, XDG paths |
 | 4 - OpenAI transcription + clipboard | ✅ COMPLETE | OpenAI Whisper API, arboard clipboard, tested on real hardware |
-| 5 - Full flow polish + tray controls | ✅ COMPLETE | Tray menu with Toggle/Cancel/Open Logs, HUD timer, auto-dismiss |
+| 5 - Full flow polish + tray controls | 🧪 UAT | Tray menu with Toggle/Cancel/Open Logs, HUD timer, auto-dismiss |
 | 6 - Hardening + UX polish | ⏸️ PAUSED | Phases 1-5 done; Phase 6 (50-cycle stability) needs real hardware |
-<<<<<<< HEAD
-| 7A - Streaming transcription | 🧪 UAT | Backend: #68-#70 ✅. Frontend: PR #125 in UAT |
-| 7-Waveform - Real-time visualization | 🚧 ACTIVE | #130 tracking; Phase 1 (#72) + Phase 2 (#75) |
-=======
-| 7A - Streaming transcription | 🧪 UAT | All backend+frontend complete. PR #145 ready. Needs hardware testing |
->>>>>>> f2e80d1 (docs: Sprint 7A completion - documentation & error handling)
+| 7A - Streaming transcription | 🧪 UAT | Backend: #68-#70 ✅ (PR #107 merged). Frontend: PR #105, #108 in UAT |
 | 7B - Post-processing modes | 📋 PLANNING | Option B chosen: Normal/Coding/Markdown/Prompt modes |
+| Settings UI Overhaul | 🔄 IN PROGRESS | Epic #114, shadcn/ui + Tailwind, multi-page settings |
 
 ---
 
 ## Current Task Context
 
-### Active Sprint: Sprint 7 — Waveform Visualization
+### Active Sprint: Sprint 7B - Post-processing Modes
 
-**Tracking Issue:** #130
-**Implementation Plan:** See `docs/SPRINT7-WAVEFORM-PLAN.md` for detailed breakdown.
+**Implementation Plan:** See `docs/SPRINT7B-PLAN.md` for detailed breakdown.
 
-### Two-Phase Implementation:
+**Note:** Sprint 7A (Streaming) is being developed in parallel by another team.
 
-#### Phase 1: Backend Waveform Buffer (#72)
-1. ⬜ Create `src-tauri/src/audio/waveform.rs`
-   - WaveformBuffer ring buffer (VecDeque, 10K capacity)
-   - RMS computation for 24 bars
-   - EMA smoothing (alpha=0.3)
-   - Event emitter task (30fps)
-2. ⬜ Modify `audio/recorder.rs` - add waveform_tx channel
-3. ⬜ Modify `effects.rs` - manage emitter lifecycle
-4. ⬜ Unit tests for buffer, normalization, smoothing
+### Decision Made:
+- **Sprint 7B: Post-processing Modes** — this team
+- **Sprint 7A: Streaming Transcription** — parallel team
+- Both features can be combined after completion
 
-#### Phase 2: Frontend Waveform Component (#75)
-1. ⬜ Create `src/hooks/useWaveform.ts` - event listener hook
-2. ⬜ Create `src/components/HUD/Waveform.tsx` - 24-bar component
-3. ⬜ Create CSS module with transitions
-4. ⬜ Integrate into `PillContent.tsx`
+### Sprint 7B Phases:
+1. ⬜ Mode Selection Infrastructure - ProcessingMode enum, state, tray menu
+2. ⬜ Processing Engines - Coding, Markdown, Prompt processors
+3. ⬜ Pipeline Integration - Post-processing after transcription
+4. ⬜ UI Integration - Mode indicator in HUD, selector in Debug panel
+5. ⬜ Prompt Configuration (stretch) - Custom prompt storage
 
-### Consolidated Architecture Decisions:
-| Aspect | Original | Updated |
-|--------|----------|---------|
-| Bar count | 64 bars | **24 bars** |
-| Update method | Polling | **Event-based** |
-| Frame rate | 20 FPS | **30 FPS** |
-| Smoothing | None | **EMA (alpha=0.3)** |
+### Modes to Implement:
+| Mode | Description | Processing |
+|------|-------------|------------|
+| Normal | Raw transcription, no changes | Passthrough |
+| Coding | snake_case, remove fillers | Local regex |
+| Markdown | Format as lists/structure | Local parsing |
+| Prompt | Custom LLM transformation | OpenAI Chat API |
 
-### Acceptance Criteria:
-- [ ] Backend emits `waveform-update` events at 30fps during recording
-- [ ] 24 normalized amplitude bars (0.0-1.0)
-- [ ] Memory bounded (10K sample buffer)
-- [ ] Frontend renders animated bars with CSS transitions
-- [ ] No jank or memory leaks
+### Acceptance Criteria (from ISSUES-v1.0.0.md):
+- [ ] Mode selection works via tray menu and Debug panel
+- [ ] Coding mode produces valid identifiers (snake_case)
+- [ ] Markdown mode formats list items correctly
+- [ ] Prompt mode calls Chat API and falls back gracefully
+- [ ] HUD shows current mode indicator
 
 ### Sprint 6 Status (Paused):
 - Phases 1-5 complete
@@ -279,46 +250,136 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 | Technical gotchas | docs/tauri-gotchas.md |
 | Setup instructions | docs/notes.md |
 | This work log | docs/WORKLOG.md |
-| Waveform implementation plan | docs/SPRINT7-WAVEFORM-PLAN.md |
 
 ---
 
 ## Session Notes
 
-### Session 2026-01-28 (Sprint 7 Waveform Planning)
-**Planned real-time waveform visualization feature (Issue #72 + #75):**
+### Session 2026-01-28 (Phase 1 Complete - Settings UI Overhaul)
+**Completed entire Phase 1: Foundation + Usage Page**
 
-**Architecture Analysis:**
-- Explored audio module structure and data flow
-- Reviewed consolidated architecture decisions
-- Determined optimal channel-based design (non-blocking audio callback)
+**Issues Completed:**
+- #115 Setup Tailwind + shadcn/ui ✅ (PR #141 merged)
+- #116 tauri-controls + Settings Layout ✅
+- #117 Admin API Key Storage ✅
+- #118 OpenAI Usage API Integration ✅
+- #119 Usage Metrics UI ✅
 
-**Consolidated Architecture Decisions:**
-- 24 bars (reduced from 64) for cleaner visuals
-- Event-based updates at 30fps (not polling at 20fps)
-- EMA smoothing (alpha=0.3) to prevent jitter
-- 10K sample buffer (~200ms) instead of 96K (2s)
+**Major Features Implemented:**
 
-**Documentation Created:**
-- `docs/SPRINT7-WAVEFORM-PLAN.md` — Detailed 2-phase implementation plan
+1. **Admin API Key Storage (Issue #117):**
+   - Rust `admin_key` module with keyring crate for secure OS-level storage
+   - Tauri commands: get_admin_key_status, set_admin_api_key, validate_admin_api_key
+   - AdminKeyInput UI component with validation, masked display, reveal toggle
 
-**GitHub Issues:**
-- Created #130 — Sprint 7 Waveform Visualization (Tracking)
-- Updated #72 with consolidated architecture notes
-- Updated #75 with consolidated architecture notes
+2. **OpenAI Usage API Integration (Issue #118):**
+   - Rust `usage` module with API client, types, and caching
+   - Fetches costs and audio transcription usage from OpenAI org endpoints
+   - 5-minute cache to avoid API spam
+   - Tauri commands: fetch_usage_metrics, get_cached_usage_metrics
 
-**Two-Phase Plan:**
-1. Phase 1 (#72): Backend waveform buffer in Rust
-   - WaveformBuffer ring buffer (VecDeque)
-   - RMS computation for 24 bars
-   - Tauri event emission at 30fps
-2. Phase 2 (#75): Frontend waveform component in React
-   - useWaveform hook with event listener
-   - CSS-animated bar visualization
+3. **Usage Metrics UI (Issue #119):**
+   - UsagePage component with metrics grid (30d/7d/24h)
+   - Budget progress bar with color indicators
+   - Loading skeletons, error states, "not configured" state
+   - Formatting utilities for currency, duration, numbers
 
-**Next Steps:**
-- Implement Phase 1 (Issue #72)
-- Create PR for waveform backend
+**New UI Components:**
+- Progress (shadcn + @radix-ui/react-progress)
+- Skeleton for loading states
+- Input component
+
+**Files Created:**
+- `src-tauri/src/admin_key.rs`
+- `src-tauri/src/usage/mod.rs`, `types.rs`, `client.rs`, `cache.rs`
+- `src/components/Settings/AdminKeyInput.tsx`
+- `src/components/Settings/UsagePage.tsx`
+- `src/components/ui/input.tsx`, `progress.tsx`, `skeleton.tsx`
+
+**Next:** Phase 2 - Settings Migration (#120-#123)
+
+---
+
+### Session 2026-01-28 (Issue #116 - tauri-controls + Settings Layout)
+**Continued Settings UI Overhaul:**
+
+**Issue #116 Implementation (PR #144):**
+
+**Completed:**
+- Merged PR #141 (Tailwind + shadcn/ui foundation) into feat/ui-overhaul
+- Added tauri-controls package for native window controls
+- Configured Settings window with custom titlebar (decorations: false)
+- Created TitleBar component with WindowTitlebar + GNOME-style controls
+- Created SettingsLayout with collapsible sidebar navigation
+- Added placeholder pages: Usage, Settings, Advanced, About
+
+**Files created:**
+- `src/Settings.tsx` - Settings window entry point
+- `src/components/Settings/SettingsLayout.tsx` - Layout with sidebar + content
+- `src/components/Settings/index.ts` - Component exports
+- `src/components/ui/titlebar.tsx` - TitleBar component
+
+**Files modified:**
+- `src-tauri/tauri.conf.json` - Added settings window config
+- `src/main.tsx` - Added settings window routing
+- `src/components/ui/index.ts` - Export TitleBar
+- `vite.config.ts` - Added tauri-controls CSS alias
+- `package.json` - Added tauri-controls dependency
+
+**Notes:**
+- tauri-controls has peer dependency warnings for React 18/19 compatibility
+- Vite alias configured to work around CSS export issue in tauri-controls
+- Build verified: 285KB JS, 40KB CSS
+
+**Still needed for Issue #116:**
+- Wayland compatibility testing
+- Window drag region verification
+- Minimize/maximize/close button testing
+
+---
+
+### Session 2026-01-28 (Settings UI Overhaul - Phase 1 Start)
+**Started Settings UI Overhaul Epic (#114):**
+
+**Planning:**
+- Created detailed issue documentation (`docs/ISSUES-settings-ui-overhaul.md`)
+- Created 11 GitHub issues (#114-#124) across 3 phases
+- Created GitHub Milestone "Settings UI Overhaul"
+- Set up `feat/ui-overhaul` as long-running feature branch
+- Draft PR #137 tracks full epic progress
+
+**Issue #115 - Tailwind + shadcn/ui Foundation:**
+
+**Dependencies added:**
+- `tailwindcss` + `@tailwindcss/vite` (Tailwind v4)
+- `clsx`, `tailwind-merge`, `class-variance-authority` (utilities)
+- `lucide-react` (icons)
+- `@radix-ui/react-slot`, `@radix-ui/react-separator` (primitives)
+
+**Files created:**
+- `src/styles/globals.css` - Tailwind + shadcn dark theme CSS variables
+- `src/lib/utils.ts` - `cn()` utility function
+- `src/components/ui/button.tsx` - Button component
+- `src/components/ui/card.tsx` - Card component family
+- `src/components/ui/separator.tsx` - Separator component
+- `src/components/ui/index.ts` - Component exports
+
+**Files modified:**
+- `vite.config.ts` - Added Tailwind plugin + path aliases
+- `tsconfig.json` - Added `@/*` path alias
+- `src/main.tsx` - Import globals.css
+- `package.json` - New dependencies
+
+**Build verification:**
+- TypeScript compiles without errors
+- Vite build succeeds (229KB JS, 26KB CSS)
+- HUD window unaffected
+
+**Deferred issues created from code review:**
+- #132 - Refactor Debug.tsx into smaller components
+- #133 - Add React component tests
+- #134 - Improve clipboard thread timeout handling
+- #139 - Investigate CSP hardening
 
 ---
 
