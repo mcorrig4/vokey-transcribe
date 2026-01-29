@@ -9,6 +9,7 @@ import {
   CardTitle,
   Button,
   Separator,
+  InlineError,
 } from '@/components/ui'
 import {
   Play,
@@ -77,6 +78,7 @@ export function AdvancedPage() {
   const [kwinStatus, setKwinStatus] = useState<KwinStatus | null>(null)
   const [kwinLoading, setKwinLoading] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
   // Listen for state updates
   useEffect(() => {
@@ -108,38 +110,46 @@ export function AdvancedPage() {
       invoke<KwinStatus>('get_kwin_status'),
     ])
 
-    // Extract successful results, logging any failures
+    // Extract successful results, tracking failures for UI display
     const [hotkey, audio, transcription, metricsData, kwin] = results
+    const newErrors: Record<string, string> = {}
 
     if (hotkey.status === 'fulfilled') {
       setHotkeyStatus(hotkey.value)
     } else {
       console.error('Failed to load hotkey status:', hotkey.reason)
+      newErrors.hotkey = String(hotkey.reason)
     }
 
     if (audio.status === 'fulfilled') {
       setAudioStatus(audio.value)
     } else {
       console.error('Failed to load audio status:', audio.reason)
+      newErrors.audio = String(audio.reason)
     }
 
     if (transcription.status === 'fulfilled') {
       setTranscriptionStatus(transcription.value)
     } else {
       console.error('Failed to load transcription status:', transcription.reason)
+      newErrors.transcription = String(transcription.reason)
     }
 
     if (metricsData.status === 'fulfilled') {
       setMetrics(metricsData.value)
     } else {
       console.error('Failed to load metrics:', metricsData.reason)
+      newErrors.metrics = String(metricsData.reason)
     }
 
     if (kwin.status === 'fulfilled') {
       setKwinStatus(kwin.value)
     } else {
       console.error('Failed to load KWin status:', kwin.reason)
+      newErrors.kwin = String(kwin.reason)
     }
+
+    setErrors(newErrors)
   }
 
   const loadMetrics = async () => {
@@ -273,7 +283,9 @@ export function AdvancedPage() {
           {/* Hotkey Status */}
           <div className="flex items-center justify-between">
             <span className="text-sm">Hotkey</span>
-            {hotkeyStatus ? (
+            {errors.hotkey ? (
+              <span className="text-sm text-destructive">Error</span>
+            ) : hotkeyStatus ? (
               <div className="flex items-center gap-2">
                 <span className={cn(
                   "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium",
@@ -291,13 +303,22 @@ export function AdvancedPage() {
               <span className="text-sm text-muted-foreground">Loading...</span>
             )}
           </div>
+          {errors.hotkey && (
+            <InlineError
+              message="Failed to load hotkey status"
+              details={errors.hotkey}
+              onRetry={loadAllStatus}
+            />
+          )}
 
           <Separator />
 
           {/* Audio Status */}
           <div className="flex items-center justify-between">
             <span className="text-sm">Audio</span>
-            {audioStatus ? (
+            {errors.audio ? (
+              <span className="text-sm text-destructive">Error</span>
+            ) : audioStatus ? (
               <span className={cn(
                 "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium",
                 audioStatus.available ? "bg-green-500/20 text-green-500" : "bg-destructive/20 text-destructive"
@@ -308,13 +329,22 @@ export function AdvancedPage() {
               <span className="text-sm text-muted-foreground">Loading...</span>
             )}
           </div>
+          {errors.audio && (
+            <InlineError
+              message="Failed to load audio status"
+              details={errors.audio}
+              onRetry={loadAllStatus}
+            />
+          )}
 
           <Separator />
 
           {/* Transcription Status */}
           <div className="flex items-center justify-between">
             <span className="text-sm">Transcription</span>
-            {transcriptionStatus ? (
+            {errors.transcription ? (
+              <span className="text-sm text-destructive">Error</span>
+            ) : transcriptionStatus ? (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">
                   {transcriptionStatus.api_provider}
@@ -330,6 +360,13 @@ export function AdvancedPage() {
               <span className="text-sm text-muted-foreground">Loading...</span>
             )}
           </div>
+          {errors.transcription && (
+            <InlineError
+              message="Failed to load transcription status"
+              details={errors.transcription}
+              onRetry={loadAllStatus}
+            />
+          )}
         </CardContent>
       </Card>
 

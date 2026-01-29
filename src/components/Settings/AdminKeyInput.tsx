@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui'
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, InlineError } from '@/components/ui'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { Eye, EyeOff, Check, X, Loader2, ExternalLink, Key } from 'lucide-react'
@@ -201,7 +201,7 @@ export function AdminKeyInput() {
               </Button>
             </div>
             {error && (
-              <p className="text-sm text-red-500">{error}</p>
+              <InlineError message={error} />
             )}
           </div>
         )}

@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { invoke } from '@tauri-apps/api/core'
 import {
   Card,
   CardContent,
@@ -8,25 +9,49 @@ import {
   Label,
   Switch,
   Separator,
+  Skeleton,
+  InlineError,
 } from '@/components/ui'
 import { Palette, Monitor, Sun, Moon, Layout } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import type { AppSettings, AppearanceSettings } from '@/types'
 
 type Theme = 'system' | 'light' | 'dark'
 type HudPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
 
-interface AppearanceSettings {
+// Local interface for component state (uses camelCase for consistency)
+interface LocalAppearanceSettings {
   theme: Theme
   hudPosition: HudPosition
   animationsEnabled: boolean
   hudAutoHideMs: number
 }
 
-const defaultSettings: AppearanceSettings = {
+const defaultSettings: LocalAppearanceSettings = {
   theme: 'system',
   hudPosition: 'top-left',
   animationsEnabled: true,
   hudAutoHideMs: 3000,
+}
+
+// Convert from backend snake_case to local camelCase
+function fromBackend(backend: AppearanceSettings): LocalAppearanceSettings {
+  return {
+    theme: backend.theme as Theme,
+    hudPosition: backend.hud_position as HudPosition,
+    animationsEnabled: backend.animations_enabled,
+    hudAutoHideMs: backend.hud_auto_hide_ms,
+  }
+}
+
+// Convert from local camelCase to backend snake_case
+function toBackend(local: LocalAppearanceSettings): AppearanceSettings {
+  return {
+    theme: local.theme,
+    hud_position: local.hudPosition,
+    animations_enabled: local.animationsEnabled,
+    hud_auto_hide_ms: local.hudAutoHideMs,
+  }
 }
 
 const ThemeOption = ({
@@ -79,8 +104,12 @@ const PositionOption = ({
 )
 
 export function AppearancePage() {
-  const [settings, setSettings] = useState<AppearanceSettings>(defaultSettings)
+  const [appSettings, setAppSettings] = useState<AppSettings | null>(null)
+  const [settings, setSettings] = useState<LocalAppearanceSettings>(defaultSettings)
   const [isDark, setIsDark] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   // Detect current system theme
   useEffect(() => {
@@ -90,6 +119,24 @@ export function AppearancePage() {
     const handler = (e: MediaQueryListEvent) => setIsDark(e.matches)
     mediaQuery.addEventListener('change', handler)
     return () => mediaQuery.removeEventListener('change', handler)
+  }, [])
+
+  // Load settings on mount
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const loaded = await invoke<AppSettings>('get_settings')
+        setAppSettings(loaded)
+        setSettings(fromBackend(loaded.appearance))
+        setLoadError(null)
+      } catch (e) {
+        console.error('Failed to load appearance settings:', e)
+        setLoadError(String(e))
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    loadSettings()
   }, [])
 
   // Apply theme
@@ -102,11 +149,69 @@ export function AppearancePage() {
     root.classList.add(effectiveTheme)
   }, [settings.theme, isDark])
 
-  const updateSetting = <K extends keyof AppearanceSettings>(
+  // Save helper - updates both local state and backend
+  const updateSetting = useCallback(async <K extends keyof LocalAppearanceSettings>(
     key: K,
-    value: AppearanceSettings[K]
+    value: LocalAppearanceSettings[K]
   ) => {
-    setSettings({ ...settings, [key]: value })
+    if (!appSettings) return
+
+    const newSettings = { ...settings, [key]: value }
+    const newAppSettings = { ...appSettings, appearance: toBackend(newSettings) }
+
+    // Optimistic update
+    setSettings(newSettings)
+    setAppSettings(newAppSettings)
+    setSaveError(null)
+
+    try {
+      await invoke('set_settings', { settings: newAppSettings })
+    } catch (e) {
+      console.error('Failed to save appearance settings:', e)
+      setSaveError(String(e))
+      // Revert on failure
+      setSettings(settings)
+      setAppSettings(appSettings)
+    }
+  }, [appSettings, settings])
+
+  // Loading skeleton
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-8 w-48 mb-2" />
+          <Skeleton className="h-4 w-64" />
+        </div>
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-32" />
+            <Skeleton className="h-4 w-48" />
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-4">
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-20 w-full" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-32" />
+            <Skeleton className="h-4 w-48" />
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-4 max-w-[300px]">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -117,6 +222,23 @@ export function AppearancePage() {
           Customize the look and feel of VoKey.
         </p>
       </div>
+
+      {/* Load Error */}
+      {loadError && (
+        <InlineError
+          message="Failed to load settings"
+          details={loadError}
+          onRetry={() => window.location.reload()}
+        />
+      )}
+
+      {/* Save Error */}
+      {saveError && (
+        <InlineError
+          message="Failed to save settings"
+          details={saveError}
+        />
+      )}
 
       {/* Theme Selection */}
       <Card>
@@ -248,15 +370,6 @@ export function AppearancePage() {
               How long the HUD stays visible after transcription completes.
             </p>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Preview Note */}
-      <Card className="border-dashed">
-        <CardContent className="py-4">
-          <p className="text-sm text-muted-foreground text-center">
-            Appearance settings are applied in real-time but not yet persisted across sessions.
-          </p>
         </CardContent>
       </Card>
     </div>
