@@ -148,12 +148,8 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 | 4 - OpenAI transcription + clipboard | ✅ COMPLETE | OpenAI Whisper API, arboard clipboard, tested on real hardware |
 | 5 - Full flow polish + tray controls | ✅ COMPLETE | Tray menu with Toggle/Cancel/Open Logs, HUD timer, auto-dismiss |
 | 6 - Hardening + UX polish | ⏸️ PAUSED | Phases 1-5 done; Phase 6 (50-cycle stability) needs real hardware |
-<<<<<<< HEAD
-| 7A - Streaming transcription | 🧪 UAT | Backend: #68-#70 ✅. Frontend: PR #125 in UAT |
-| 7-Waveform - Real-time visualization | 🚧 ACTIVE | #130 tracking; Phase 1 (#72) + Phase 2 (#75) |
-=======
-| 7A - Streaming transcription | 🧪 UAT | All backend+frontend complete. PR #145 ready. Needs hardware testing |
->>>>>>> f2e80d1 (docs: Sprint 7A completion - documentation & error handling)
+| 7A - Streaming transcription | ✅ COMPLETE | All backend+frontend complete. PR #145 merged. |
+| 7B - Waveform visualization | ✅ COMPLETE | Phase 1 (#72) + Phase 2 (#75) complete. |
 | 7B - Post-processing modes | 📋 PLANNING | Option B chosen: Normal/Coding/Markdown/Prompt modes |
 
 ---
