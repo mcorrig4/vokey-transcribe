@@ -164,9 +164,9 @@ impl EmaState {
             return;
         }
 
-        for i in 0..NUM_BARS {
+        for (bar, prev) in bars.iter_mut().zip(self.prev_bars.iter()) {
             // EMA formula: new = alpha * current + (1 - alpha) * previous
-            bars[i] = EMA_ALPHA * bars[i] + (1.0 - EMA_ALPHA) * self.prev_bars[i];
+            *bar = EMA_ALPHA * *bar + (1.0 - EMA_ALPHA) * prev;
         }
 
         // Store for next frame

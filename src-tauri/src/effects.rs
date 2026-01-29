@@ -146,7 +146,8 @@ fn evaluate_short_clip_vad(stats: &crate::audio::vad::VadStats) -> VadDecision {
 }
 
 /// Convenience function that returns just the boolean decision.
-/// Used by tests and any code that only needs the final answer.
+/// Used by tests that only need the final answer.
+#[cfg(test)]
 fn short_clip_vad_allows_transcription(stats: &crate::audio::vad::VadStats) -> bool {
     evaluate_short_clip_vad(stats).allows_transcription
 }

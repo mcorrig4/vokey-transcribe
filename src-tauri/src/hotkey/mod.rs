@@ -10,7 +10,7 @@
 mod detector;
 pub mod manager;
 
-pub use manager::{failed_status, HotkeyManager, HotkeyStatus};
+pub use manager::{HotkeyManager, HotkeyStatus};
 
 use evdev::Key;
 

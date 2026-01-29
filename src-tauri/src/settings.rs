@@ -99,12 +99,10 @@ pub fn save_settings(app: &AppHandle, settings: &AppSettings) -> Result<(), Stri
 
     // On Unix, rename will atomically replace the destination. On Windows, rename
     // fails if the destination exists, so we remove it first (ignoring NotFound).
-    if cfg!(windows) {
-        if path.exists() {
-            if let Err(e) = std::fs::remove_file(&path) {
-                if e.kind() != std::io::ErrorKind::NotFound {
-                    return Err(format!("Remove existing settings file {:?}: {}", path, e));
-                }
+    if cfg!(windows) && path.exists() {
+        if let Err(e) = std::fs::remove_file(&path) {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                return Err(format!("Remove existing settings file {:?}: {}", path, e));
             }
         }
     }
