@@ -366,6 +366,7 @@ impl EffectRunner for AudioEffectRunner {
                         tokio::sync::oneshot::channel::<()>();
 
                     // Spawn waveform emitter task
+                    log::info!("Spawning waveform emitter task");
                     let app_for_waveform = app.clone();
                     tokio::spawn(async move {
                         run_waveform_emitter(app_for_waveform, waveform_rx, waveform_stop_rx).await;
