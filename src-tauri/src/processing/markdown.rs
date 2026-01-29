@@ -82,7 +82,7 @@ static SENTENCE_END: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[.!?]$").un
 ///
 /// assert_eq!(
 ///     process("first do this second do that"),
-///     "1. Do this\n- Do that"
+///     "1. Do this.\n2. Do that."
 /// );
 /// assert_eq!(process("hello world"), "Hello world.");
 /// assert_eq!(process(""), "");

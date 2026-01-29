@@ -251,8 +251,8 @@ Sprint 7B adds text post-processing modes that transform transcriptions before c
 | coding_fillers | "um like get the time" | "get_the_time" |
 | coding_special | "check user's email" | "check_users_email" |
 | coding_empty | "" | "" |
-| markdown_list | "first do this. second do that" | "1. do this\n- do that" |
-| markdown_plain | "hello world" | "hello world." |
+| markdown_list | "first do this second do that" | "1. Do this.\n2. Do that." |
+| markdown_plain | "hello world" | "Hello world." |
 
 ### Integration Tests
 

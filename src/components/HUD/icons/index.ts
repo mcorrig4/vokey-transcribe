@@ -1,6 +1,0 @@
-export { MicIcon } from './MicIcon'
-export { SettingsIcon } from './SettingsIcon'
-export { SpinnerIcon } from './SpinnerIcon'
-export { CheckIcon } from './CheckIcon'
-export { AlertIcon } from './AlertIcon'
-export { StopIcon } from './StopIcon'

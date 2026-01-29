@@ -94,20 +94,16 @@ fn remove_word(text: &str, word: &str) -> String {
 /// Convert text to snake_case.
 fn to_snake_case(s: &str) -> String {
     s.chars()
-        .map(|c| {
+        .filter_map(|c| {
             if c.is_alphanumeric() {
-                c.to_ascii_lowercase()
+                Some(c.to_ascii_lowercase())
             } else if c.is_whitespace() || c == '-' {
-                '_'
+                Some('_')
             } else {
-                // Skip other characters
-                '_'
+                // Remove apostrophes and other punctuation entirely
+                None
             }
         })
-        .collect::<String>()
-        // Filter out non-alphanumeric except underscores
-        .chars()
-        .filter(|c| c.is_alphanumeric() || *c == '_')
         .collect()
 }
 
