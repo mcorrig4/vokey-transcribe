@@ -9,6 +9,9 @@ import './styles/globals.css'
 const params = new URLSearchParams(window.location.search)
 const windowType = params.get('window')
 
+// Set data attribute for window-specific styling (HUD needs transparent background)
+document.documentElement.dataset.window = windowType || 'hud'
+
 // Component map - explicit relationship between window type and component
 const componentMap: Record<string, React.ComponentType> = {
   settings: Settings,

@@ -53,7 +53,18 @@
   }
 
   body {
-    @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Apply dark theme background only to settings windows (HUD needs transparent) */
+  :root[data-window="settings"] body,
+  :root[data-window="debug"] body {
+    @apply bg-background text-foreground;
+  }
+
+  /* Keep HUD window transparent for floating pill effect */
+  :root[data-window="hud"] body {
+    background: transparent;
+    @apply text-foreground;
   }
 }
