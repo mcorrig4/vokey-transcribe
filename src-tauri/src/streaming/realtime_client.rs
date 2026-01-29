@@ -23,7 +23,7 @@ use tokio_tungstenite::{
     connect_async_with_config,
     tungstenite::{
         client::IntoClientRequest,
-        http::{HeaderValue, Request},
+        http::HeaderValue,
         Message,
     },
     MaybeTlsStream, WebSocketStream,

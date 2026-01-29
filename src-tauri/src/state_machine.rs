@@ -27,8 +27,9 @@ impl NoSpeechSource {
 
 /// Internal state of the recording workflow.
 /// This is the authoritative state - all transitions go through the reducer.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum State {
+    #[default]
     Idle,
     Arming {
         recording_id: Uuid,
@@ -66,12 +67,6 @@ pub enum State {
         message: String,
         last_good_text: Option<String>,
     },
-}
-
-impl Default for State {
-    fn default() -> Self {
-        State::Idle
-    }
 }
 
 /// Events that can trigger state transitions.
@@ -166,6 +161,7 @@ pub enum Effect {
         wav_path: PathBuf,
     },
     CopyToClipboard {
+        #[allow(dead_code)] // Kept for consistency with other effects and Debug output
         id: Uuid,
         text: String,
     },
@@ -457,6 +453,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             Transcribing {
                 recording_id,
                 wav_path,
+                ..
             },
             NoSpeechDetected {
                 id,
@@ -503,6 +500,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             Transcribing {
                 recording_id,
                 wav_path,
+                ..
             },
             Cancel,
         ) => (
@@ -705,6 +703,7 @@ mod tests {
         let state = State::Transcribing {
             recording_id: id,
             wav_path: PathBuf::from("/tmp/test.wav"),
+            partial_text: None,
         };
         let (next, effects) = reduce(&state, Event::Cancel);
 

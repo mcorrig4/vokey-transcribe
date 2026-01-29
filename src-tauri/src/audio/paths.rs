@@ -25,12 +25,11 @@ fn get_max_recordings() -> usize {
 /// Get the temp audio directory path.
 /// Returns: ~/.local/share/vokey-transcribe/temp/audio/
 fn temp_audio_dir() -> PathBuf {
-    let data_dir = dirs::data_local_dir()
+    dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join("vokey-transcribe")
         .join("temp")
-        .join("audio");
-    data_dir
+        .join("audio")
 }
 
 /// Create the temp audio directory if it doesn't exist.

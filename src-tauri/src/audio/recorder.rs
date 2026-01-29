@@ -76,7 +76,6 @@ enum AudioCommand {
 /// The actual stream is owned by the audio thread.
 pub struct RecordingHandle {
     stop_sender: mpsc::Sender<AudioCommand>,
-    wav_path: PathBuf,
 }
 
 impl RecordingHandle {
@@ -215,7 +214,6 @@ impl AudioRecorder {
 
         let handle = RecordingHandle {
             stop_sender: self.command_sender.clone(),
-            wav_path: wav_path.clone(),
         };
 
         Ok((handle, wav_path))
@@ -249,9 +247,10 @@ fn audio_thread_main(
             }) => {
                 // Stop any existing recording first
                 if let Some(stream) = active_stream.take() {
-                    if let Err(e) = finalize_recording(stream) {
+                    if let Err(e) = finalize_recording(&stream) {
                         log::error!("Failed to finalize previous recording: {}", e);
                     }
+                    drop(stream);
                 }
 
                 // Start new recording
@@ -275,8 +274,13 @@ fn audio_thread_main(
             }
             Ok(AudioCommand::Stop { response }) => {
                 if let Some(stream) = active_stream.take() {
-                    let result = finalize_recording(stream);
+                    let result = finalize_recording(&stream);
+                    // Send response BEFORE dropping stream - CPAL Stream::drop can block on ALSA errors
                     let _ = response.send(result);
+                    // Now drop the stream (may block, but response is already sent)
+                    log::debug!("Dropping audio stream...");
+                    drop(stream);
+                    log::debug!("Audio stream dropped");
                 } else {
                     let _ = response.send(Err(AudioError::ThreadError(
                         "No active recording".to_string(),
@@ -286,9 +290,10 @@ fn audio_thread_main(
             Ok(AudioCommand::Shutdown) | Err(_) => {
                 // Finalize any active recording before shutting down
                 if let Some(stream) = active_stream.take() {
-                    if let Err(e) = finalize_recording(stream) {
+                    if let Err(e) = finalize_recording(&stream) {
                         log::error!("Failed to finalize recording on shutdown: {}", e);
                     }
+                    drop(stream);
                 }
                 log::info!("Audio thread shutting down");
                 break;
@@ -356,8 +361,9 @@ fn start_recording(
     Ok((active, wav_path))
 }
 
-/// Finalize a recording and return the WAV path
-fn finalize_recording(stream: ActiveStream) -> Result<PathBuf, AudioError> {
+/// Finalize a recording: stop the WAV writer and return the path.
+/// Note: Does NOT drop the stream - caller must handle that separately.
+fn finalize_recording(stream: &ActiveStream) -> Result<PathBuf, AudioError> {
     // Signal recording to stop
     stream.is_recording.store(false, Ordering::SeqCst);
 
@@ -377,7 +383,7 @@ fn finalize_recording(stream: ActiveStream) -> Result<PathBuf, AudioError> {
     }
 
     log::info!("Recording stopped, WAV finalized: {:?}", stream.wav_path);
-    Ok(stream.wav_path)
+    Ok(stream.wav_path.clone())
 }
 
 /// Build the input stream for the given sample format
