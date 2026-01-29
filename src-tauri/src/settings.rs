@@ -5,6 +5,31 @@ use tauri::Manager;
 
 const SETTINGS_FILE_NAME: &str = "settings.json";
 
+/// Appearance-specific settings for UI customization
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct AppearanceSettings {
+    /// Theme preference: "system", "light", or "dark"
+    pub theme: String,
+    /// HUD position: "top-left", "top-right", "bottom-left", "bottom-right"
+    pub hud_position: String,
+    /// Whether animations are enabled
+    pub animations_enabled: bool,
+    /// Auto-hide delay in milliseconds (0 = never hide)
+    pub hud_auto_hide_ms: u64,
+}
+
+impl Default for AppearanceSettings {
+    fn default() -> Self {
+        Self {
+            theme: "system".to_string(),
+            hud_position: "top-left".to_string(),
+            animations_enabled: true,
+            hud_auto_hide_ms: 3000,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppSettings {
@@ -32,6 +57,9 @@ pub struct AppSettings {
 
     /// Unix timestamp (seconds) when KWin rules were installed via the app.
     pub kwin_rules_installed_at: Option<u64>,
+
+    /// Appearance settings (theme, HUD position, animations)
+    pub appearance: AppearanceSettings,
 }
 
 impl Default for AppSettings {
@@ -44,6 +72,7 @@ impl Default for AppSettings {
             streaming_enabled: true, // On by default
             kwin_setup_prompted: false,
             kwin_rules_installed_at: None,
+            appearance: AppearanceSettings::default(),
         }
     }
 }
