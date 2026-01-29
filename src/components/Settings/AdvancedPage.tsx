@@ -156,8 +156,10 @@ export function AdvancedPage() {
     try {
       const m = await invoke<MetricsSummary>('get_metrics_summary')
       setMetrics(m)
+      setErrors(prev => ({ ...prev, metrics: '' }))
     } catch (e) {
       console.error('Failed to load metrics:', e)
+      setErrors(prev => ({ ...prev, metrics: String(e) }))
     }
   }
 
@@ -169,16 +171,20 @@ export function AdvancedPage() {
   const openLogsFolder = async () => {
     try {
       await invoke('open_logs_folder')
+      setErrors(prev => ({ ...prev, logs: '' }))
     } catch (e) {
       console.error('Failed to open logs folder:', e)
+      setErrors(prev => ({ ...prev, logs: String(e) }))
     }
   }
 
   const openRecordingsFolder = async () => {
     try {
       await invoke('open_recordings_folder')
+      setErrors(prev => ({ ...prev, recordings: '' }))
     } catch (e) {
       console.error('Failed to open recordings folder:', e)
+      setErrors(prev => ({ ...prev, recordings: String(e) }))
     }
   }
 
@@ -188,8 +194,10 @@ export function AdvancedPage() {
       await invoke('install_kwin_rule')
       const status = await invoke<KwinStatus>('get_kwin_status')
       setKwinStatus(status)
+      setErrors(prev => ({ ...prev, kwinInstall: '' }))
     } catch (e) {
       console.error('Failed to install KWin rule:', e)
+      setErrors(prev => ({ ...prev, kwinInstall: String(e) }))
     } finally {
       setKwinLoading(false)
     }
@@ -201,8 +209,10 @@ export function AdvancedPage() {
       await invoke('remove_kwin_rule')
       const status = await invoke<KwinStatus>('get_kwin_status')
       setKwinStatus(status)
+      setErrors(prev => ({ ...prev, kwinRemove: '' }))
     } catch (e) {
       console.error('Failed to remove KWin rule:', e)
+      setErrors(prev => ({ ...prev, kwinRemove: String(e) }))
     } finally {
       setKwinLoading(false)
     }
@@ -222,9 +232,10 @@ export function AdvancedPage() {
       await navigator.clipboard.writeText(JSON.stringify(info, null, 2))
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
+      setErrors(prev => ({ ...prev, copy: '' }))
     } catch (e) {
       console.error('Failed to copy debug info to clipboard:', e)
-      // Could show a toast notification here, but console.error is better than silent failure
+      setErrors(prev => ({ ...prev, copy: String(e) }))
     }
   }
 
@@ -416,6 +427,20 @@ export function AdvancedPage() {
                 )}
               </div>
             </div>
+            {errors.kwinInstall && (
+              <InlineError
+                message="Failed to install KWin rule"
+                details={errors.kwinInstall}
+                onRetry={installKwinRule}
+              />
+            )}
+            {errors.kwinRemove && (
+              <InlineError
+                message="Failed to remove KWin rule"
+                details={errors.kwinRemove}
+                onRetry={removeKwinRule}
+              />
+            )}
           </CardContent>
         </Card>
       )}
@@ -447,6 +472,13 @@ export function AdvancedPage() {
             </div>
           </CardContent>
         </Card>
+      )}
+      {errors.metrics && (
+        <InlineError
+          message="Failed to load metrics"
+          details={errors.metrics}
+          onRetry={loadMetrics}
+        />
       )}
 
       {/* Simulation Controls */}
@@ -506,6 +538,27 @@ export function AdvancedPage() {
               {copied ? 'Copied!' : 'Copy Debug Info'}
             </Button>
           </div>
+          {errors.logs && (
+            <InlineError
+              message="Failed to open logs folder"
+              details={errors.logs}
+              onRetry={openLogsFolder}
+            />
+          )}
+          {errors.recordings && (
+            <InlineError
+              message="Failed to open recordings folder"
+              details={errors.recordings}
+              onRetry={openRecordingsFolder}
+            />
+          )}
+          {errors.copy && (
+            <InlineError
+              message="Failed to copy debug info"
+              details={errors.copy}
+              onRetry={copyDebugInfo}
+            />
+          )}
         </CardContent>
       </Card>
     </div>

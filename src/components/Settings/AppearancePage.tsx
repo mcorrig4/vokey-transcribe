@@ -68,6 +68,7 @@ const ThemeOption = ({
   <button
     type="button"
     onClick={onClick}
+    aria-pressed={selected}
     className={cn(
       "flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-colors",
       selected
@@ -92,6 +93,7 @@ const PositionOption = ({
   <button
     type="button"
     onClick={onClick}
+    aria-pressed={selected}
     className={cn(
       "flex items-center justify-center p-3 rounded-lg border-2 text-xs font-medium transition-colors",
       selected
@@ -156,6 +158,10 @@ export function AppearancePage() {
   ) => {
     if (!appSettings) return
 
+    // Capture previous values BEFORE optimistic update
+    const prevSettings = settings
+    const prevAppSettings = appSettings
+
     const newSettings = { ...settings, [key]: value }
     const newAppSettings = { ...appSettings, appearance: toBackend(newSettings) }
 
@@ -169,9 +175,9 @@ export function AppearancePage() {
     } catch (e) {
       console.error('Failed to save appearance settings:', e)
       setSaveError(String(e))
-      // Revert on failure
-      setSettings(settings)
-      setAppSettings(appSettings)
+      // Use captured values for revert
+      setSettings(prevSettings)
+      setAppSettings(prevAppSettings)
     }
   }, [appSettings, settings])
 
@@ -355,6 +361,7 @@ export function AppearancePage() {
                   key={ms}
                   type="button"
                   onClick={() => updateSetting('hudAutoHideMs', ms)}
+                  aria-pressed={settings.hudAutoHideMs === ms}
                   className={cn(
                     "px-3 py-1.5 rounded text-sm font-medium transition-colors",
                     settings.hudAutoHideMs === ms

@@ -19,6 +19,7 @@ export function AdminKeyInput() {
   const [showKey, setShowKey] = useState(false)
   const [validationState, setValidationState] = useState<ValidationState>('idle')
   const [error, setError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -40,8 +41,10 @@ export function AdminKeyInput() {
     try {
       const s = await invoke<AdminKeyStatus>('get_admin_key_status')
       setStatus(s)
+      setLoadError(null) // Clear error on success
     } catch (e) {
-      console.error('Failed to get admin key status:', e)
+      console.error('Failed to load admin key status:', e)
+      setLoadError(String(e))
     }
   }
 
@@ -131,6 +134,14 @@ export function AdminKeyInput() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {loadError && (
+          <InlineError
+            message="Failed to load API key status"
+            details={loadError}
+            onRetry={loadStatus}
+          />
+        )}
+
         {/* Current status */}
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">Status:</span>
