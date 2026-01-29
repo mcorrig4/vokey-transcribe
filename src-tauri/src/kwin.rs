@@ -184,7 +184,7 @@ fn install_rule(path: &PathBuf) -> Result<(), String> {
     rule_section.insert("acceptfocus".to_string(), "false".to_string());
     rule_section.insert("acceptfocusrule".to_string(), "2".to_string());
     rule_section.insert("position".to_string(), "20,20".to_string());
-    rule_section.insert("positionrule".to_string(), "2".to_string());
+    rule_section.insert("positionrule".to_string(), "4".to_string());
     rule_section.insert("wmclass".to_string(), WMCLASS.to_string());
     rule_section.insert("wmclassmatch".to_string(), "1".to_string());
 
@@ -206,7 +206,8 @@ fn install_rule(path: &PathBuf) -> Result<(), String> {
 
 /// Remove our KWin rule
 fn remove_rule(path: &PathBuf) -> Result<(), String> {
-    let content = fs::read_to_string(path).map_err(|e| format!("Failed to read kwinrulesrc: {}", e))?;
+    let content =
+        fs::read_to_string(path).map_err(|e| format!("Failed to read kwinrulesrc: {}", e))?;
 
     let mut sections = parse_kwinrulesrc(&content);
 
@@ -270,7 +271,10 @@ fn serialize_kwinrulesrc(sections: &HashMap<String, HashMap<String, String>>) ->
             output.push_str(&format!("Description={}\n", desc));
         }
         // Write remaining keys alphabetically for consistency
-        let mut keys: Vec<_> = section_data.keys().filter(|k| *k != "Description").collect();
+        let mut keys: Vec<_> = section_data
+            .keys()
+            .filter(|k| *k != "Description")
+            .collect();
         keys.sort();
         for key in keys {
             output.push_str(&format!("{}={}\n", key, section_data[key]));
@@ -341,7 +345,7 @@ pub fn get_status() -> KwinStatus {
     let config_path = kwinrulesrc_path();
     let rule_installed = config_path
         .as_ref()
-        .map(|p| check_rule_installed(p))
+        .map(check_rule_installed)
         .unwrap_or(false);
 
     KwinStatus {
@@ -452,7 +456,10 @@ aboverule=2
         let has_exact_match = rules_with_similar_name
             .split(',')
             .any(|r| r.trim() == RULE_ID);
-        assert!(!has_exact_match, "Should not match substring 'my-vokey-hud-rule'");
+        assert!(
+            !has_exact_match,
+            "Should not match substring 'my-vokey-hud-rule'"
+        );
 
         // Verify it DOES match when exact rule is present
         let rules_with_exact = "my-vokey-hud-rule,vokey-hud-rule,other-rule";
@@ -473,13 +480,19 @@ aboverule=2
             .filter(|s| !s.is_empty())
             .collect();
 
-        assert!(rules_list.is_empty(), "Empty rules string should produce empty vec");
+        assert!(
+            rules_list.is_empty(),
+            "Empty rules string should produce empty vec"
+        );
 
         // After adding a rule, should be clean (no leading comma)
         let mut rules_list = rules_list;
         rules_list.push(RULE_ID.to_string());
         let result = rules_list.join(",");
-        assert_eq!(result, RULE_ID, "Should be just the rule ID, no leading comma");
+        assert_eq!(
+            result, RULE_ID,
+            "Should be just the rule ID, no leading comma"
+        );
         assert!(!result.starts_with(','), "Should not start with comma");
     }
 }

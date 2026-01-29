@@ -21,6 +21,7 @@ serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
 tauri = { version = "2.9.5", features = ["tray-icon"] }
 tauri-plugin-log = "2"
+tauri-plugin-process = "2"
 
 # State machine
 uuid = { version = "1", features = ["v4"] }
@@ -45,9 +46,13 @@ webrtc-vad = "0.4"
 tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
 base64 = "0.22"
 futures-util = "0.3"
+rustls = { version = "0.23", features = ["ring"] }
 
 # XDG paths
 dirs = "5"
+
+# GTK (Linux window customization)
+gtk = "0.18"
 
 # Development environment
 dotenvy = "0.15"

@@ -26,6 +26,12 @@ pub struct AppSettings {
     /// When enabled, partial transcripts are shown while recording.
     /// When disabled, only batch transcription (Whisper) is used.
     pub streaming_enabled: bool,
+
+    /// Has the user been shown the KWin setup banner? (Wayland/KDE only)
+    pub kwin_setup_prompted: bool,
+
+    /// Unix timestamp (seconds) when KWin rules were installed via the app.
+    pub kwin_rules_installed_at: Option<u64>,
 }
 
 impl Default for AppSettings {
@@ -36,6 +42,8 @@ impl Default for AppSettings {
             vad_check_max_ms: 1500,
             vad_ignore_start_ms: 80,
             streaming_enabled: true, // On by default
+            kwin_setup_prompted: false,
+            kwin_rules_installed_at: None,
         }
     }
 }
@@ -91,12 +99,10 @@ pub fn save_settings(app: &AppHandle, settings: &AppSettings) -> Result<(), Stri
 
     // On Unix, rename will atomically replace the destination. On Windows, rename
     // fails if the destination exists, so we remove it first (ignoring NotFound).
-    if cfg!(windows) {
-        if path.exists() {
-            if let Err(e) = std::fs::remove_file(&path) {
-                if e.kind() != std::io::ErrorKind::NotFound {
-                    return Err(format!("Remove existing settings file {:?}: {}", path, e));
-                }
+    if cfg!(windows) && path.exists() {
+        if let Err(e) = std::fs::remove_file(&path) {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                return Err(format!("Remove existing settings file {:?}: {}", path, e));
             }
         }
     }

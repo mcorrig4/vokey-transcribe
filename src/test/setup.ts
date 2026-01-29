@@ -18,14 +18,32 @@ vi.mock('@tauri-apps/api/event', () => ({
   emit: vi.fn(),
 }))
 
+// Create a singleton mock window object that persists across calls
+const mockWindowInstance = {
+  close: vi.fn(() => Promise.resolve()),
+  minimize: vi.fn(() => Promise.resolve()),
+  maximize: vi.fn(() => Promise.resolve()),
+  isMaximized: vi.fn(() => Promise.resolve(false)),
+  onCloseRequested: vi.fn(() => Promise.resolve(() => {})),
+  startDragging: vi.fn(() => Promise.resolve()),
+  setMinSize: vi.fn(() => Promise.resolve()),
+  setMaxSize: vi.fn(() => Promise.resolve()),
+  setSize: vi.fn(() => Promise.resolve()),
+  setPosition: vi.fn(() => Promise.resolve()),
+  show: vi.fn(() => Promise.resolve()),
+  hide: vi.fn(() => Promise.resolve()),
+}
+
 vi.mock('@tauri-apps/api/window', () => ({
-  getCurrentWindow: vi.fn(() => ({
-    close: vi.fn(),
-    minimize: vi.fn(),
-    maximize: vi.fn(),
-    isMaximized: vi.fn(() => Promise.resolve(false)),
-    onCloseRequested: vi.fn(() => Promise.resolve(() => {})),
-  })),
+  getCurrentWindow: vi.fn(() => mockWindowInstance),
+  LogicalSize: vi.fn((width: number, height: number) => ({ width, height })),
+  PhysicalSize: vi.fn((width: number, height: number) => ({ width, height })),
+}))
+
+vi.mock('@tauri-apps/api/app', () => ({
+  getVersion: vi.fn(() => Promise.resolve('0.2.0-dev')),
+  getName: vi.fn(() => Promise.resolve('VoKey Transcribe')),
+  getTauriVersion: vi.fn(() => Promise.resolve('2.0.0')),
 }))
 
 // Mock tauri-controls

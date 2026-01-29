@@ -148,6 +148,9 @@ export function setupDefaultTauriMocks(): void {
     get_admin_api_key: null,
     get_masked_admin_key: null,
     get_usage_metrics: null,
+    check_kwin_setup_needed: false,
+    set_kwin_setup_dismissed: undefined,
+    reset_setup_banner: undefined,
   })
 }
 

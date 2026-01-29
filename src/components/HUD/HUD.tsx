@@ -3,6 +3,7 @@ import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window'
 import { useHUD } from '../../context/HUDContext'
 import { ControlPill } from './ControlPill'
 import { TranscriptPanel } from './TranscriptPanel'
+import { SetupBanner } from './SetupBanner'
 import styles from './HUD.module.css'
 
 // Window sizes for different states
@@ -48,7 +49,11 @@ export function HUD() {
 
     // Use requestAnimationFrame to batch the resize, with cleanup
     const rafId = requestAnimationFrame(() => {
-      window.setSize(targetSize).catch((err) => {
+      Promise.all([
+        window.setMinSize(targetSize),
+        window.setMaxSize(targetSize),
+        window.setSize(targetSize),
+      ]).catch((err) => {
         console.warn('Failed to resize window:', err)
       })
     })
@@ -76,6 +81,7 @@ export function HUD() {
   return (
     <div className={styles.layout} onMouseDown={handleMouseDown} data-testid="hud-container">
       <ControlPill />
+      <SetupBanner />
       {panelState !== 'hidden' && (
         <TranscriptPanel isExiting={panelState === 'exiting'} />
       )}

@@ -15,6 +15,8 @@ vi.mock('./HUD.module.css', () => ({
 vi.mock('@tauri-apps/api/window', () => ({
   getCurrentWindow: vi.fn(() => ({
     setSize: vi.fn(() => Promise.resolve()),
+    setMinSize: vi.fn(() => Promise.resolve()),
+    setMaxSize: vi.fn(() => Promise.resolve()),
     startDragging: vi.fn(() => Promise.resolve()),
   })),
   LogicalSize: class LogicalSize {

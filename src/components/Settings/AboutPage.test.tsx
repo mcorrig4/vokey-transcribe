@@ -27,9 +27,10 @@ describe('AboutPage', () => {
     expect(screen.getByText('Press. Speak. Paste.')).toBeInTheDocument()
   })
 
-  it('displays version number', () => {
+  it('displays version number', async () => {
     render(<AboutPage />)
-    expect(screen.getByText('0.2.0-dev')).toBeInTheDocument()
+    // Wait for async version fetch to complete
+    expect(await screen.findByText('0.2.0-dev')).toBeInTheDocument()
   })
 
   it('displays features list', () => {
