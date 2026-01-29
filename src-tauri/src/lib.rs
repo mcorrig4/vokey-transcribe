@@ -462,9 +462,9 @@ async fn fetch_usage_metrics(
 #[tauri::command]
 async fn get_cached_usage_metrics(
     handle: tauri::State<'_, UsageHandle>,
-) -> Option<usage::UsageMetrics> {
+) -> Result<Option<usage::UsageMetrics>, String> {
     let cache = handle.cache.lock().await;
-    cache.get_stale().cloned()
+    Ok(cache.get_stale().cloned())
 }
 
 // ============================================================================

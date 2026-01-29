@@ -255,7 +255,7 @@ export function AppearancePage() {
       <Card className="border-dashed">
         <CardContent className="py-4">
           <p className="text-sm text-muted-foreground text-center">
-            Appearance settings are saved automatically and applied in real-time.
+            Appearance settings are applied in real-time but not yet persisted across sessions.
           </p>
         </CardContent>
       </Card>

@@ -188,10 +188,10 @@ describe('AppearancePage', () => {
     ).toBeInTheDocument()
   })
 
-  it('shows auto-save message', () => {
+  it('shows real-time application note', () => {
     render(<AppearancePage />)
     expect(
-      screen.getByText('Appearance settings are saved automatically and applied in real-time.')
+      screen.getByText('Appearance settings are applied in real-time but not yet persisted across sessions.')
     ).toBeInTheDocument()
   })
 })

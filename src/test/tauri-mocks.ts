@@ -178,6 +178,8 @@ export interface MockUsageMetrics {
   seconds_30d: number
   seconds_7d: number
   seconds_24h: number
-  budget_cents: number | null
+  requests_30d: number
+  requests_7d: number
+  requests_24h: number
   last_updated: string
 }

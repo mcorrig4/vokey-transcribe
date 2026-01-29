@@ -14,9 +14,14 @@ export function AboutPage() {
 
   useEffect(() => {
     let isMounted = true
-    getVersion().then((v) => {
-      if (isMounted) setVersion(v)
-    })
+    getVersion()
+      .then((v) => {
+        if (isMounted) setVersion(v)
+      })
+      .catch((e) => {
+        console.error('Failed to get app version:', e)
+        if (isMounted) setVersion('unknown')
+      })
     return () => {
       isMounted = false
     }

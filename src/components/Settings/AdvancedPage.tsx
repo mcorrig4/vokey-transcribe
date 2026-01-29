@@ -91,27 +91,54 @@ export function AdvancedPage() {
     loadAllStatus()
   }, [])
 
-  // Reload metrics when state changes
+  // Reload metrics when a cycle completes
   useEffect(() => {
-    loadMetrics()
-  }, [uiState])
+    if (uiState.status === 'done' || uiState.status === 'error') {
+      loadMetrics()
+    }
+  }, [uiState.status])
 
   const loadAllStatus = async () => {
-    try {
-      const [hotkey, audio, transcription, metricsData, kwin] = await Promise.all([
-        invoke<HotkeyStatus>('get_hotkey_status'),
-        invoke<AudioStatus>('get_audio_status'),
-        invoke<TranscriptionStatus>('get_transcription_status'),
-        invoke<MetricsSummary>('get_metrics_summary'),
-        invoke<KwinStatus>('get_kwin_status'),
-      ])
-      setHotkeyStatus(hotkey)
-      setAudioStatus(audio)
-      setTranscriptionStatus(transcription)
-      setMetrics(metricsData)
-      setKwinStatus(kwin)
-    } catch (e) {
-      console.error('Failed to load status:', e)
+    // Use Promise.allSettled to get partial results even if some calls fail
+    const results = await Promise.allSettled([
+      invoke<HotkeyStatus>('get_hotkey_status'),
+      invoke<AudioStatus>('get_audio_status'),
+      invoke<TranscriptionStatus>('get_transcription_status'),
+      invoke<MetricsSummary>('get_metrics_summary'),
+      invoke<KwinStatus>('get_kwin_status'),
+    ])
+
+    // Extract successful results, logging any failures
+    const [hotkey, audio, transcription, metricsData, kwin] = results
+
+    if (hotkey.status === 'fulfilled') {
+      setHotkeyStatus(hotkey.value)
+    } else {
+      console.error('Failed to load hotkey status:', hotkey.reason)
+    }
+
+    if (audio.status === 'fulfilled') {
+      setAudioStatus(audio.value)
+    } else {
+      console.error('Failed to load audio status:', audio.reason)
+    }
+
+    if (transcription.status === 'fulfilled') {
+      setTranscriptionStatus(transcription.value)
+    } else {
+      console.error('Failed to load transcription status:', transcription.reason)
+    }
+
+    if (metricsData.status === 'fulfilled') {
+      setMetrics(metricsData.value)
+    } else {
+      console.error('Failed to load metrics:', metricsData.reason)
+    }
+
+    if (kwin.status === 'fulfilled') {
+      setKwinStatus(kwin.value)
+    } else {
+      console.error('Failed to load KWin status:', kwin.reason)
     }
   }
 
@@ -181,9 +208,14 @@ export function AdvancedPage() {
       kwinStatus,
       metrics,
     }
-    await navigator.clipboard.writeText(JSON.stringify(info, null, 2))
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(info, null, 2))
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (e) {
+      console.error('Failed to copy debug info to clipboard:', e)
+      // Could show a toast notification here, but console.error is better than silent failure
+    }
   }
 
   return (

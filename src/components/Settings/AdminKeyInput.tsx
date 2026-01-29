@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui'
 import { Input } from '@/components/ui/input'
@@ -20,10 +20,20 @@ export function AdminKeyInput() {
   const [validationState, setValidationState] = useState<ValidationState>('idle')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Load status on mount
   useEffect(() => {
     loadStatus()
+  }, [])
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+      }
+    }
   }, [])
 
   const loadStatus = async () => {
@@ -97,10 +107,15 @@ export function AdminKeyInput() {
     setValidationState('idle')
     setError(null)
 
+    // Clear any pending debounce timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+      debounceTimerRef.current = null
+    }
+
     // Debounce validation
     if (value.length >= 10) {
-      const timer = setTimeout(() => validateKey(value), 500)
-      return () => clearTimeout(timer)
+      debounceTimerRef.current = setTimeout(() => validateKey(value), 500)
     }
   }
 
