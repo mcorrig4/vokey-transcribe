@@ -356,3 +356,69 @@
   color: #fc8181;
   font-size: 11px;
 }
+
+/* KWin rules status */
+.kwin-status {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kwin-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kwin-hint {
+  font-size: 11px;
+  color: #a0aec0;
+}
+
+.kwin-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.kwin-actions button {
+  padding: 6px 10px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  background: #4a5568;
+  color: white;
+  transition: background-color 0.15s;
+}
+
+.kwin-actions button:hover {
+  background: #2d3748;
+}
+
+.kwin-actions button:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.kwin-actions button.kwin-install-btn {
+  background: #3182ce;
+}
+
+.kwin-actions button.kwin-install-btn:hover {
+  background: #2b6cb0;
+}
+
+.kwin-actions button.kwin-restart-btn {
+  background: #d69e2e;
+}
+
+.kwin-actions button.kwin-restart-btn:hover {
+  background: #b7791f;
+}
+
+.kwin-error {
+  color: #fc8181;
+  font-size: 11px;
+}

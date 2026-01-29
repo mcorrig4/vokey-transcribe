@@ -3,13 +3,25 @@
 //! The AudioRecorder captures audio from the default input device and writes
 //! it to a WAV file. Recording is controlled via a dedicated audio thread
 //! to ensure CPAL streams are created and dropped on the same thread.
+//!
+//! # Streaming Support (Sprint 7A)
+//!
+//! When a streaming channel is provided to `start()`, the audio callback will
+//! batch samples and send them to the channel using non-blocking `try_send()`.
+//! This allows real-time streaming to OpenAI Realtime API while recording.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
+/// Sender type for streaming audio samples to the streaming pipeline
+pub type StreamingSender = tokio::sync::mpsc::Sender<Vec<i16>>;
+
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+
+// Import WaveformSender from waveform module to avoid duplicate type definition
+use super::waveform::WaveformSender;
 use cpal::{Device, SampleFormat, Stream, StreamConfig};
 use hound::{WavSpec, WavWriter};
 use uuid::Uuid;
@@ -49,6 +61,10 @@ enum AudioCommand {
     Start {
         recording_id: Uuid,
         response: mpsc::Sender<Result<PathBuf, AudioError>>,
+        /// Optional channel for streaming audio samples
+        streaming_tx: Option<StreamingSender>,
+        /// Optional channel for waveform visualization samples
+        waveform_tx: Option<WaveformSender>,
     },
     Stop {
         response: mpsc::Sender<Result<PathBuf, AudioError>>,
@@ -60,7 +76,6 @@ enum AudioCommand {
 /// The actual stream is owned by the audio thread.
 pub struct RecordingHandle {
     stop_sender: mpsc::Sender<AudioCommand>,
-    wav_path: PathBuf,
 }
 
 impl RecordingHandle {
@@ -85,6 +100,8 @@ impl RecordingHandle {
 pub struct AudioRecorder {
     command_sender: mpsc::Sender<AudioCommand>,
     _thread_handle: JoinHandle<()>,
+    /// Sample rate used for recording (needed for streaming pipeline)
+    sample_rate: u32,
 }
 
 impl AudioRecorder {
@@ -141,6 +158,9 @@ impl AudioRecorder {
         // Create command channel
         let (command_tx, command_rx) = mpsc::channel::<AudioCommand>();
 
+        // Store sample rate before moving config
+        let sample_rate = config.sample_rate.0;
+
         // Spawn dedicated audio thread
         let thread_handle = thread::spawn(move || {
             audio_thread_main(device, config, sample_format, command_rx);
@@ -149,18 +169,42 @@ impl AudioRecorder {
         Ok(Self {
             command_sender: command_tx,
             _thread_handle: thread_handle,
+            sample_rate,
         })
     }
 
+    /// Get the sample rate being used for recording.
+    /// This is needed by the streaming pipeline to configure downsampling.
+    pub fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+
     /// Start recording to a new WAV file.
-    /// Returns a handle that must be used to stop the recording.
-    pub fn start(&self, recording_id: Uuid) -> Result<(RecordingHandle, PathBuf), AudioError> {
+    ///
+    /// # Arguments
+    /// * `recording_id` - Unique identifier for this recording
+    /// * `streaming_tx` - Optional channel for streaming audio samples to the
+    ///   streaming pipeline. If provided, samples will be batched and sent
+    ///   using non-blocking `try_send()`.
+    /// * `waveform_tx` - Optional channel for waveform visualization samples.
+    ///   If provided, samples will be sent using non-blocking `try_send()`.
+    ///
+    /// # Returns
+    /// A handle that must be used to stop the recording, and the WAV file path.
+    pub fn start(
+        &self,
+        recording_id: Uuid,
+        streaming_tx: Option<StreamingSender>,
+        waveform_tx: Option<WaveformSender>,
+    ) -> Result<(RecordingHandle, PathBuf), AudioError> {
         let (response_tx, response_rx) = mpsc::channel();
 
         self.command_sender
             .send(AudioCommand::Start {
                 recording_id,
                 response: response_tx,
+                streaming_tx,
+                waveform_tx,
             })
             .map_err(|_| AudioError::ThreadError("Failed to send start command".to_string()))?;
 
@@ -170,7 +214,6 @@ impl AudioRecorder {
 
         let handle = RecordingHandle {
             stop_sender: self.command_sender.clone(),
-            wav_path: wav_path.clone(),
         };
 
         Ok((handle, wav_path))
@@ -199,16 +242,26 @@ fn audio_thread_main(
             Ok(AudioCommand::Start {
                 recording_id,
                 response,
+                streaming_tx,
+                waveform_tx,
             }) => {
                 // Stop any existing recording first
                 if let Some(stream) = active_stream.take() {
-                    if let Err(e) = finalize_recording(stream) {
+                    if let Err(e) = finalize_recording(&stream) {
                         log::error!("Failed to finalize previous recording: {}", e);
                     }
+                    drop(stream);
                 }
 
                 // Start new recording
-                let result = start_recording(&device, &config, sample_format, recording_id);
+                let result = start_recording(
+                    &device,
+                    &config,
+                    sample_format,
+                    recording_id,
+                    streaming_tx,
+                    waveform_tx,
+                );
                 match result {
                     Ok((stream, path)) => {
                         active_stream = Some(stream);
@@ -221,8 +274,13 @@ fn audio_thread_main(
             }
             Ok(AudioCommand::Stop { response }) => {
                 if let Some(stream) = active_stream.take() {
-                    let result = finalize_recording(stream);
+                    let result = finalize_recording(&stream);
+                    // Send response BEFORE dropping stream - CPAL Stream::drop can block on ALSA errors
                     let _ = response.send(result);
+                    // Now drop the stream (may block, but response is already sent)
+                    log::debug!("Dropping audio stream...");
+                    drop(stream);
+                    log::debug!("Audio stream dropped");
                 } else {
                     let _ = response.send(Err(AudioError::ThreadError(
                         "No active recording".to_string(),
@@ -232,9 +290,10 @@ fn audio_thread_main(
             Ok(AudioCommand::Shutdown) | Err(_) => {
                 // Finalize any active recording before shutting down
                 if let Some(stream) = active_stream.take() {
-                    if let Err(e) = finalize_recording(stream) {
+                    if let Err(e) = finalize_recording(&stream) {
                         log::error!("Failed to finalize recording on shutdown: {}", e);
                     }
+                    drop(stream);
                 }
                 log::info!("Audio thread shutting down");
                 break;
@@ -257,6 +316,8 @@ fn start_recording(
     config: &StreamConfig,
     sample_format: SampleFormat,
     recording_id: Uuid,
+    streaming_tx: Option<StreamingSender>,
+    waveform_tx: Option<WaveformSender>,
 ) -> Result<(ActiveStream, PathBuf), AudioError> {
     let wav_path = generate_wav_path(recording_id)
         .map_err(|e| AudioError::FileCreationFailed(e.to_string()))?;
@@ -280,6 +341,8 @@ fn start_recording(
         sample_format,
         writer.clone(),
         is_recording.clone(),
+        streaming_tx,
+        waveform_tx,
     )?;
 
     stream
@@ -298,8 +361,9 @@ fn start_recording(
     Ok((active, wav_path))
 }
 
-/// Finalize a recording and return the WAV path
-fn finalize_recording(stream: ActiveStream) -> Result<PathBuf, AudioError> {
+/// Finalize a recording: stop the WAV writer and return the path.
+/// Note: Does NOT drop the stream - caller must handle that separately.
+fn finalize_recording(stream: &ActiveStream) -> Result<PathBuf, AudioError> {
     // Signal recording to stop
     stream.is_recording.store(false, Ordering::SeqCst);
 
@@ -319,7 +383,7 @@ fn finalize_recording(stream: ActiveStream) -> Result<PathBuf, AudioError> {
     }
 
     log::info!("Recording stopped, WAV finalized: {:?}", stream.wav_path);
-    Ok(stream.wav_path)
+    Ok(stream.wav_path.clone())
 }
 
 /// Build the input stream for the given sample format
@@ -329,19 +393,39 @@ fn build_stream(
     sample_format: SampleFormat,
     writer: Arc<Mutex<Option<WavWriter<std::io::BufWriter<std::fs::File>>>>>,
     is_recording: Arc<AtomicBool>,
+    streaming_tx: Option<StreamingSender>,
+    waveform_tx: Option<WaveformSender>,
 ) -> Result<Stream, AudioError> {
     let err_fn = |err| log::error!("Audio stream error: {}", err);
 
     match sample_format {
-        SampleFormat::I16 => {
-            build_stream_typed::<i16>(device, config, writer, is_recording, err_fn)
-        }
-        SampleFormat::U16 => {
-            build_stream_typed::<u16>(device, config, writer, is_recording, err_fn)
-        }
-        SampleFormat::F32 => {
-            build_stream_typed::<f32>(device, config, writer, is_recording, err_fn)
-        }
+        SampleFormat::I16 => build_stream_typed::<i16>(
+            device,
+            config,
+            writer,
+            is_recording,
+            streaming_tx,
+            waveform_tx,
+            err_fn,
+        ),
+        SampleFormat::U16 => build_stream_typed::<u16>(
+            device,
+            config,
+            writer,
+            is_recording,
+            streaming_tx,
+            waveform_tx,
+            err_fn,
+        ),
+        SampleFormat::F32 => build_stream_typed::<f32>(
+            device,
+            config,
+            writer,
+            is_recording,
+            streaming_tx,
+            waveform_tx,
+            err_fn,
+        ),
         _ => Err(AudioError::NoSupportedConfig),
     }
 }
@@ -351,6 +435,8 @@ fn build_stream_typed<T>(
     config: &StreamConfig,
     writer: Arc<Mutex<Option<WavWriter<std::io::BufWriter<std::fs::File>>>>>,
     is_recording: Arc<AtomicBool>,
+    streaming_tx: Option<StreamingSender>,
+    waveform_tx: Option<WaveformSender>,
     err_fn: impl FnMut(cpal::StreamError) + Send + 'static,
 ) -> Result<Stream, AudioError>
 where
@@ -364,6 +450,10 @@ where
                     return;
                 }
 
+                // Collect samples as i16 for both WAV writing and streaming
+                let samples: Vec<i16> = data.iter().map(|&s| sample_to_i16(s)).collect();
+
+                // 1. Write to WAV file
                 // Handle poisoned mutex gracefully instead of panicking
                 let mut guard = match writer.lock() {
                     Ok(guard) => guard,
@@ -375,13 +465,39 @@ where
                 };
 
                 if let Some(ref mut w) = *guard {
-                    for &sample in data {
-                        // Convert to i16 for WAV
-                        let sample_i16 = sample_to_i16(sample);
+                    for &sample_i16 in &samples {
                         if w.write_sample(sample_i16).is_err() {
                             log::error!("Failed to write sample, stopping recording.");
                             is_recording.store(false, Ordering::SeqCst);
-                            break;
+                            return;
+                        }
+                    }
+                }
+
+                // Release the mutex before sending to channels
+                drop(guard);
+
+                // 2. Send to streaming channel (non-blocking)
+                if let Some(ref tx) = streaming_tx {
+                    // try_send is non-blocking - if channel is full or closed, we drop the samples.
+                    // This is acceptable as streaming is best-effort and the WAV backup always works.
+                    // Note: Dropped chunk metrics are tracked in the streaming task when it completes,
+                    // not here in the audio callback (which cannot access async MetricsCollector).
+                    if tx.try_send(samples.clone()).is_err() {
+                        // Channel full or closed - this is expected under load
+                    }
+                }
+
+                // 3. Send to waveform visualization channel (non-blocking)
+                if let Some(ref tx) = waveform_tx {
+                    // try_send is non-blocking - visualization is best-effort
+                    match tx.try_send(samples) {
+                        Ok(_) => {}
+                        Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                            log::trace!("Waveform channel full, dropping samples");
+                        }
+                        Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                            log::warn!("Waveform channel closed unexpectedly");
                         }
                     }
                 }

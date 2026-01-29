@@ -6,16 +6,115 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 ## Current Status
 
-**Phase:** Sprint 7B PLANNING — Post-processing modes
+**Phase:** Sprint 7A — Real-time Streaming Transcription (COMPLETING)
 **Target:** Kubuntu with KDE Plasma 6.4 on Wayland
-**Branch:** `feat/no-speech-filters` (WIP)
-**Last Updated:** 2026-01-25
+**Branch:** `claude/fix-transcription-ui-display-YHEWs`
+**Last Updated:** 2026-01-28
 
-**Sprint 6 Status:** Phases 1-5 complete, Phase 6 (Stability Testing) needs real hardware
+**Sprint 7A Status:**
+- Backend: All issues complete ✅
+  - #68 WebSocket Infrastructure ✅
+  - #69 Audio Streaming Pipeline ✅
+  - #70 Transcript Aggregation ✅
+  - #71 State Machine Integration ✅
+  - #72 Waveform Data Buffer ✅
+  - #100 Error Handling & Fallback ✅ (verified + gap fixed)
+- Frontend: All issues complete ✅
+  - #73 HUD Scaffolding ✅
+  - #74 Mic Button States ✅
+  - #75 Waveform Visualization ✅
+  - #76 Transcript Panel ✅ (PR #145)
+  - #77 Pill Content States ✅
+- Final:
+  - #78 Integration Testing — 🧪 Ready for UAT
+  - #79 Documentation & Polish — ✅ Complete
 
 ---
 
 ## Completed Work
+
+### 2026-01-28: Sprint 7B — Post-processing Modes (PR #162)
+
+**Processing Pipeline Implementation**
+- [x] Created `processing/` module with mod.rs, coding.rs, markdown.rs, prompt.rs, pipeline.rs
+- [x] ProcessingMode enum: Normal, Coding, Markdown, Prompt
+- [x] Coding processor: snake_case conversion, filler word removal
+- [x] Markdown processor: list detection, structure formatting
+- [x] Prompt processor: OpenAI gpt-4o-mini with XML safety, retry logic
+- [x] Pipeline integration in effects.rs after transcription completion
+- [x] Tauri commands: get_processing_mode, set_processing_mode
+- [x] Mode persisted in AppSettings
+
+**Frontend Mode Selector**
+- [x] ProcessingMode type and ProcessingModeInfo metadata in types.ts
+- [x] Mode selector in Debug panel with button group
+- [x] Mode badge in HUD PillContent (shown when idle, non-normal mode)
+- [x] HUDContext tracks processingMode state via events
+
+**Code Review Fixes**
+- [x] Removed unused WORD_BOUNDARY_REGEX static
+- [x] Strengthened prompt injection guardrails
+- [x] Added warning log for regex compilation failures
+- [x] Added keyboard focus states for accessibility
+
+### 2026-01-28: Sprint 7A Refinements & E2E Prep
+
+**Issue #147: Preserve Partial Transcript**
+- [x] Cache last partial text via useRef in TranscriptPanel
+- [x] Show cached text during transcribing instead of placeholder
+- [x] Pulsing ellipsis indicator during processing
+
+**Issue #154: Data-testid Attributes (Partial)**
+- [x] hud-container, hud-status, hud-timer, hud-error-message
+- [x] hud-transcript-panel, hud-transcript-preview, hud-mic-button
+- [x] debug-simulate-start/stop/error/cancel, debug-metrics-section
+
+**PR #145 Maintenance**
+- [x] Rebased onto develop to resolve conflicts
+- [x] PR now mergeable
+
+### 2026-01-28: Sprint 7A Completion — Transcript Panel & Error Handling
+
+**PR #145: Real-time Transcript Display (#76)**
+- [x] Created `parseTranscriptLines` utility for word-wrap and line parsing
+- [x] Created `useTranscriptLines` custom hook for memoized text processing
+- [x] Updated `TranscriptPanel.tsx` to display real `partialText` from state
+- [x] Added CSS animations for smooth line entry with fade-scroll effect
+- [x] Added ARIA live region for screen reader accessibility
+- [x] Fixed unstable React keys (use absolute index for stable reconciliation)
+- [x] Added maxChars guard to prevent infinite loop edge case
+
+**Error Handling Gap Fixed (#100)**
+- [x] Added `partial_text` field to `Stopping` and `Transcribing` states
+- [x] Partial text now preserved through state transitions
+- [x] `TranscribeFail` now uses partial text as `last_good_text` fallback
+- [x] Graceful degradation when batch transcription fails
+
+**Documentation Updates (#79)**
+- [x] Updated README.md with streaming transcription section
+- [x] Updated repo layout with new modules (streaming/, hooks/, utils/)
+- [x] Updated WORKLOG.md with Sprint 7A completion status
+
+**Architecture Decisions:**
+- AD-76-001: Pure frontend implementation for transcript display
+- AD-76-002: Custom hook pattern for separation of concerns
+- AD-76-003: CSS-based animations (no JS animation libraries)
+- AD-76-004: Character-count heuristic for word-wrap
+- AD-76-005: CSS mask gradient for fade effect
+
+**Deferred Issues Created:**
+- #146: Unit tests for parseTranscriptLines (priority:medium)
+- #147: UX for preserving partial text during transcribing (priority:low)
+
+### 2026-01-27: Sprint 7A - Transcript Reception & Aggregation (#70)
+- [x] Created TranscriptAggregator for delta text accumulation
+- [x] Added partial_text to Recording state and UiState
+- [x] Implemented PartialDelta event handler in state machine
+- [x] Modified RealtimeSession to expose incoming receiver for concurrent processing
+- [x] Updated connect_streamer to return (AudioStreamer, TranscriptReceiver) tuple
+- [x] Added run_transcript_receiver task in effects.rs
+- [x] Fixed HIGH priority bug: AudioStartFail event now sent on recorder init failure
+- [x] PR #107 created and reviewed
 
 ### 2026-01-25: No-speech filtering + settings (anti-hallucination)
 - [x] Added `NoSpeech` state so silence/very short clips don’t overwrite clipboard
@@ -44,50 +143,56 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 |--------|--------|-------|
 | 0 - Project skeleton + HUD + tray | ✅ COMPLETE | HUD shows "Ready", tray icon works, Quit exits cleanly |
 | 1 - State machine + UI wiring | ✅ COMPLETE | Full state machine, debug panel, simulate commands |
-| 2 - Global hotkey (evdev) | ✅ COMPLETE | evdev module implemented, needs testing on real hardware |
+| 2 - Global hotkey (evdev) | ✅ COMPLETE | evdev module implemented, tested on real hardware |
 | 3 - Audio capture (CPAL + Hound) | ✅ COMPLETE | CPAL capture, hound WAV writing, XDG paths |
 | 4 - OpenAI transcription + clipboard | ✅ COMPLETE | OpenAI Whisper API, arboard clipboard, tested on real hardware |
-| 5 - Full flow polish + tray controls | 🧪 UAT | Tray menu with Toggle/Cancel/Open Logs, HUD timer, auto-dismiss |
+| 5 - Full flow polish + tray controls | ✅ COMPLETE | Tray menu with Toggle/Cancel/Open Logs, HUD timer, auto-dismiss |
 | 6 - Hardening + UX polish | ⏸️ PAUSED | Phases 1-5 done; Phase 6 (50-cycle stability) needs real hardware |
-| 7A - Streaming transcription | 🔄 PARALLEL | Separate team implementing Option A (Realtime API) |
+| 7A - Streaming transcription | ✅ COMPLETE | All backend+frontend complete. PR #145 merged. |
+| 7B - Waveform visualization | ✅ COMPLETE | Phase 1 (#72) + Phase 2 (#75) complete. |
 | 7B - Post-processing modes | 📋 PLANNING | Option B chosen: Normal/Coding/Markdown/Prompt modes |
 
 ---
 
 ## Current Task Context
 
-### Active Sprint: Sprint 7B - Post-processing Modes
+### Active Sprint: Sprint 7 — Waveform Visualization
 
-**Implementation Plan:** See `docs/SPRINT7B-PLAN.md` for detailed breakdown.
+**Tracking Issue:** #130
+**Implementation Plan:** See `docs/SPRINT7-WAVEFORM-PLAN.md` for detailed breakdown.
 
-**Note:** Sprint 7A (Streaming) is being developed in parallel by another team.
+### Two-Phase Implementation:
 
-### Decision Made:
-- **Sprint 7B: Post-processing Modes** — this team
-- **Sprint 7A: Streaming Transcription** — parallel team
-- Both features can be combined after completion
+#### Phase 1: Backend Waveform Buffer (#72)
+1. ⬜ Create `src-tauri/src/audio/waveform.rs`
+   - WaveformBuffer ring buffer (VecDeque, 10K capacity)
+   - RMS computation for 24 bars
+   - EMA smoothing (alpha=0.3)
+   - Event emitter task (30fps)
+2. ⬜ Modify `audio/recorder.rs` - add waveform_tx channel
+3. ⬜ Modify `effects.rs` - manage emitter lifecycle
+4. ⬜ Unit tests for buffer, normalization, smoothing
 
-### Sprint 7B Phases:
-1. ⬜ Mode Selection Infrastructure - ProcessingMode enum, state, tray menu
-2. ⬜ Processing Engines - Coding, Markdown, Prompt processors
-3. ⬜ Pipeline Integration - Post-processing after transcription
-4. ⬜ UI Integration - Mode indicator in HUD, selector in Debug panel
-5. ⬜ Prompt Configuration (stretch) - Custom prompt storage
+#### Phase 2: Frontend Waveform Component (#75)
+1. ⬜ Create `src/hooks/useWaveform.ts` - event listener hook
+2. ⬜ Create `src/components/HUD/Waveform.tsx` - 24-bar component
+3. ⬜ Create CSS module with transitions
+4. ⬜ Integrate into `PillContent.tsx`
 
-### Modes to Implement:
-| Mode | Description | Processing |
-|------|-------------|------------|
-| Normal | Raw transcription, no changes | Passthrough |
-| Coding | snake_case, remove fillers | Local regex |
-| Markdown | Format as lists/structure | Local parsing |
-| Prompt | Custom LLM transformation | OpenAI Chat API |
+### Consolidated Architecture Decisions:
+| Aspect | Original | Updated |
+|--------|----------|---------|
+| Bar count | 64 bars | **24 bars** |
+| Update method | Polling | **Event-based** |
+| Frame rate | 20 FPS | **30 FPS** |
+| Smoothing | None | **EMA (alpha=0.3)** |
 
-### Acceptance Criteria (from ISSUES-v1.0.0.md):
-- [ ] Mode selection works via tray menu and Debug panel
-- [ ] Coding mode produces valid identifiers (snake_case)
-- [ ] Markdown mode formats list items correctly
-- [ ] Prompt mode calls Chat API and falls back gracefully
-- [ ] HUD shows current mode indicator
+### Acceptance Criteria:
+- [ ] Backend emits `waveform-update` events at 30fps during recording
+- [ ] 24 normalized amplitude bars (0.0-1.0)
+- [ ] Memory bounded (10K sample buffer)
+- [ ] Frontend renders animated bars with CSS transitions
+- [ ] No jank or memory leaks
 
 ### Sprint 6 Status (Paused):
 - Phases 1-5 complete
@@ -132,6 +237,22 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 - Logs: `~/.local/share/vokey-transcribe/logs/`
 - Temp audio: `~/.local/share/vokey-transcribe/temp/audio/`
 
+### AD-004: Git Branching Strategy (GitHub Flow + Develop)
+**Date:** 2026-01-27
+**Decision:** Use hybrid GitHub Flow with a `develop` integration branch
+**Branches:**
+- `master` - Stable releases only, tagged versions
+- `develop` - Integration/testing branch, default PR target
+- `claude/*`, `feat/*` - Feature branches
+
+**Rationale:**
+- Enables testing multiple PRs together before release
+- Protects master from untested code
+- Simple enough for small team + AI development
+- Works well with parallel feature development (Sprint 7A + 7B)
+
+**Trade-off:** Extra step to promote `develop` → `master` for releases
+
 ---
 
 ## Known Issues / Risks
@@ -154,10 +275,69 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 | Technical gotchas | docs/tauri-gotchas.md |
 | Setup instructions | docs/notes.md |
 | This work log | docs/WORKLOG.md |
+| Waveform implementation plan | docs/SPRINT7-WAVEFORM-PLAN.md |
 
 ---
 
 ## Session Notes
+
+### Session 2026-01-28 (Sprint 7 Waveform Planning)
+**Planned real-time waveform visualization feature (Issue #72 + #75):**
+
+**Architecture Analysis:**
+- Explored audio module structure and data flow
+- Reviewed consolidated architecture decisions
+- Determined optimal channel-based design (non-blocking audio callback)
+
+**Consolidated Architecture Decisions:**
+- 24 bars (reduced from 64) for cleaner visuals
+- Event-based updates at 30fps (not polling at 20fps)
+- EMA smoothing (alpha=0.3) to prevent jitter
+- 10K sample buffer (~200ms) instead of 96K (2s)
+
+**Documentation Created:**
+- `docs/SPRINT7-WAVEFORM-PLAN.md` — Detailed 2-phase implementation plan
+
+**GitHub Issues:**
+- Created #130 — Sprint 7 Waveform Visualization (Tracking)
+- Updated #72 with consolidated architecture notes
+- Updated #75 with consolidated architecture notes
+
+**Two-Phase Plan:**
+1. Phase 1 (#72): Backend waveform buffer in Rust
+   - WaveformBuffer ring buffer (VecDeque)
+   - RMS computation for 24 bars
+   - Tauri event emission at 30fps
+2. Phase 2 (#75): Frontend waveform component in React
+   - useWaveform hook with event listener
+   - CSS-animated bar visualization
+
+**Next Steps:**
+- Implement Phase 1 (Issue #72)
+- Create PR for waveform backend
+
+---
+
+### Session 2026-01-27 (Git Workflow Setup)
+**Implemented GitHub Flow + Develop branch strategy:**
+
+**Changes Made:**
+- Created `develop` branch from `master` via GitHub API
+- Retargeted all 5 open PRs (#90, #105, #106, #107, #108) to `develop`
+- Updated CLAUDE.md with branching workflow documentation
+- Added AD-004 architecture decision
+
+**Manual Steps Required (admin access):**
+- [ ] Set `develop` as default branch in GitHub Settings
+- [ ] Add branch protection rules for `master` and `develop`
+
+**New Workflow:**
+1. All PRs target `develop` for integration testing
+2. Test combined features on `develop`
+3. Create release PRs from `develop` → `master`
+4. Tag releases on `master`
+
+---
 
 ### Session 2026-01-24 (Sprint 7B Planning)
 **Analyzed options and created Sprint 7B plan:**

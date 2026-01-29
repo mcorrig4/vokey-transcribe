@@ -1,0 +1,55 @@
+/**
+ * Waveform visualization styles
+ *
+ * Layout: 24 bars with 2px gaps, total width ~142px
+ * - Each bar: 4px wide
+ * - Gaps: 2px x 23 = 46px
+ * - Total: 4px x 24 + 46px = 142px
+ */
+
+.container {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  height: 32px;
+  padding: 2px 4px;
+}
+
+.bar {
+  width: 4px;
+  height: 28px;
+  background: linear-gradient(
+    to top,
+    #ef4444 0%,
+    #f87171 50%,
+    #fca5a5 100%
+  );
+  border-radius: 2px;
+
+  /* GPU-accelerated scaling (issue #138) */
+  transform-origin: bottom center;
+  transform: scaleY(var(--amplitude, 0.143));
+  transition: transform 33ms linear;
+
+  /* Optimize compositing: hint browser to put on own layer */
+  will-change: transform;
+}
+
+/* Active state: add glow effect to bars */
+.active .bar {
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
+}
+
+/* Inactive state: reduced opacity */
+.container:not(.active) .bar {
+  opacity: 0.3;
+}
+
+/* Respect user's motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .bar {
+    transition: none;
+    will-change: auto;
+  }
+}

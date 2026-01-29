@@ -1,0 +1,180 @@
+.panel {
+  width: 300px;
+  height: 120px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background-color: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+
+  /* Depth and polish */
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
+  /* Entrance animation */
+  animation: slideIn 0.25s ease-out;
+
+  /* Fade mask for scroll effect (top fades out) */
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    black 20%,
+    black 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    black 20%,
+    black 100%
+  );
+
+  /* Prevent dragging */
+  -webkit-app-region: no-drag;
+  user-select: text;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Container for transcript lines */
+.lines {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 2px;
+  min-height: 100%;
+}
+
+/* Individual transcript line */
+.line {
+  display: flex;
+  align-items: baseline;
+  flex-shrink: 0;
+  /* Smooth entry animation for new lines */
+  animation: lineEnter 150ms ease-out;
+}
+
+/* Transcript text styling */
+.text {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  font-family: system-ui, -apple-system, sans-serif;
+  word-break: break-word;
+}
+
+/* Blinking cursor at end of text */
+.cursor {
+  display: inline;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 400;
+  margin-left: 1px;
+  animation: cursor-blink 0.8s step-end infinite;
+}
+
+/* Processing indicator when transcribing with cached text (#147) */
+.processingIndicator {
+  display: inline;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 400;
+  margin-left: 4px;
+  animation: processing-pulse 1.2s ease-in-out infinite;
+}
+
+/* Placeholder container when no transcript */
+.placeholderContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+/* Placeholder text styling */
+.placeholder {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+  font-weight: 400;
+  font-style: italic;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* Animations */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes lineEnter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cursor-blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes processing-pulse {
+  0%, 100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Exit animation class (applied via JS when hiding) */
+.exiting {
+  animation: slideOut 0.2s ease-in forwards;
+}
+
+@keyframes slideOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+/* Accessibility: Respect user's motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .panel {
+    animation: none;
+  }
+  .line {
+    animation: none;
+  }
+  .cursor {
+    animation: none;
+  }
+  .exiting {
+    animation: none;
+    opacity: 0;
+  }
+}

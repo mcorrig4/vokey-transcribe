@@ -25,12 +25,11 @@ fn get_max_recordings() -> usize {
 /// Get the temp audio directory path.
 /// Returns: ~/.local/share/vokey-transcribe/temp/audio/
 fn temp_audio_dir() -> PathBuf {
-    let data_dir = dirs::data_local_dir()
+    dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join("vokey-transcribe")
         .join("temp")
-        .join("audio");
-    data_dir
+        .join("audio")
 }
 
 /// Create the temp audio directory if it doesn't exist.
@@ -87,17 +86,15 @@ pub fn cleanup_old_recordings() -> std::io::Result<usize> {
 
     // Sort by modified time (oldest first) - sort_by_key is more efficient
     // Sprint 6 #24: Log metadata errors instead of silently swallowing them
-    entries.sort_by_key(|entry| {
-        match entry.metadata().and_then(|m| m.modified()) {
-            Ok(time) => Some(time),
-            Err(e) => {
-                log::warn!(
-                    "Failed to get modified time for {:?}: {} - file may be deleted in wrong order",
-                    entry.path(),
-                    e
-                );
-                None
-            }
+    entries.sort_by_key(|entry| match entry.metadata().and_then(|m| m.modified()) {
+        Ok(time) => Some(time),
+        Err(e) => {
+            log::warn!(
+                "Failed to get modified time for {:?}: {} - file may be deleted in wrong order",
+                entry.path(),
+                e
+            );
+            None
         }
     });
 

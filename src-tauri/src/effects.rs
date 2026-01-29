@@ -11,16 +11,100 @@ use std::time::Instant;
 use tokio::sync::{mpsc, Mutex};
 use uuid::Uuid;
 
-use crate::audio::{cleanup_old_recordings, AudioRecorder};
+use crate::audio::{
+    cleanup_old_recordings, create_waveform_channel, run_waveform_emitter, AudioRecorder,
+};
 use crate::metrics::MetricsCollector;
 use crate::settings::AppSettings;
 use crate::state_machine::{Effect, Event};
+use crate::streaming::{
+    connect_streamer, get_api_key, ServerMessage, TranscriptAggregator, TranscriptReceiver,
+};
 use crate::transcription;
 
 const OPENAI_NO_SPEECH_PROB_THRESHOLD: f32 = 0.8;
 const OPENAI_NO_SPEECH_MAX_TEXT_LEN: usize = 12;
 const SHORT_CLIP_VAD_MIN_SPEECH_FRAMES: usize = 2;
 const SHORT_CLIP_MAX_CREST_FACTOR: f32 = 15.0;
+
+/// Run the transcript receiver loop
+///
+/// Receives transcript messages from the WebSocket and sends PartialDelta events
+/// to the state machine for UI updates.
+///
+/// # Arguments
+/// * `rx` - Receiver for incoming WebSocket messages
+/// * `event_tx` - Sender for state machine events
+/// * `recording_id` - ID of the current recording (for event correlation)
+async fn run_transcript_receiver(
+    mut rx: TranscriptReceiver,
+    event_tx: mpsc::Sender<Event>,
+    recording_id: Uuid,
+) {
+    let mut aggregator = TranscriptAggregator::new();
+
+    log::info!(
+        "Transcript receiver: starting for recording {}",
+        recording_id
+    );
+
+    while let Some(msg) = rx.recv().await {
+        match msg {
+            ServerMessage::TranscriptDelta { delta, .. } => {
+                let new_text = aggregator.process_delta(&delta);
+                log::debug!(
+                    "Transcript delta: '{}' (total: {} chars)",
+                    delta,
+                    new_text.len()
+                );
+
+                // Send PartialDelta event to state machine
+                if let Err(e) = event_tx
+                    .send(Event::PartialDelta {
+                        id: recording_id,
+                        delta,
+                    })
+                    .await
+                {
+                    log::warn!("Failed to send PartialDelta event: {}", e);
+                    break;
+                }
+            }
+            ServerMessage::TranscriptCompleted { transcript, .. } => {
+                aggregator.process_completed(&transcript);
+                log::info!(
+                    "Transcript completed: {} chars (after {} deltas)",
+                    transcript.len(),
+                    aggregator.delta_count()
+                );
+                // Final transcript is handled by batch transcription flow
+                // The streaming transcript is for real-time display only
+            }
+            ServerMessage::Error { error } => {
+                log::warn!(
+                    "Streaming error from API: {} ({})",
+                    error.message,
+                    error.error_type
+                );
+                // Don't break - continue receiving, errors may be recoverable
+            }
+            ServerMessage::SessionCreated { .. } | ServerMessage::SessionUpdated { .. } => {
+                // Session events are handled during connection setup
+                log::debug!("Ignoring session event in transcript receiver");
+            }
+            _ => {
+                // Other message types (InputAudioBufferCommitted, etc.)
+                log::trace!("Ignoring message type in transcript receiver");
+            }
+        }
+    }
+
+    log::info!(
+        "Transcript receiver: ended for recording {} ({} deltas processed)",
+        recording_id,
+        aggregator.delta_count()
+    );
+}
 
 /// Result of evaluating VAD stats for short-clip transcription gating.
 /// Contains both the final decision and intermediate values for logging/debugging.
@@ -62,7 +146,8 @@ fn evaluate_short_clip_vad(stats: &crate::audio::vad::VadStats) -> VadDecision {
 }
 
 /// Convenience function that returns just the boolean decision.
-/// Used by tests and any code that only needs the final answer.
+/// Used by tests that only need the final answer.
+#[cfg(test)]
 fn short_clip_vad_allows_transcription(stats: &crate::audio::vad::VadStats) -> bool {
     evaluate_short_clip_vad(stats).allows_transcription
 }
@@ -77,12 +162,16 @@ pub trait EffectRunner: Send + Sync + 'static {
 /// RecordingHandle is now Send+Sync safe (uses channel to dedicated audio thread).
 struct ActiveRecording {
     handle: Option<crate::audio::recorder::RecordingHandle>,
+    /// Sender to stop the waveform emitter task
+    waveform_stop_tx: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
 /// Real effect runner with CPAL audio capture.
 /// Sprint 4: Real transcription via OpenAI Whisper.
 /// Sprint 6: Metrics collection for performance tracking.
+/// Sprint 7: Waveform visualization support.
 pub struct AudioEffectRunner {
+    app: tauri::AppHandle,
     recorder: Arc<Mutex<Option<AudioRecorder>>>,
     active_recordings: Arc<Mutex<HashMap<Uuid, ActiveRecording>>>,
     metrics: Arc<Mutex<MetricsCollector>>,
@@ -93,6 +182,7 @@ impl AudioEffectRunner {
     /// Create a new AudioEffectRunner with metrics collection.
     /// Returns Ok even if audio device isn't available - errors happen at record time.
     pub fn new(
+        app: tauri::AppHandle,
         metrics: Arc<Mutex<MetricsCollector>>,
         settings: Arc<Mutex<AppSettings>>,
     ) -> Arc<Self> {
@@ -109,6 +199,7 @@ impl AudioEffectRunner {
         };
 
         Arc::new(Self {
+            app,
             recorder: Arc::new(Mutex::new(recorder)),
             active_recordings: Arc::new(Mutex::new(HashMap::new())),
             metrics,
@@ -120,45 +211,179 @@ impl AudioEffectRunner {
 impl EffectRunner for AudioEffectRunner {
     fn spawn(&self, effect: Effect, tx: mpsc::Sender<Event>) {
         match effect {
+            // StartAudio: Starts audio recording with optional real-time streaming.
+            //
+            // # Streaming Integration (AD-71-001)
+            // Streaming is embedded in StartAudio rather than separate effects because:
+            // 1. Audio and streaming share the same lifecycle (start/stop together)
+            // 2. Channel-based termination leverages Rust ownership model
+            // 3. Streaming failures must not affect audio recording (fallback strategy)
+            //
+            // When `settings.streaming_enabled` is true and API key is available,
+            // this handler:
+            // 1. Creates a streaming channel for audio samples
+            // 2. Spawns the WebSocket connection and streaming task
+            // 3. Spawns the transcript receiver task (sends PartialDelta events)
+            // 4. Starts the audio recorder with the streaming channel
             Effect::StartAudio { id } => {
                 let recorder = self.recorder.clone();
                 let active = self.active_recordings.clone();
                 let metrics = self.metrics.clone();
+                let settings = self.settings.clone();
+                let app = self.app.clone();
 
                 tokio::spawn(async move {
                     // Start metrics tracking for this cycle
                     {
                         let mut m = metrics.lock().await;
                         m.start_cycle(id);
+                        m.reset_streaming_stats();
                     }
-                    // Try to get or create recorder, then start recording while holding lock
+
+                    // Check streaming settings before initializing recorder
+                    let (streaming_enabled, api_key) = {
+                        let settings_guard = settings.lock().await;
+                        (settings_guard.streaming_enabled, get_api_key())
+                    };
+
+                    // Try to get or create recorder first, so we have the correct sample rate
                     // We capture the result and drop the lock before any awaits to avoid
                     // holding the mutex across await points (can cause contention/deadlocks)
-                    let start_result = {
+                    let recorder_init_result: Result<u32, String> = {
                         let mut recorder_guard = recorder.lock().await;
                         if recorder_guard.is_none() {
                             // Retry creating recorder
                             match AudioRecorder::new() {
                                 Ok(r) => {
                                     *recorder_guard = Some(r);
-                                    Ok(())
                                 }
                                 Err(e) => {
                                     log::error!("Failed to initialize audio recorder: {}", e);
-                                    // Return error to be handled after lock is dropped
-                                    Err(e.to_string())
+                                    // Send AudioStartFail event so state machine can transition properly
+                                    let err_msg = e.to_string();
+                                    drop(recorder_guard); // Release lock before async operations
+                                    let mut m = metrics.lock().await;
+                                    m.cycle_failed(err_msg.clone());
+                                    drop(m);
+                                    let _ =
+                                        tx.send(Event::AudioStartFail { id, err: err_msg }).await;
+                                    return;
                                 }
                             }
-                        } else {
-                            Ok(())
                         }
-                        .and_then(|_| match recorder_guard.as_ref() {
-                            Some(rec) => rec.start(id).map_err(|e| e.to_string()),
+                        // Recorder is guaranteed to exist now
+                        match recorder_guard.as_ref() {
+                            Some(rec) => Ok(rec.sample_rate()),
+                            None => Err("Audio recorder unavailable".to_string()),
+                        }
+                    };
+
+                    let source_sample_rate = match recorder_init_result {
+                        Ok(rate) => rate,
+                        Err(e) => {
+                            log::error!("Failed to get sample rate: {}", e);
+                            let mut m = metrics.lock().await;
+                            m.cycle_failed(e.clone());
+                            let _ = tx.send(Event::AudioStartFail { id, err: e }).await;
+                            return;
+                        }
+                    };
+
+                    // Now create streaming channel with correct sample rate
+                    let streaming_tx = if streaming_enabled {
+                        if let Some(api_key) = api_key {
+                            // Create channel for streaming
+                            let (stx, rx) = tokio::sync::mpsc::channel::<Vec<i16>>(100);
+
+                            // Clone for streaming tasks
+                            let streaming_metrics = metrics.clone();
+                            let transcript_tx = tx.clone();
+                            let recording_id = id;
+
+                            // Spawn streaming task
+                            tokio::spawn(async move {
+                                log::info!("Streaming: connecting to OpenAI Realtime API...");
+                                match connect_streamer(&api_key, rx, source_sample_rate).await {
+                                    Ok((streamer, transcript_rx)) => {
+                                        log::info!("Streaming: connected, starting audio stream");
+
+                                        // Spawn transcript receiver task
+                                        let transcript_tx_clone = transcript_tx.clone();
+                                        tokio::spawn(async move {
+                                            run_transcript_receiver(
+                                                transcript_rx,
+                                                transcript_tx_clone,
+                                                recording_id,
+                                            )
+                                            .await;
+                                        });
+
+                                        // Run audio streamer (sends audio to WebSocket)
+                                        match streamer.run().await {
+                                            Ok(chunks_sent) => {
+                                                log::info!(
+                                                    "Streaming: completed, {} chunks sent",
+                                                    chunks_sent
+                                                );
+                                                // Update metrics with chunks sent
+                                                let mut m = streaming_metrics.lock().await;
+                                                m.add_streaming_chunks_sent(chunks_sent);
+                                            }
+                                            Err(e) => {
+                                                log::warn!(
+                                                    "Streaming: error during streaming: {}",
+                                                    e
+                                                );
+                                                // Streaming failed mid-recording, but WAV continues
+                                                // This is expected behavior per fallback strategy
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        log::warn!(
+                                            "Streaming: failed to connect (falling back to batch): {}",
+                                            e
+                                        );
+                                        // Connection failed - fall back to batch-only mode
+                                        // WAV recording continues normally
+                                    }
+                                }
+                            });
+
+                            Some(stx)
+                        } else {
+                            log::debug!("Streaming: disabled (no API key)");
+                            None
+                        }
+                    } else {
+                        log::debug!("Streaming: disabled (setting off)");
+                        None
+                    };
+
+                    // Create waveform visualization channel and emitter
+                    let (waveform_tx, waveform_rx) = create_waveform_channel();
+                    let (waveform_stop_tx, waveform_stop_rx) =
+                        tokio::sync::oneshot::channel::<()>();
+
+                    // Spawn waveform emitter task
+                    log::info!("Spawning waveform emitter task");
+                    let app_for_waveform = app.clone();
+                    tokio::spawn(async move {
+                        run_waveform_emitter(app_for_waveform, waveform_rx, waveform_stop_rx).await;
+                    });
+
+                    // Start recording with the streaming and waveform channels
+                    let start_result = {
+                        let recorder_guard = recorder.lock().await;
+                        match recorder_guard.as_ref() {
+                            Some(rec) => rec
+                                .start(id, streaming_tx, Some(waveform_tx))
+                                .map_err(|e| e.to_string()),
                             None => {
-                                log::error!("Audio recorder is unavailable after retry");
+                                log::error!("Audio recorder is unavailable");
                                 Err("Audio recorder unavailable".to_string())
                             }
-                        })
+                        }
                     }; // recorder_guard dropped here
 
                     // Now handle results without holding the mutex
@@ -178,6 +403,7 @@ impl EffectRunner for AudioEffectRunner {
                                 id,
                                 ActiveRecording {
                                     handle: Some(handle),
+                                    waveform_stop_tx: Some(waveform_stop_tx),
                                 },
                             );
                             drop(active_guard); // Explicitly drop before await
@@ -203,12 +429,20 @@ impl EffectRunner for AudioEffectRunner {
                 let settings = self.settings.clone();
 
                 tokio::spawn(async move {
-                    let handle = {
+                    let (handle, waveform_stop_tx) = {
                         let mut active_guard = active.lock().await;
-                        active_guard
-                            .remove(&id)
-                            .and_then(|mut recording| recording.handle.take())
+                        match active_guard.remove(&id) {
+                            Some(mut recording) => {
+                                (recording.handle.take(), recording.waveform_stop_tx.take())
+                            }
+                            None => (None, None),
+                        }
                     };
+
+                    // Stop waveform emitter first
+                    if let Some(stop_tx) = waveform_stop_tx {
+                        let _ = stop_tx.send(());
+                    }
 
                     let Some(handle) = handle else {
                         log::warn!("StopAudio: no active handle for id={}", id);
@@ -756,7 +990,12 @@ impl EffectRunner for StubEffectRunner {
 mod tests {
     use super::*;
 
-    fn vad_stats_for_test(speech_frames: usize, total_frames: usize, rms: f32, peak_abs: i32) -> crate::audio::vad::VadStats {
+    fn vad_stats_for_test(
+        speech_frames: usize,
+        total_frames: usize,
+        rms: f32,
+        peak_abs: i32,
+    ) -> crate::audio::vad::VadStats {
         crate::audio::vad::VadStats {
             total_frames,
             speech_frames,

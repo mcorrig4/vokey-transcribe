@@ -27,8 +27,9 @@ impl NoSpeechSource {
 
 /// Internal state of the recording workflow.
 /// This is the authoritative state - all transitions go through the reducer.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum State {
+    #[default]
     Idle,
     Arming {
         recording_id: Uuid,
@@ -37,14 +38,20 @@ pub enum State {
         recording_id: Uuid,
         wav_path: PathBuf,
         started_at: Instant,
+        /// Accumulated partial transcript from streaming (if enabled)
+        partial_text: Option<String>,
     },
     Stopping {
         recording_id: Uuid,
         wav_path: PathBuf,
+        /// Preserved partial transcript for fallback if batch transcription fails
+        partial_text: Option<String>,
     },
     Transcribing {
         recording_id: Uuid,
         wav_path: PathBuf,
+        /// Preserved partial transcript for fallback if batch transcription fails
+        partial_text: Option<String>,
     },
     NoSpeech {
         recording_id: Uuid,
@@ -60,12 +67,6 @@ pub enum State {
         message: String,
         last_good_text: Option<String>,
     },
-}
-
-impl Default for State {
-    fn default() -> Self {
-        State::Idle
-    }
 }
 
 /// Events that can trigger state transitions.
@@ -127,8 +128,8 @@ pub enum Event {
         message: String,
     },
 
-    // Phase 2 (reserved for future)
-    #[allow(dead_code)]
+    // Streaming transcription events (Sprint 7A)
+    /// Partial transcript delta received from streaming
     PartialDelta {
         id: Uuid,
         delta: String,
@@ -160,6 +161,7 @@ pub enum Effect {
         wav_path: PathBuf,
     },
     CopyToClipboard {
+        #[allow(dead_code)] // Kept for consistency with other effects and Debug output
         id: Uuid,
         text: String,
     },
@@ -224,6 +226,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
                 recording_id: *recording_id,
                 wav_path,
                 started_at: Instant::now(),
+                partial_text: None,
             },
             vec![StartRecordingTick { id }, EmitUi],
         ),
@@ -260,6 +263,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             Recording {
                 recording_id,
                 wav_path,
+                partial_text,
                 ..
             },
             HotkeyToggle,
@@ -267,6 +271,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             Stopping {
                 recording_id: *recording_id,
                 wav_path: wav_path.clone(),
+                partial_text: partial_text.clone(),
             },
             vec![StopAudio { id: *recording_id }, EmitUi],
         ),
@@ -295,6 +300,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
                 recording_id,
                 wav_path,
                 started_at,
+                partial_text,
             },
             RecordingTick { id },
         ) if *recording_id == id => {
@@ -311,6 +317,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
                     Stopping {
                         recording_id: *recording_id,
                         wav_path: wav_path.clone(),
+                        partial_text: partial_text.clone(),
                     },
                     vec![StopAudio { id: *recording_id }, EmitUi],
                 )
@@ -325,6 +332,31 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
                 (state.clone(), vec![EmitUi])
             }
         }
+        // PartialDelta during recording - accumulate transcript text
+        (
+            Recording {
+                recording_id,
+                wav_path,
+                started_at,
+                partial_text,
+            },
+            PartialDelta { id, delta },
+        ) if *recording_id == id => {
+            // Append delta to existing partial text (with space separator between segments)
+            let new_partial = match partial_text {
+                Some(existing) => Some(format!("{} {}", existing, delta)),
+                None => Some(delta),
+            };
+            (
+                Recording {
+                    recording_id: *recording_id,
+                    wav_path: wav_path.clone(),
+                    started_at: *started_at,
+                    partial_text: new_partial,
+                },
+                vec![EmitUi],
+            )
+        }
 
         // -----------------
         // Stopping
@@ -333,12 +365,14 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             Stopping {
                 recording_id,
                 wav_path,
+                partial_text,
             },
             AudioStopOk { id },
         ) if *recording_id == id => (
             Transcribing {
                 recording_id: *recording_id,
                 wav_path: wav_path.clone(),
+                partial_text: partial_text.clone(),
             },
             vec![
                 StartTranscription {
@@ -352,6 +386,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             Stopping {
                 recording_id,
                 wav_path,
+                ..
             },
             NoSpeechDetected {
                 id,
@@ -377,12 +412,13 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             Stopping {
                 recording_id,
                 wav_path,
+                partial_text,
             },
             AudioStopFail { id, err },
         ) if *recording_id == id => (
             Error {
                 message: err,
-                last_good_text: None,
+                last_good_text: partial_text.clone(),
             },
             vec![
                 Cleanup {
@@ -417,8 +453,13 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             Transcribing {
                 recording_id,
                 wav_path,
+                ..
             },
-            NoSpeechDetected { id, source, message },
+            NoSpeechDetected {
+                id,
+                source,
+                message,
+            },
         ) if *recording_id == id => (
             NoSpeech {
                 recording_id: *recording_id,
@@ -438,12 +479,14 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             Transcribing {
                 recording_id,
                 wav_path,
+                partial_text,
             },
             TranscribeFail { id, err },
         ) if *recording_id == id => (
             Error {
                 message: err,
-                last_good_text: None,
+                // Use partial transcript from streaming as fallback when batch fails
+                last_good_text: partial_text.clone(),
             },
             vec![
                 Cleanup {
@@ -457,6 +500,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             Transcribing {
                 recording_id,
                 wav_path,
+                ..
             },
             Cancel,
         ) => (
@@ -543,6 +587,7 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
         (_, NoSpeechDetected { id, .. }) if is_stale(id) => (state.clone(), vec![]),
         (_, TranscribeOk { id, .. }) if is_stale(id) => (state.clone(), vec![]),
         (_, TranscribeFail { id, .. }) if is_stale(id) => (state.clone(), vec![]),
+        (_, PartialDelta { id, .. }) if is_stale(id) => (state.clone(), vec![]),
 
         // -----------------
         // Unhandled: no transition
@@ -636,6 +681,7 @@ mod tests {
             recording_id: id,
             wav_path: PathBuf::from("/tmp/test.wav"),
             started_at: std::time::Instant::now(),
+            partial_text: None,
         };
         let (next, effects) = reduce(&state, Event::Cancel);
 
@@ -657,6 +703,7 @@ mod tests {
         let state = State::Transcribing {
             recording_id: id,
             wav_path: PathBuf::from("/tmp/test.wav"),
+            partial_text: None,
         };
         let (next, effects) = reduce(&state, Event::Cancel);
 
@@ -711,5 +758,91 @@ mod tests {
         assert!(effects
             .iter()
             .any(|e| matches!(e, Effect::StartAudio { .. })));
+    }
+
+    // =========================================================================
+    // PartialDelta tests (Sprint 7A)
+    // =========================================================================
+
+    #[test]
+    fn partial_delta_during_recording_accumulates_text() {
+        let id = Uuid::new_v4();
+        let state = State::Recording {
+            recording_id: id,
+            wav_path: PathBuf::from("/tmp/test.wav"),
+            started_at: std::time::Instant::now(),
+            partial_text: None,
+        };
+
+        // First delta
+        let (next, effects) = reduce(
+            &state,
+            Event::PartialDelta {
+                id,
+                delta: "Hello".to_string(),
+            },
+        );
+
+        assert!(matches!(
+            next,
+            State::Recording { partial_text: Some(ref t), .. } if t == "Hello"
+        ));
+        assert!(effects.iter().any(|e| matches!(e, Effect::EmitUi)));
+    }
+
+    #[test]
+    fn partial_delta_appends_to_existing_text() {
+        let id = Uuid::new_v4();
+        let state = State::Recording {
+            recording_id: id,
+            wav_path: PathBuf::from("/tmp/test.wav"),
+            started_at: std::time::Instant::now(),
+            partial_text: Some("Hello".to_string()),
+        };
+
+        // OpenAI Realtime API sends complete segments without leading spaces,
+        // so the state machine adds a space separator between segments
+        let (next, _) = reduce(
+            &state,
+            Event::PartialDelta {
+                id,
+                delta: "world".to_string(),
+            },
+        );
+
+        assert!(matches!(
+            next,
+            State::Recording { partial_text: Some(ref t), .. } if t == "Hello world"
+        ));
+    }
+
+    #[test]
+    fn stale_partial_delta_is_ignored() {
+        let id = Uuid::new_v4();
+        let stale_id = Uuid::new_v4();
+        let state = State::Recording {
+            recording_id: id,
+            wav_path: PathBuf::from("/tmp/test.wav"),
+            started_at: std::time::Instant::now(),
+            partial_text: None,
+        };
+
+        let (next, effects) = reduce(
+            &state,
+            Event::PartialDelta {
+                id: stale_id,
+                delta: "Stale text".to_string(),
+            },
+        );
+
+        // Should stay unchanged
+        assert!(matches!(
+            next,
+            State::Recording {
+                partial_text: None,
+                ..
+            }
+        ));
+        assert!(effects.is_empty());
     }
 }

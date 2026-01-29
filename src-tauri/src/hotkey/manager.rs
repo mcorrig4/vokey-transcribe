@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use evdev::{Device, InputEventKind, Key};
 use tokio::sync::mpsc;
@@ -52,7 +52,10 @@ impl DebounceState {
                 }
             }
         } else {
-            log::trace!("Hotkey debounced ({}ms since last trigger)", now_ms.saturating_sub(last));
+            log::trace!(
+                "Hotkey debounced ({}ms since last trigger)",
+                now_ms.saturating_sub(last)
+            );
             false
         }
     }
@@ -63,7 +66,7 @@ pub fn find_keyboards() -> Vec<(PathBuf, Device)> {
     evdev::enumerate()
         .filter_map(|(path, device)| {
             // A keyboard should support common keys
-            let is_keyboard = device.supported_keys().map_or(false, |keys| {
+            let is_keyboard = device.supported_keys().is_some_and(|keys| {
                 keys.contains(Key::KEY_ENTER)
                     && keys.contains(Key::KEY_SPACE)
                     && keys.contains(Key::KEY_A)
