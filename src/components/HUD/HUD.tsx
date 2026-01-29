@@ -49,7 +49,11 @@ export function HUD() {
 
     // Use requestAnimationFrame to batch the resize, with cleanup
     const rafId = requestAnimationFrame(() => {
-      window.setSize(targetSize).catch((err) => {
+      Promise.all([
+        window.setMinSize(targetSize),
+        window.setMaxSize(targetSize),
+        window.setSize(targetSize),
+      ]).catch((err) => {
         console.warn('Failed to resize window:', err)
       })
     })
