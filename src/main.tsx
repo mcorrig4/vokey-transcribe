@@ -9,17 +9,13 @@ import './styles/globals.css'
 const params = new URLSearchParams(window.location.search)
 const windowType = params.get('window')
 
-function getRootComponent() {
-  switch (windowType) {
-    case 'settings':
-    case 'debug': // Legacy debug window now uses Settings UI
-      return Settings
-    default:
-      return App
-  }
+// Component map - explicit relationship between window type and component
+const componentMap: Record<string, React.ComponentType> = {
+  settings: Settings,
+  debug: Settings, // Legacy debug window now uses Settings UI
 }
 
-const RootComponent = getRootComponent()
+const RootComponent = (windowType && componentMap[windowType]) || App
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

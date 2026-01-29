@@ -1,3 +1,5 @@
+import { useState, useEffect } from 'react'
+import { getVersion } from '@tauri-apps/api/app'
 import {
   Card,
   CardContent,
@@ -8,6 +10,17 @@ import {
 import { ExternalLink, Github, Bug, BookOpen, Heart } from 'lucide-react'
 
 export function AboutPage() {
+  const [version, setVersion] = useState("")
+
+  useEffect(() => {
+    let isMounted = true
+    getVersion().then((v) => {
+      if (isMounted) setVersion(v)
+    })
+    return () => {
+      isMounted = false
+    }
+  }, [])
   const openExternal = (url: string) => {
     window.open(url, '_blank', 'noopener,noreferrer')
   }
@@ -37,7 +50,7 @@ export function AboutPage() {
         <CardContent className="text-center space-y-2">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-muted text-sm">
             <span className="text-muted-foreground">Version</span>
-            <span className="font-mono font-medium">0.2.0-dev</span>
+            <span className="font-mono font-medium">{version || "loading..."}</span>
           </div>
         </CardContent>
       </Card>

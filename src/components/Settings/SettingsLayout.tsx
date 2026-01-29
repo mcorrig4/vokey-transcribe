@@ -122,20 +122,17 @@ export function SettingsLayout({ children }: SettingsLayoutProps) {
   )
 }
 
-// Content components for each page - exhaustive switch for type safety
+// Page component map - ensures explicit relationship between page ID and component
+const pageMap: Record<PageId, React.ReactNode> = {
+  usage: <UsagePage />,
+  settings: <SettingsFormPage />,
+  appearance: <AppearancePage />,
+  advanced: <AdvancedPage />,
+  about: <AboutPage />,
+}
+
 function SettingsContent({ page }: { page: PageId }): React.ReactNode {
-  switch (page) {
-    case 'usage':
-      return <UsagePage />
-    case 'settings':
-      return <SettingsFormPage />
-    case 'appearance':
-      return <AppearancePage />
-    case 'advanced':
-      return <AdvancedPage />
-    case 'about':
-      return <AboutPage />
-  }
+  return pageMap[page] ?? null
 }
 
 export default SettingsLayout
