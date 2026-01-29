@@ -24,6 +24,11 @@
         "hooks": [
           {
             "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/setup-gh-cli.sh",
+            "timeout": 120000
+          },
+          {
+            "type": "command",
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/setup-cc-web.sh",
             "timeout": 120000
           },
