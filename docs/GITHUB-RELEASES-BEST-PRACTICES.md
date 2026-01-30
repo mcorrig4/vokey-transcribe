@@ -310,7 +310,7 @@ jobs:
           fi
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           prerelease: ${{ steps.release-type.outputs.prerelease }}
           generate_release_notes: true
