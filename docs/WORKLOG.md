@@ -109,14 +109,15 @@ This document tracks progress, decisions, and context for the VoKey Transcribe p
 
 | Sprint | Status | Notes |
 |--------|--------|-------|
-| 0 - Project skeleton + HUD + tray | ✅ COMPLETE | HUD shows "Ready", tray icon works |
-| 1 - State machine + UI wiring | ✅ COMPLETE | Full state machine, debug panel |
-| 2 - Global hotkey (evdev) | ✅ COMPLETE | evdev module implemented |
-| 3 - Audio capture (CPAL + Hound) | ✅ COMPLETE | CPAL capture, hound WAV writing |
-| 4 - OpenAI transcription + clipboard | ✅ COMPLETE | OpenAI Whisper API, arboard clipboard |
-| 5 - Full flow polish + tray controls | ✅ COMPLETE | Tray menu, HUD timer, auto-dismiss |
-| 6 - Hardening + UX polish | ⏸️ PAUSED | Phases 1-5 done; Phase 6 needs real hardware |
-| 7A - Streaming transcription | ✅ COMPLETE | Backend + Frontend complete |
+| 0 - Project skeleton + HUD + tray | ✅ COMPLETE | HUD shows "Ready", tray icon works, Quit exits cleanly |
+| 1 - State machine + UI wiring | ✅ COMPLETE | Full state machine, debug panel, simulate commands |
+| 2 - Global hotkey (evdev) | ✅ COMPLETE | evdev module implemented, tested on real hardware |
+| 3 - Audio capture (CPAL + Hound) | ✅ COMPLETE | CPAL capture, hound WAV writing, XDG paths |
+| 4 - OpenAI transcription + clipboard | ✅ COMPLETE | OpenAI Whisper API, arboard clipboard, tested on real hardware |
+| 5 - Full flow polish + tray controls | ✅ COMPLETE | Tray menu with Toggle/Cancel/Open Logs, HUD timer, auto-dismiss |
+| 6 - Hardening + UX polish | ⏸️ PAUSED | Phases 1-5 done; Phase 6 (50-cycle stability) needs real hardware |
+| 7A - Streaming transcription | ✅ COMPLETE | All backend+frontend complete. PR #145 merged. |
+| 7B - Waveform visualization | ✅ COMPLETE | Phase 1 (#72) + Phase 2 (#75) complete. |
 | 7B - Post-processing modes | ✅ COMPLETE | Normal/Coding/Markdown/Prompt modes |
 | Settings UI Overhaul | 🔄 MERGING | Epic #114, shadcn/ui + Tailwind |
 

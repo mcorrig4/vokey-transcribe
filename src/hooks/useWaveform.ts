@@ -32,7 +32,16 @@ export function useWaveform(enabled: boolean): number[] {
 
     // Use promise-based cleanup to avoid race condition where
     // cleanup runs before listen() resolves (matches HUDContext.tsx pattern)
+    console.log('[useWaveform] Starting listener for waveform-update events')
+
+    let eventCount = 0
     const unlistenPromise = listen<WaveformData>('waveform-update', (event) => {
+      eventCount++
+      const maxBar = Math.max(...event.payload.bars)
+      // Log every 30th event (~1/sec at 30fps) to avoid spam
+      if (eventCount % 30 === 1) {
+        console.log(`[useWaveform] Event #${eventCount}: maxBar=${maxBar.toFixed(3)}, bars=`, event.payload.bars.slice(0, 5).map(b => b.toFixed(2)))
+      }
       setBars(event.payload.bars)
     })
 

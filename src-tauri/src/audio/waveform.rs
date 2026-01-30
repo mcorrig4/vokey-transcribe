@@ -207,7 +207,7 @@ pub async fn run_waveform_emitter(
     let mut ema = EmaState::new();
     let mut tick = interval(Duration::from_millis(FRAME_INTERVAL_MS));
 
-    log::debug!("Waveform emitter started");
+    log::info!("Waveform emitter started (30fps, {} bars)", NUM_BARS);
 
     loop {
         tokio::select! {
@@ -230,6 +230,9 @@ pub async fn run_waveform_emitter(
                 ema.apply(&mut bars);
 
                 // Emit to frontend
+                let max_bar = bars.iter().cloned().fold(0.0f32, f32::max);
+                log::trace!("Waveform emit: max_bar={:.3}, samples_in_buffer={}", max_bar, buffer.samples.len());
+
                 if let Err(e) = app.emit("waveform-update", WaveformData { bars }) {
                     log::warn!("Failed to emit waveform update: {}", e);
                 }
@@ -241,7 +244,7 @@ pub async fn run_waveform_emitter(
     buffer.clear();
     ema.reset();
 
-    log::debug!("Waveform emitter stopped");
+    log::info!("Waveform emitter stopped");
 }
 
 #[cfg(test)]
