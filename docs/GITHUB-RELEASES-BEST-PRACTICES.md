@@ -133,9 +133,13 @@ Include in your release notes:
    gpg --verify SHA256SUMS.txt.asc SHA256SUMS.txt
    ```
 
-4. Verify the checksum:
+4. Verify the checksum of your downloaded file (e.g., `vokey-transcribe_1.0.0_amd64.deb`):
    ```bash
-   sha256sum -c SHA256SUMS.txt
+   # Linux
+   grep "vokey-transcribe_1.0.0_amd64.deb" SHA256SUMS.txt | sha256sum -c -
+
+   # macOS
+   grep "vokey-transcribe_1.0.0_amd64.deb" SHA256SUMS.txt | shasum -a 256 -c -
    ```
 ```
 
@@ -738,8 +742,9 @@ jobs:
         include:
           - platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-          - platform: ubuntu-22.04-arm
-            target: aarch64-unknown-linux-gnu
+          # Note: Linux ARM builds require a self-hosted runner or cross-compilation
+          # - platform: self-hosted-linux-arm64
+          #   target: aarch64-unknown-linux-gnu
           - platform: macos-latest
             target: aarch64-apple-darwin
           - platform: macos-13
@@ -767,7 +772,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: latest
+          version: 9  # Pin to major version for reproducible builds
 
       - name: Install Rust
         uses: dtolnay/rust-action@stable
@@ -783,7 +788,7 @@ jobs:
         run: pnpm install
 
       - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v0.5.18  # Pin to specific version for stability
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
