@@ -441,8 +441,8 @@ async fn fetch_usage_metrics(
     }
 
     // Get admin key
-    let admin_key = admin_key::get_admin_api_key()
-        .ok_or_else(|| "Admin API key not configured".to_string())?;
+    let admin_key =
+        admin_key::get_admin_api_key().ok_or_else(|| "Admin API key not configured".to_string())?;
 
     // Fetch fresh metrics
     log::info!("Usage: fetching fresh metrics from OpenAI API");
