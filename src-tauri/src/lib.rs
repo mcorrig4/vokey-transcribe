@@ -426,14 +426,18 @@ async fn validate_admin_api_key(key: String) -> Result<bool, String> {
 /// Fetch usage metrics from OpenAI API.
 /// Uses cache if available and not expired (5 minute TTL).
 /// Returns cached data with force_refresh=false, fresh data with force_refresh=true.
+/// Note: Holds lock across async fetch to prevent cache stampede (multiple concurrent
+/// requests triggering duplicate API calls when cache expires).
 #[tauri::command]
 async fn fetch_usage_metrics(
     handle: tauri::State<'_, UsageHandle>,
     force_refresh: bool,
 ) -> Result<usage::UsageMetrics, String> {
+    // Hold lock for entire operation to prevent cache stampede
+    let mut cache = handle.cache.lock().await;
+
     // Check cache first (unless force refresh)
     if !force_refresh {
-        let cache = handle.cache.lock().await;
         if let Some(metrics) = cache.get() {
             log::debug!("Usage: returning cached metrics");
             return Ok(metrics.clone());
@@ -444,15 +448,12 @@ async fn fetch_usage_metrics(
     let admin_key =
         admin_key::get_admin_api_key().ok_or_else(|| "Admin API key not configured".to_string())?;
 
-    // Fetch fresh metrics
+    // Fetch fresh metrics (lock held to serialize concurrent requests)
     log::info!("Usage: fetching fresh metrics from OpenAI API");
     let metrics = usage::fetch_usage_metrics(&admin_key).await?;
 
     // Update cache
-    {
-        let mut cache = handle.cache.lock().await;
-        cache.set(metrics.clone());
-    }
+    cache.set(metrics.clone());
 
     Ok(metrics)
 }
