@@ -13,6 +13,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -21,6 +23,7 @@ jobs:
   build-linux:
     name: Build Linux
     runs-on: ubuntu-22.04
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
@@ -28,6 +31,7 @@ jobs:
 
       - name: Install system dependencies
         run: |
+          set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y \
             libgtk-3-dev \
@@ -65,12 +69,13 @@ jobs:
         run: pnpm install
 
       - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
+        id: tauri-build
+        uses: tauri-apps/tauri-action@v0.5.17
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'VoKey Transcribe ${{ github.ref_name }}'
+          tagName: ${{ inputs.tag || github.ref_name }}
+          releaseName: 'VoKey Transcribe ${{ inputs.tag || github.ref_name }}'
           releaseBody: |
             ## Installation
 
@@ -94,7 +99,37 @@ jobs:
             ---
             See [CHANGELOG](https://github.com/mcorrig4/vokey-transcribe/blob/master/CHANGELOG.md) for details.
           releaseDraft: true
-          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+          prerelease: ${{ contains(inputs.tag || github.ref_name, 'alpha') || contains(inputs.tag || github.ref_name, 'beta') || contains(inputs.tag || github.ref_name, 'rc') }}
+
+      - name: Collect build diagnostics on failure
+        if: failure() && steps.tauri-build.outcome == 'failure'
+        run: |
+          echo "::group::Cargo build directory contents"
+          ls -la src-tauri/target/release/ 2>/dev/null || echo "Release directory not found"
+          echo "::endgroup::"
+          echo "::group::Bundle directory contents"
+          ls -laR src-tauri/target/release/bundle/ 2>/dev/null || echo "Bundle directory not found"
+          echo "::endgroup::"
+
+      - name: Validate build outputs
+        run: |
+          set -euo pipefail
+          DEB_DIR="src-tauri/target/release/bundle/deb"
+          APPIMAGE_DIR="src-tauri/target/release/bundle/appimage"
+
+          echo "Checking for .deb files..."
+          if [[ ! -d "$DEB_DIR" ]] || ! ls "$DEB_DIR"/*.deb 1>/dev/null 2>&1; then
+            echo "::error::No .deb files found"
+            exit 1
+          fi
+          ls -la "$DEB_DIR"/*.deb
+
+          echo "Checking for AppImage files..."
+          if [[ ! -d "$APPIMAGE_DIR" ]] || ! ls "$APPIMAGE_DIR"/*.AppImage 1>/dev/null 2>&1; then
+            echo "::warning::No AppImage files found (non-fatal)"
+          else
+            ls -la "$APPIMAGE_DIR"/*.AppImage
+          fi
 
       - name: Upload artifacts for checksum job
         uses: actions/upload-artifact@v4
@@ -108,6 +143,7 @@ jobs:
     name: Generate Checksums
     needs: build-linux
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Download artifacts
@@ -118,18 +154,89 @@ jobs:
 
       - name: Generate SHA256 checksums
         run: |
+          set -euo pipefail
           cd artifacts
+
+          # Flatten directory structure
           find . -type f \( -name "*.deb" -o -name "*.AppImage" \) -exec mv {} . \;
           rm -rf deb appimage 2>/dev/null || true
-          sha256sum *.deb *.AppImage > SHA256SUMS.txt
+
+          # Validate we have files to checksum
+          if ! ls *.deb 1>/dev/null 2>&1; then
+            echo "::error::No .deb files found in artifacts"
+            ls -la
+            exit 1
+          fi
+
+          echo "Files to checksum:"
+          ls -la *.deb *.AppImage 2>/dev/null || ls -la *.deb
+
+          # Generate checksums (AppImage may not exist)
+          if ls *.AppImage 1>/dev/null 2>&1; then
+            sha256sum *.deb *.AppImage > SHA256SUMS.txt
+          else
+            sha256sum *.deb > SHA256SUMS.txt
+          fi
+
+          echo "Generated checksums:"
           cat SHA256SUMS.txt
+
+          if [[ ! -s SHA256SUMS.txt ]]; then
+            echo "::error::SHA256SUMS.txt is empty"
+            exit 1
+          fi
 
       - name: Upload checksums to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          TAG="${{ github.ref_name }}"
+          set -euo pipefail
           gh release upload "$TAG" \
             --repo "${{ github.repository }}" \
             artifacts/SHA256SUMS.txt \
             --clobber
+
+  publish-release:
+    name: Publish Release
+    needs: [build-linux, checksums]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Validate release has assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          echo "Checking assets for release: $TAG"
+
+          ASSET_COUNT=$(gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '.assets | length')
+          echo "Found $ASSET_COUNT assets"
+
+          if [[ "$ASSET_COUNT" -lt 2 ]]; then
+            echo "::error::Release has fewer than 2 assets (expected at least .deb and SHA256SUMS.txt)"
+            gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '.assets[].name'
+            exit 1
+          fi
+
+          DEB_COUNT=$(gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '[.assets[] | select(.name | endswith(".deb"))] | length')
+          if [[ "$DEB_COUNT" -eq 0 ]]; then
+            echo "::error::No .deb file found in release assets"
+            exit 1
+          fi
+
+          echo "Release asset validation passed:"
+          gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '.assets[].name'
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          gh release edit "$TAG" \
+            --repo "${{ github.repository }}" \
+            --draft=false
+          echo "Release $TAG published successfully"
