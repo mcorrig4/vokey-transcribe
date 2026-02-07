@@ -1,0 +1,4 @@
+# ntfy-send configuration for vokey-transcribe repo
+channel=vokey-alert-channel
+priority=4
+tags=robot
