@@ -222,6 +222,8 @@ impl EffectRunner for AudioEffectRunner {
                 let app = self.app.clone();
 
                 tokio::spawn(async move {
+                    let effect_start = std::time::Instant::now();
+
                     // Start metrics tracking for this cycle
                     {
                         let mut m = metrics.lock().await;
@@ -241,6 +243,7 @@ impl EffectRunner for AudioEffectRunner {
                     let recorder = match AudioRecorder::new() {
                         Ok(r) => {
                             log::info!("AudioRecorder created for recording {}", id);
+                            log::info!("StartAudio: recorder creation for {} took {:?}", id, effect_start.elapsed());
                             r
                         }
                         Err(e) => {
@@ -342,6 +345,8 @@ impl EffectRunner for AudioEffectRunner {
                     let start_result = recorder
                         .start(id, streaming_tx, Some(waveform_tx))
                         .map_err(|e| e.to_string());
+
+                    log::info!("StartAudio: total effect time for {}: {:?}", id, effect_start.elapsed());
 
                     // Now handle results without holding the mutex
                     match start_result {

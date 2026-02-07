@@ -108,11 +108,16 @@ impl AudioRecorder {
     /// Create a new AudioRecorder using the default input device.
     /// Spawns a dedicated audio thread for stream management.
     pub fn new() -> Result<Self, AudioError> {
+        let init_start = std::time::Instant::now();
+
         // Verify we can access an audio device before spawning thread
         let host = cpal::default_host();
+        log::debug!("AudioRecorder::new() host init: {:?}", init_start.elapsed());
+
         let device = host
             .default_input_device()
             .ok_or(AudioError::NoInputDevice)?;
+        log::debug!("AudioRecorder::new() device selection: {:?}", init_start.elapsed());
 
         log::info!("Using audio input device: {:?}", device.name());
 
@@ -127,6 +132,7 @@ impl AudioRecorder {
                 )
             })
             .ok_or(AudioError::NoSupportedConfig)?;
+        log::debug!("AudioRecorder::new() config query: {:?}", init_start.elapsed());
 
         // Use a reasonable sample rate - prefer 48kHz or 44.1kHz, clamped to device range
         // Some devices report unbounded max (u32::MAX) which causes overflow in WAV writing
@@ -166,6 +172,8 @@ impl AudioRecorder {
             audio_thread_main(device, config, sample_format, command_rx);
         });
 
+        log::info!("AudioRecorder::new() total: {:?}", init_start.elapsed());
+
         Ok(Self {
             command_sender: command_tx,
             _thread_handle: thread_handle,
@@ -197,6 +205,7 @@ impl AudioRecorder {
         streaming_tx: Option<StreamingSender>,
         waveform_tx: Option<WaveformSender>,
     ) -> Result<(RecordingHandle, PathBuf), AudioError> {
+        let start_time = std::time::Instant::now();
         let (response_tx, response_rx) = mpsc::channel();
 
         self.command_sender
@@ -215,6 +224,8 @@ impl AudioRecorder {
         let handle = RecordingHandle {
             stop_sender: self.command_sender.clone(),
         };
+
+        log::info!("AudioRecorder::start() total: {:?}", start_time.elapsed());
 
         Ok((handle, wav_path))
     }
