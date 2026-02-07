@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>VoKey Transcribe — Git History &amp; Project State</title>
+<style>
+  :root {
+    --bg: #0d1117; --fg: #c9d1d9; --border: #30363d;
+    --green: #3fb950; --red: #f85149; --yellow: #d29922;
+    --blue: #58a6ff; --purple: #bc8cff; --orange: #f0883e;
+    --cyan: #39d2c0; --pink: #f778ba;
+    --card-bg: #161b22; --hover: #1f2937;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--fg); font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; font-size: 14px; line-height: 1.5; padding: 24px; }
+  h1 { font-size: 28px; margin-bottom: 4px; }
+  .subtitle { color: #8b949e; margin-bottom: 24px; font-size: 14px; }
+  h2 { font-size: 20px; margin: 32px 0 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 16px; margin: 16px 0 8px; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+  .tab { padding: 10px 20px; cursor: pointer; color: #8b949e; border-bottom: 2px solid transparent; transition: all 0.2s; }
+  .tab:hover { color: var(--fg); }
+  .tab.active { color: var(--fg); border-bottom-color: var(--orange); font-weight: 600; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* Stats row */
+  .stats { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+  .stat { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; min-width: 140px; }
+  .stat-value { font-size: 28px; font-weight: 700; }
+  .stat-label { color: #8b949e; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-value.green { color: var(--green); }
+  .stat-value.red { color: var(--red); }
+  .stat-value.yellow { color: var(--yellow); }
+  .stat-value.blue { color: var(--blue); }
+  .stat-value.purple { color: var(--purple); }
+
+  /* Branch diagram */
+  .branch-diagram { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 24px; overflow-x: auto; margin-bottom: 24px; }
+  .branch-diagram pre { font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 13px; line-height: 1.7; white-space: pre; }
+  .b-master { color: var(--green); font-weight: 700; }
+  .b-develop { color: var(--blue); font-weight: 700; }
+  .b-feat { color: var(--purple); }
+  .b-fix { color: var(--orange); }
+  .b-claude { color: var(--cyan); }
+  .b-copilot { color: var(--pink); }
+  .b-stale { color: #484f58; }
+  .b-tag { color: var(--yellow); font-weight: 700; }
+  .b-comment { color: #6e7681; font-style: italic; }
+
+  /* Cards */
+  .card-grid { display: grid; gap: 12px; }
+  .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px; transition: border-color 0.2s; }
+  .card:hover { border-color: #484f58; }
+  .card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .card-title { font-weight: 600; font-size: 15px; }
+  .card-meta { color: #8b949e; font-size: 12px; }
+  .card-body { font-size: 13px; color: #8b949e; }
+  .card-body code { background: #1f2937; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 12px; color: var(--fg); }
+
+  /* Badges */
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .badge-open { background: #1a4d2e; color: var(--green); }
+  .badge-draft { background: #3d2e00; color: var(--yellow); }
+  .badge-merged { background: #2d1a4e; color: var(--purple); }
+  .badge-stale { background: #1c1c1c; color: #484f58; }
+  .badge-safe { background: #1a4d2e; color: var(--green); }
+  .badge-caution { background: #3d2e00; color: var(--yellow); }
+  .badge-unique { background: #2d1a4e; color: var(--purple); }
+  .badge-master { background: #0f2d1a; color: var(--green); border: 1px solid #1a4d2e; }
+  .badge-develop { background: #0d2744; color: var(--blue); border: 1px solid #1a3d5c; }
+  .badge-high { background: #4a1a1a; color: var(--red); }
+  .badge-medium { background: #3d2e00; color: var(--yellow); }
+  .badge-low { background: #1a3d1a; color: var(--green); }
+  .badge-none { background: #1c1c1c; color: #484f58; }
+
+  /* Branch table */
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  th { color: #8b949e; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+  tr:hover { background: var(--hover); }
+
+  /* Legend */
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; font-size: 12px; color: #8b949e; }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+  /* Section divider */
+  .section-group { margin-bottom: 32px; }
+
+  /* Filter */
+  .filter-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .filter-btn { padding: 4px 12px; border-radius: 16px; border: 1px solid var(--border); background: transparent; color: var(--fg); cursor: pointer; font-size: 12px; transition: all 0.2s; }
+  .filter-btn:hover, .filter-btn.active { background: var(--blue); color: #0d1117; border-color: var(--blue); }
+
+  /* Recommendation box */
+  .reco { background: #0d2744; border: 1px solid #1a3d5c; border-radius: 8px; padding: 16px; margin: 12px 0; }
+  .reco-title { font-weight: 600; color: var(--blue); margin-bottom: 4px; }
+  .reco ul { padding-left: 20px; }
+  .reco li { margin: 4px 0; }
+
+  .danger { background: #4a1a1a; border-color: #6e2b2b; }
+  .danger .reco-title { color: var(--red); }
+  .success { background: #1a4d2e; border-color: #2a6e3e; }
+  .success .reco-title { color: var(--green); }
+</style>
+</head>
+<body>
+
+<h1>VoKey Transcribe — Project State Dashboard</h1>
+<p class="subtitle">Generated 2026-02-07 &bull; Snapshot of all branches, PRs, issues, and their relationships</p>
+
+<div class="stats">
+  <div class="stat"><div class="stat-value green">v0.2.0-beta</div><div class="stat-label">Last Release (master)</div></div>
+  <div class="stat"><div class="stat-value blue">3</div><div class="stat-label">Commits ahead on develop</div></div>
+  <div class="stat"><div class="stat-value yellow">11</div><div class="stat-label">Open PRs</div></div>
+  <div class="stat"><div class="stat-value purple">29</div><div class="stat-label">Remote Branches</div></div>
+  <div class="stat"><div class="stat-value red">44</div><div class="stat-label">Open Issues</div></div>
+  <div class="stat"><div class="stat-value green">48</div><div class="stat-label">Merged PRs (total)</div></div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="showTab('overview')">Branch Map</div>
+  <div class="tab" onclick="showTab('prs')">Open PRs (11)</div>
+  <div class="tab" onclick="showTab('branches')">All Branches (29)</div>
+  <div class="tab" onclick="showTab('issues')">Open Issues (44)</div>
+  <div class="tab" onclick="showTab('plan')">Recovery Plan</div>
+</div>
+
+<!-- ========== TAB: OVERVIEW ========== -->
+<div id="overview" class="tab-content active">
+  <h2>Branch Topology</h2>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div> master (stable)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div> develop (integration)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div> feat/ branches</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--cyan)"></div> claude/ branches</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--pink)"></div> copilot/ branches</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--orange)"></div> fix/ branches</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--yellow)"></div> tags</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#484f58"></div> stale/orphaned</div>
+  </div>
+
+  <div class="branch-diagram"><pre>
+<span class="b-master">master</span> <span class="b-tag">[v0.2.0-beta]</span> fa581df  <span class="b-comment">← last stable release (2026-01-29)</span>
+  │
+  │  <span class="b-comment">(1 commit behind: the v0.2.0-beta merge commit itself)</span>
+  │
+<span class="b-develop">develop</span> bac7cd8  <span class="b-comment">← HEAD (2026-02-03)</span>
+  │  bac7cd8 Merge PR #188 (deb release workflow)
+  │  0763446 feat(ui): merge Settings UI overhaul + Sprint 7A (#186)
+  │  24ada42 GitHub Releases best practices (#185)
+  │
+  ├──── <span class="b-claude">PR #194</span> feat/hide-transcript-panel-when-streaming-off  <span class="badge badge-open">OPEN</span>
+  │       <span class="b-comment">hide TranscriptPanel when streaming disabled</span>
+  │
+  ├──── <span class="b-feat">PR #192</span> feat/cc-world  <span class="badge badge-open">OPEN</span>
+  │       3 commits: deb releases, workflow docs, ntfy script
+  │
+  ├──── <span class="b-copilot">PR #191</span> copilot/sub-pr-189-again  <span class="badge badge-draft">DRAFT</span>
+  │       2 commits: fix AdminKeyInput timeout cleanup
+  │
+  ├──── <span class="b-copilot">PR #190</span> copilot/sub-pr-189  <span class="badge badge-draft">DRAFT</span>
+  │       1 commit: "Initial plan" placeholder
+  │
+  ├──── <span class="b-claude">PR #187</span> claude/fix-pr-174-review-fLcvQ  <span class="badge badge-open">OPEN</span>
+  │       5 commits: Error UI feedback (#171) + Appearance persistence (#172)
+  │
+  ├──── <span class="b-claude">PR #170</span> claude/merge-develop-ui-overhaul-ouW0E  <span class="badge badge-stale">STALE</span>
+  │       <span class="b-comment">superseded by #186 (already merged)</span>
+  │
+  ├──── <span class="b-claude">PR #164</span> claude/e2e-testing-research-xkIhD  <span class="badge badge-open">OPEN</span>
+  │       1 commit: docs only (E2E testing research)
+  │
+  ├──── <span class="b-claude">PR #162</span> claude/sprint-7b-postprocessing-YHEWs  <span class="badge badge-open">OPEN</span>
+  │       4 commits: Sprint 7B post-processing modes (Coding/Markdown/Prompt)
+  │
+  ├──── <span class="b-feat">PR #137</span> feat/ui-overhaul  <span class="badge badge-stale">STALE DRAFT</span>
+  │       <span class="b-comment">epic branch — work merged via #186, draft is stale</span>
+  │
+  └──── <span class="b-feat">PR #169</span> develop → feat/ui-overhaul  <span class="badge badge-stale">STALE</span>
+          <span class="b-comment">reverse merge, no longer needed</span>
+
+<span class="b-develop">develop</span> ──── <span class="b-master">PR #189</span> → master  <span class="badge badge-open">OPEN</span>
+               <span class="b-comment">release PR: auto-build release artifacts</span>
+
+<span class="b-comment">─── Orphaned branches (no open PR) ───</span>
+
+<span class="b-stale">feat/166-two-panel-design</span>       <span class="badge badge-unique">1 UNIQUE COMMIT</span>  docs: plan for two-panel HUD design
+<span class="b-stale">feat/167-word-count-metric</span>      <span class="badge badge-unique">1 UNIQUE COMMIT</span>  docs: plan for word count metric
+<span class="b-stale">feat/ui-overhaul-merge-v2</span>       <span class="badge badge-unique">30 UNIQUE</span>  full UI overhaul (superset of what #186 merged differently)
+<span class="b-stale">feat/restart-fix</span>                <span class="badge badge-safe">MERGED</span>  all commits in develop
+<span class="b-stale">fix/125-live-transcription</span>      <span class="badge badge-safe">MERGED</span>  all commits in develop
+<span class="b-stale">sprint-7a-80</span>                    <span class="badge badge-unique">2 UNIQUE</span>  docs: Sprint 7A planning worklog
+<span class="b-stale">sprint-7a-81</span>                    <span class="badge badge-unique">3 UNIQUE</span>  docs: Sprint 7A planning docs
+<span class="b-stale">sprint-7b-snapshot</span>              <span class="badge badge-safe">MERGED</span>  all commits in develop
+<span class="b-stale">main-linux</span>                      <span class="badge badge-safe">MERGED</span>  old default branch, subset of develop
+<span class="b-stale">master-windows</span>                  <span class="badge badge-unique">1 UNIQUE</span>  docs: README formatting (Windows-specific)
+<span class="b-stale">claude/waveform-viz-OC2LB</span>      <span class="badge badge-unique">6 UNIQUE</span>  SessionStart hook setup scripts (cc-web-setup.sh)
+<span class="b-stale">claude/optimize-div-pr131</span>      <span class="badge badge-unique">3 UNIQUE</span>  waveform RMS division optimization
+<span class="b-stale">claude/review-issue-154</span>        <span class="badge badge-unique">1 UNIQUE</span>  GPU-accelerated scaleY for waveform
+<span class="b-stale">claude/review-issues-prs-eSYd4</span> <span class="badge badge-caution">DUPLICATE</span>  same as feat/ui-overhaul commits
+<span class="b-stale">claude/issue-115-tailwind</span>      <span class="badge badge-caution">DUPLICATE</span>  tailwind setup (merged differently via #141)
+<span class="b-stale">claude/review-171-172</span>          <span class="badge badge-caution">OVERLAP</span>  overlaps with PR #187 branch
+<span class="b-stale">claude/sprint-7-issue-72</span>       <span class="badge badge-safe">MERGED</span>  via PR #165
+<span class="b-stale">claude/review-pr-140</span>           <span class="badge badge-safe">MERGED</span>  via PR #142
+<span class="b-stale">claude/sprint-7a-frontend</span>      <span class="badge badge-safe">MERGED</span>  via PR #105/#108
+<span class="b-stale">feat/kwin-rules-settings</span>       <span class="badge badge-safe">MERGED</span>  via PR #90
+<span class="b-stale">fix/gtk-titlebar-workaround</span>    <span class="badge badge-safe">MERGED</span>  via PR #113
+<span class="b-stale">fix/waveform-debug</span>             <span class="badge badge-safe">MERGED</span>  via PR #179
+</pre></div>
+
+  <h2>Timeline: Key Events</h2>
+  <div class="branch-diagram"><pre>
+Jan 22 ─── <span class="b-tag">project start</span> (main-linux branch)
+   │
+Jan 24 ─── Sprints 4-6: transcription, clipboard, tray, metrics
+   │
+Jan 26 ─── <span class="b-tag">v0.1.0</span> released on master
+   │        Sprint 7A begins (streaming + HUD redesign)
+   │
+Jan 27 ─── Sprint 7A backend complete (#68-#72, #100)
+   │        WebSocket, audio pipeline, transcript aggregation
+   │        develop branch workflow adopted
+   │
+Jan 28 ─── Sprint 7A frontend complete (#73-#77)
+   │        Settings UI Overhaul epic (#114) work begins
+   │        120 tests passing, 8 test files
+   │        Sprint 7B post-processing started (#162)
+   │        <span class="b-comment">many parallel branches created here — complexity peaks</span>
+   │
+Jan 29 ─── <span class="b-tag">v0.2.0-beta</span> released (PR #184: develop → master)
+   │        UI overhaul merge attempts (#169, #170) — <span class="b-comment">confusion zone</span>
+   │        feat/ui-overhaul-merge-v2 created as clean merge attempt
+   │
+Jan 30 ─── PR #186 merged: Settings UI + Sprint 7A completion into develop
+   │        PR #187 opened: Error UI + Appearance persistence
+   │        <span class="b-comment">develop now has merged UI overhaul</span>
+   │
+Feb 03 ─── PR #188 merged: automated .deb release workflow
+   │        <span class="b-comment">develop is at bac7cd8 — last known state</span>
+   │
+Feb 06 ─── PR #189 opened: release develop → master
+   │
+Feb 07 ─── copilot sub-PRs (#190, #191), feat/cc-world (#192), PR #194
+           <span class="b-comment">← you are here</span>
+</pre></div>
+</div>
+
+<!-- ========== TAB: OPEN PRs ========== -->
+<div id="prs" class="tab-content">
+  <h2>Open Pull Requests (11)</h2>
+
+  <div class="card-grid">
+    <div class="card" style="border-left: 3px solid var(--green)">
+      <div class="card-header">
+        <span class="badge badge-master">→ master</span>
+        <span class="card-title">#189: feat(releases): auto-build release artifacts</span>
+        <span class="badge badge-open">OPEN</span>
+      </div>
+      <div class="card-body">
+        Branch: <code>develop</code> → <code>master</code><br>
+        Purpose: Promote develop to master as next release. Contains Settings UI merge + deb workflow.<br>
+        <strong>Assessment:</strong> This is the release gate. Review when ready to cut a new release.
+      </div>
+    </div>
+
+    <div class="card" style="border-left: 3px solid var(--purple)">
+      <div class="card-header">
+        <span class="badge badge-develop">→ develop</span>
+        <span class="card-title">#194: feat(hud): hide TranscriptPanel when streaming disabled</span>
+        <span class="badge badge-open">OPEN</span>
+      </div>
+      <div class="card-body">
+        Branch: <code>feat/hide-transcript-panel-when-streaming-off</code><br>
+        Created: 2026-02-07 (today)<br>
+        <strong>Assessment:</strong> Active feature work. Review and merge if wanted.
+      </div>
+    </div>
+
+    <div class="card" style="border-left: 3px solid var(--purple)">
+      <div class="card-header">
+        <span class="badge badge-develop">→ develop</span>
+        <span class="card-title">#192: Feat/cc world</span>
+        <span class="badge badge-open">OPEN</span>
+      </div>
+      <div class="card-body">
+        Branch: <code>feat/cc-world</code> (3 commits)<br>
+        Contains: deb release build, workflow docs, ntfy-send script<br>
+        <strong>Assessment:</strong> Tooling/DX improvements. Review for usefulness. May overlap with #188 (already merged).
+      </div>
+    </div>
+
+    <div class="card" style="border-left: 3px solid var(--cyan)">
+      <div class="card-header">
+        <span class="badge badge-develop">→ develop</span>
+        <span class="card-title">#187: Error UI feedback (#171) + Appearance persistence (#172)</span>
+        <span class="badge badge-open">OPEN</span>
+      </div>
+      <div class="card-body">
+        Branch: <code>claude/fix-pr-174-review-fLcvQ</code> (5 commits)<br>
+        Addresses issues: #171, #172, #173<br>
+        <strong>Assessment:</strong> Genuine feature work. May need rebase onto current develop after #186 merge. Worth keeping.
+      </div>
+    </div>
+
+    <div class="card" style="border-left: 3px solid var(--cyan)">
+      <div class="card-header">
+        <span class="badge badge-develop">→ develop</span>
+        <span class="card-title">#162: Sprint 7B — Post-processing modes</span>
+        <span class="badge badge-open">OPEN</span>
+      </div>
+      <div class="card-body">
+        Branch: <code>claude/sprint-7b-postprocessing-YHEWs</code> (4 commits)<br>
+        Feature: Normal/Coding/Markdown/Prompt post-processing<br>
+        <strong>Assessment:</strong> Significant feature. May need rebase. Worth keeping and reviewing.
+      </div>
+    </div>
+
+    <div class="card" style="border-left: 3px solid var(--cyan)">
+      <div class="card-header">
+        <span class="badge badge-develop">→ develop</span>
+        <span class="card-title">#164: E2E testing research</span>
+        <span class="badge badge-open">OPEN</span>
+      </div>
+      <div class="card-body">
+        Branch: <code>claude/e2e-testing-research-xkIhD</code> (1 commit)<br>
+        Content: docs only — E2E testing strategy research<br>
+        <strong>Assessment:</strong> Docs-only PR. Easy merge or close. No code risk.
+      </div>
+    </div>
+
+    <div class="card" style="border-left: 3px solid var(--pink)">
+      <div class="card-header">
+        <span class="badge badge-develop">→ develop</span>
+        <span class="card-title">#191: Fix timeout cleanup in AdminKeyInput</span>
+        <span class="badge badge-draft">DRAFT</span>
+      </div>
+      <div class="card-body">
+        Branch: <code>copilot/sub-pr-189-again</code> (2 commits)<br>
+        Content: "Initial plan" + debounce fix<br>
+        <strong>Assessment:</strong> Small fix. May or may not still apply. Review or close.
+      </div>
+    </div>
+
+    <div class="card" style="border-left: 3px solid var(--pink)">
+      <div class="card-header">
+        <span class="badge badge-develop">→ develop</span>
+        <span class="card-title">#190: [WIP] Update auto-building of release artifacts</span>
+        <span class="badge badge-draft">DRAFT</span>
+      </div>
+      <div class="card-body">
+        Branch: <code>copilot/sub-pr-189</code> (1 commit: "Initial plan")<br>
+        <strong>Assessment:</strong> Placeholder WIP. Likely safe to close — #188 already handled this.
+      </div>
+    </div>
+
+    <div class="card" style="border-left: 3px solid #484f58">
+      <div class="card-header">
+        <span class="badge badge-develop">→ develop</span>
+        <span class="card-title">#170: merge: Overhaul Settings UI</span>
+        <span class="badge badge-stale">SUPERSEDED</span>
+      </div>
+      <div class="card-body">
+        Branch: <code>claude/merge-develop-ui-overhaul-ouW0E</code><br>
+        <strong>Assessment:</strong> Superseded by PR #186 which successfully merged the UI overhaul. Can close.
+        Has 1 unique commit (review findings fix) but that work was redone in #186.
+      </div>
+    </div>
+
+    <div class="card" style="border-left: 3px solid #484f58">
+      <div class="card-header">
+        <span class="badge" style="background:#2d1a4e;color:var(--purple)">→ feat/ui-overhaul</span>
+        <span class="card-title">#169: merge develop into ui-overhaul</span>
+        <span class="badge badge-stale">SUPERSEDED</span>
+      </div>
+      <div class="card-body">
+        Branch: <code>develop</code> → <code>feat/ui-overhaul</code> (reverse merge)<br>
+        <strong>Assessment:</strong> Reverse merge attempt. UI overhaul is now on develop via #186. Can close.
+      </div>
+    </div>
+
+    <div class="card" style="border-left: 3px solid #484f58">
+      <div class="card-header">
+        <span class="badge badge-develop">→ develop</span>
+        <span class="card-title">#137: [EPIC] Settings UI Overhaul with shadcn/ui + Tailwind</span>
+        <span class="badge badge-stale">STALE DRAFT</span>
+      </div>
+      <div class="card-body">
+        Branch: <code>feat/ui-overhaul</code><br>
+        <strong>Assessment:</strong> The epic branch. All work was merged to develop via #186. This draft can be closed.
+        Keep issue #114 open as the epic tracker if needed.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== TAB: BRANCHES ========== -->
+<div id="branches" class="tab-content">
+  <h2>All Remote Branches (29)</h2>
+  <p style="color:#8b949e;margin-bottom:16px">Sorted by last commit date. Columns show whether the branch has unique commits not in develop.</p>
+
+  <table>
+    <thead>
+      <tr><th>Branch</th><th>Last Commit</th><th>Status</th><th>Unique Commits</th><th>Notes</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="b-master">master</span></td><td>2026-01-29</td>
+        <td><span class="badge badge-safe">STABLE</span></td><td>1 (merge commit)</td>
+        <td>v0.2.0-beta tag. Known good state.</td>
+      </tr>
+      <tr>
+        <td><span class="b-develop">develop</span></td><td>2026-02-03</td>
+        <td><span class="badge badge-safe">ACTIVE</span></td><td>3 ahead of master</td>
+        <td>Integration branch. HEAD = bac7cd8</td>
+      </tr>
+      <tr style="background:#0d2744">
+        <td><span class="b-feat">feat/hide-transcript-panel-when-streaming-off</span></td><td>2026-02-07</td>
+        <td><span class="badge badge-open">PR #194</span></td><td>?</td>
+        <td>New today — hide TranscriptPanel</td>
+      </tr>
+      <tr style="background:#0d2744">
+        <td><span class="b-feat">feat/cc-world</span></td><td>2026-02-07</td>
+        <td><span class="badge badge-open">PR #192</span></td><td>3</td>
+        <td>deb releases, workflow docs, ntfy script</td>
+      </tr>
+      <tr style="background:#0d2744">
+        <td><span class="b-copilot">copilot/sub-pr-189-again</span></td><td>2026-02-07</td>
+        <td><span class="badge badge-draft">PR #191</span></td><td>2</td>
+        <td>AdminKeyInput timeout fix</td>
+      </tr>
+      <tr style="background:#0d2744">
+        <td><span class="b-copilot">copilot/sub-pr-189</span></td><td>2026-02-07</td>
+        <td><span class="badge badge-draft">PR #190</span></td><td>1</td>
+        <td>"Initial plan" placeholder only</td>
+      </tr>
+      <tr style="background:#0d2744">
+        <td><span class="b-claude">claude/fix-pr-174-review-fLcvQ</span></td><td>2026-01-30</td>
+        <td><span class="badge badge-open">PR #187</span></td><td>5</td>
+        <td>Error UI + Appearance persistence</td>
+      </tr>
+      <tr style="background:#0d2744">
+        <td><span class="b-claude">claude/merge-develop-ui-overhaul-ouW0E</span></td><td>2026-01-29</td>
+        <td><span class="badge badge-stale">PR #170 STALE</span></td><td>1</td>
+        <td>Superseded by #186</td>
+      </tr>
+      <tr style="background:#0d2744">
+        <td><span class="b-feat">feat/ui-overhaul</span></td><td>2026-01-29</td>
+        <td><span class="badge badge-stale">PR #137 STALE</span></td><td>many</td>
+        <td>Epic branch, merged via #186</td>
+      </tr>
+      <tr style="background:#0d2744">
+        <td><span class="b-claude">claude/e2e-testing-research-xkIhD</span></td><td>2026-01-29</td>
+        <td><span class="badge badge-open">PR #164</span></td><td>1</td>
+        <td>Docs only</td>
+      </tr>
+      <tr style="background:#0d2744">
+        <td><span class="b-claude">claude/sprint-7b-postprocessing-YHEWs</span></td><td>2026-01-29</td>
+        <td><span class="badge badge-open">PR #162</span></td><td>4</td>
+        <td>Post-processing modes feature</td>
+      </tr>
+      <tr>
+        <td><span class="b-stale">feat/ui-overhaul-merge-v2</span></td><td>2026-01-29</td>
+        <td><span class="badge badge-unique">ORPHANED</span></td><td>30</td>
+        <td>Clean merge attempt. Work done differently in #186. Has unique commit history but the result is in develop.</td>
+      </tr>
+      <tr>
+        <td><span class="b-stale">claude/waveform-visualization-OC2LB</span></td><td>2026-01-29</td>
+        <td><span class="badge badge-unique">ORPHANED</span></td><td>6</td>
+        <td>SessionStart hook / cc-web-setup scripts. <strong>May want to keep</strong> — useful tooling.</td>
+      </tr>
+      <tr>
+        <td><span class="b-stale">claude/review-issues-171-172-8mpGN</span></td><td>2026-01-29</td>
+        <td><span class="badge badge-caution">ORPHANED</span></td><td>many</td>
+        <td>Overlaps heavily with PR #187 branch. Same work, different branch.</td>
+      </tr>
+      <tr>
+        <td><span class="b-stale">claude/review-issues-prs-eSYd4</span></td><td>2026-01-28</td>
+        <td><span class="badge badge-caution">ORPHANED</span></td><td>many</td>
+        <td>Duplicate of feat/ui-overhaul commits</td>
+      </tr>
+      <tr>
+        <td><span class="b-stale">feat/166-two-panel-design</span></td><td>2026-01-29</td>
+        <td><span class="badge badge-unique">ORPHANED</span></td><td>1</td>
+        <td>Planning doc for two-panel HUD. Relates to issue #166.</td>
+      </tr>
+      <tr>
+        <td><span class="b-stale">feat/167-word-count-metric</span></td><td>2026-01-29</td>
+        <td><span class="badge badge-unique">ORPHANED</span></td><td>1</td>
+        <td>Planning doc for word count metric. Relates to issue #167.</td>
+      </tr>
+      <tr>
+        <td><span class="b-stale">claude/review-issue-154-1aYjP</span></td><td>2026-01-28</td>
+        <td><span class="badge badge-unique">ORPHANED</span></td><td>1</td>
+        <td>GPU-accelerated scaleY transform. Related to issue #138.</td>
+      </tr>
+      <tr>
+        <td><span class="b-stale">claude/optimize-division-pr131-wLqie</span></td><td>2026-01-28</td>
+        <td><span class="badge badge-unique">ORPHANED</span></td><td>3</td>
+        <td>Waveform RMS optimization. Small perf improvement.</td>
+      </tr>
+      <tr>
+        <td><span class="b-stale">claude/issue-115-tailwind-shadcn-OC2LB</span></td><td>2026-01-28</td>
+        <td><span class="badge badge-caution">DUPLICATE</span></td><td>4</td>
+        <td>Tailwind setup — merged via #141 differently</td>
+      </tr>
+      <tr>
+        <td><span class="b-stale">fix/125-live-transcription-not-showing</span></td><td>2026-01-28</td>
+        <td><span class="badge badge-safe">MERGED</span></td><td>0</td>
+        <td>All commits in develop. Safe to delete.</td>
+      </tr>
+      <tr>
+        <td><span class="b-stale">feat/restart-fix</span></td><td>2026-01-28</td>
+        <td><span class="badge badge-safe">MERGED</span></td><td>0</td>
+        <td>All commits in develop. Safe to delete.</td>
+      </tr>
+      <tr>
+        <td><span class="b-stale">fix/waveform-debug</span></td><td>2026-01-29</td>
+        <td><span class="badge badge-safe">MERGED</span></td><td>0</td>
+        <td>All commits in develop. Safe to delete.</td>
+      </tr>
+      <tr>
+        <td><span class="b-stale">claude/sprint-7-issue-72-A3r3C</span></td><td>2026-01-28</td>
+        <td><span class="badge badge-safe">MERGED</span></td><td>0</td>
+        <td>Merged via PR #131/#165. Safe to delete.</td>
+      </tr>
+      <tr>
+        <td><span class="b-stale">claude/review-pr-140-0hNXq</span></td><td>2026-01-28</td>
+        <td><span class="badge badge-safe">MERGED</span></td><td>0</td>
+        <td>Merged via PR #142. Safe to delete.</td>
+      </tr>
+      <tr>
+        <td><span class="b-stale">claude/sprint-7a-frontend-planning-ngiX4</span></td><td>2026-01-27</td>
+        <td><span class="badge badge-safe">MERGED</span></td><td>0</td>
+        <td>Merged via PR #105. Safe to delete.</td>
+      </tr>
+      <tr>
+        <td><span class="b-stale">feat/kwin-rules-settings</span></td><td>2026-01-26</td>
+        <td><span class="badge badge-safe">MERGED</span></td><td>0</td>
+        <td>Merged via PR #90. Safe to delete.</td>
+      </tr>
+      <tr>
+        <td><span class="b-stale">fix/gtk-titlebar-workaround</span></td><td>2026-01-27</td>
+        <td><span class="badge badge-safe">MERGED</span></td><td>0</td>
+        <td>Merged via PR #113. Safe to delete.</td>
+      </tr>
+      <tr>
+        <td><span class="b-stale">sprint-7a-80</span></td><td>2026-01-24</td>
+        <td><span class="badge badge-unique">ORPHANED</span></td><td>2</td>
+        <td>Sprint 7A planning docs only</td>
+      </tr>
+      <tr>
+        <td><span class="b-stale">sprint-7a-81</span></td><td>2026-01-24</td>
+        <td><span class="badge badge-unique">ORPHANED</span></td><td>3</td>
+        <td>Sprint 7A planning docs only</td>
+      </tr>
+      <tr>
+        <td><span class="b-stale">sprint-7b-snapshot</span></td><td>2026-01-24</td>
+        <td><span class="badge badge-safe">MERGED</span></td><td>0</td>
+        <td>All commits in develop. Safe to delete.</td>
+      </tr>
+      <tr>
+        <td><span class="b-stale">main-linux</span></td><td>2026-01-22</td>
+        <td><span class="badge badge-safe">OLD DEFAULT</span></td><td>0</td>
+        <td>Original default branch. Subset of develop.</td>
+      </tr>
+      <tr>
+        <td><span class="b-stale">master-windows</span></td><td>2026-01-21</td>
+        <td><span class="badge badge-unique">ORPHANED</span></td><td>1</td>
+        <td>Windows README formatting. Possibly historical.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ========== TAB: ISSUES ========== -->
+<div id="issues" class="tab-content">
+  <h2>Open Issues (44)</h2>
+
+  <h3>High Priority (5) — E2E Testing</h3>
+  <div class="card-grid">
+    <div class="card" style="border-left:3px solid var(--red)">
+      <div class="card-header"><span class="badge badge-high">HIGH</span><span class="card-title">#161: [Epic] E2E Testing Infrastructure</span></div>
+      <div class="card-body">Umbrella epic for E2E testing setup</div>
+    </div>
+    <div class="card" style="border-left:3px solid var(--red)">
+      <div class="card-header"><span class="badge badge-high">HIGH</span><span class="card-title">#152: Setup WebdriverIO + tauri-driver</span></div>
+      <div class="card-body">Foundation for E2E tests</div>
+    </div>
+    <div class="card" style="border-left:3px solid var(--red)">
+      <div class="card-header"><span class="badge badge-high">HIGH</span><span class="card-title">#153: Write core E2E test suite</span></div>
+      <div class="card-body">Core tests for main workflows</div>
+    </div>
+    <div class="card" style="border-left:3px solid var(--red)">
+      <div class="card-header"><span class="badge badge-high">HIGH</span><span class="card-title">#158: Write transcription E2E tests with audio injection</span></div>
+      <div class="card-body">Test transcription flow end-to-end</div>
+    </div>
+    <div class="card" style="border-left:3px solid var(--red)">
+      <div class="card-header"><span class="badge badge-high">HIGH</span><span class="card-title">#159: Create GitHub Actions E2E workflow</span></div>
+      <div class="card-body">CI pipeline for E2E tests</div>
+    </div>
+  </div>
+
+  <h3>Medium Priority (9)</h3>
+  <div class="card-grid">
+    <div class="card"><div class="card-header"><span class="badge badge-medium">MED</span><span class="card-title">#193: Hide TranscriptPanel when streaming disabled</span></div><div class="card-body">PR #194 addresses this</div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-medium">MED</span><span class="card-title">#173: Architectural Plan: Issues #171 & #172</span></div><div class="card-body">Planning doc for Error UI + Appearance persistence</div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-medium">MED</span><span class="card-title">#172: Persist AppearancePage settings across sessions</span></div><div class="card-body">PR #187 addresses this</div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-medium">MED</span><span class="card-title">#171: Add error UI feedback for async operations</span></div><div class="card-body">PR #187 addresses this</div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-medium">MED</span><span class="card-title">#160: Add OpenAI API mocking for CI</span></div><div class="card-body">Part of E2E testing effort</div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-medium">MED</span><span class="card-title">#157: Create PipeWire virtual microphone setup script</span></div><div class="card-body">Testing infrastructure</div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-medium">MED</span><span class="card-title">#156: Add configurable audio device to CPAL recorder</span></div><div class="card-body">For testing with virtual mics</div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-medium">MED</span><span class="card-title">#155: Create test audio file collection</span></div><div class="card-body">For reproducible testing</div></div>
+  </div>
+
+  <h3>Low Priority (14) — Backlog</h3>
+  <div class="card-grid">
+    <div class="card"><div class="card-header"><span class="badge badge-low">LOW</span><span class="card-title">#182: Optimize audio sample allocation</span></div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-low">LOW</span><span class="card-title">#181: Replace once_cell with std::sync::OnceLock</span></div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-low">LOW</span><span class="card-title">#177: Improve load error retry UX in AppearancePage</span></div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-low">LOW</span><span class="card-title">#176: Use Rust enums for AppearanceSettings</span></div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-low">LOW</span><span class="card-title">#175: Integrate useAsyncAction hook</span></div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-low">LOW</span><span class="card-title">#167: Add word count metric to CycleMetrics</span></div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-low">LOW</span><span class="card-title">#166: HUD window remains click-blocking after panel hides</span></div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-low">LOW</span><span class="card-title">#147: Preserve partial transcript during transcribing</span></div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-low">LOW</span><span class="card-title">#139: CSP hardening — remove unsafe-inline</span></div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-low">LOW</span><span class="card-title">#138: GPU-accelerated waveform transitions</span></div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-low">LOW</span><span class="card-title">#135: Verify restart button in production build</span></div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-low">LOW</span><span class="card-title">#134: Clipboard thread timeout/abort handling</span></div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-low">LOW</span><span class="card-title">#126: Integration tests for streaming-to-UI flow</span></div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-low">LOW</span><span class="card-title">#109: HUD component code quality improvements</span></div></div>
+  </div>
+
+  <h3>No Priority Label (12) — Older Issues</h3>
+  <div class="card-grid">
+    <div class="card"><div class="card-header"><span class="badge badge-none">NONE</span><span class="card-title">#114: [EPIC] Settings UI Overhaul</span></div><div class="card-body">Epic tracker. Phase 1-3 done. Consider closing.</div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-none">NONE</span><span class="card-title">#104: Extract shared get_api_key() utility</span></div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-none">NONE</span><span class="card-title">#99: Mid-recording WebSocket reconnection</span></div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-none">NONE</span><span class="card-title">#98: Adopt thiserror for error types</span></div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-none">NONE</span><span class="card-title">#91: Track no-speech outcomes in metrics</span></div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-none">NONE</span><span class="card-title">#86: Metrics persistence across restarts</span></div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-none">NONE</span><span class="card-title">#83: Recording continues after ForceError</span></div><div class="card-body">Bug report</div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-none">NONE</span><span class="card-title">#78: Sprint 7A Integration Testing</span></div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-none">NONE</span><span class="card-title">#67: Sprint 7A Epic</span></div><div class="card-body">Sprint 7A complete. Consider closing.</div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-none">NONE</span><span class="card-title">#51: Sprint 7B Epic</span></div><div class="card-body">PR #162 addresses this</div></div>
+    <div class="card"><div class="card-header"><span class="badge badge-none">NONE</span><span class="card-title">#48, #46, #43, #35, #34, #25, #24, #23, #18, #15</span></div><div class="card-body">Various older enhancement requests and bugs</div></div>
+  </div>
+</div>
+
+<!-- ========== TAB: RECOVERY PLAN ========== -->
+<div id="plan" class="tab-content">
+  <h2>Recovery Plan</h2>
+
+  <div class="reco success">
+    <div class="reco-title">Good News: Your core branches are healthy</div>
+    <ul>
+      <li><strong>master</strong> is at v0.2.0-beta — known good, tagged, stable</li>
+      <li><strong>develop</strong> is only 3 commits ahead (UI overhaul merge + release workflow)</li>
+      <li>The mess is in the <strong>28 stale/orphaned branches</strong> and <strong>11 open PRs</strong>, not in the main branches</li>
+    </ul>
+  </div>
+
+  <h3>Step 1: Close Superseded PRs (safe, no code loss)</h3>
+  <div class="reco">
+    <div class="reco-title">Close these 3 PRs with explanatory comments</div>
+    <ul>
+      <li><strong>#170</strong> — superseded by #186 (already merged)</li>
+      <li><strong>#169</strong> — reverse merge, no longer needed</li>
+      <li><strong>#137</strong> — epic draft, work merged via #186. Keep issue #114 as tracker.</li>
+    </ul>
+  </div>
+
+  <h3>Step 2: Evaluate Copilot sub-PRs</h3>
+  <div class="reco">
+    <div class="reco-title">Review and likely close these 2 draft PRs</div>
+    <ul>
+      <li><strong>#190</strong> — single "Initial plan" commit, WIP placeholder. #188 already handled this work.</li>
+      <li><strong>#191</strong> — AdminKeyInput debounce fix. Small, but may not apply cleanly. Review the 1-line fix before closing.</li>
+    </ul>
+  </div>
+
+  <h3>Step 3: Delete fully-merged remote branches (safe)</h3>
+  <div class="reco">
+    <div class="reco-title">These 11 branches have zero unique commits vs develop</div>
+    <ul>
+      <li><code>fix/125-live-transcription-not-showing</code></li>
+      <li><code>feat/restart-fix</code></li>
+      <li><code>fix/waveform-debug</code></li>
+      <li><code>claude/sprint-7-issue-72-A3r3C</code></li>
+      <li><code>claude/review-pr-140-0hNXq</code></li>
+      <li><code>claude/sprint-7a-frontend-planning-ngiX4</code></li>
+      <li><code>feat/kwin-rules-settings</code></li>
+      <li><code>fix/gtk-titlebar-workaround</code></li>
+      <li><code>sprint-7b-snapshot</code></li>
+      <li><code>main-linux</code> (old default)</li>
+      <li><code>sprint-7a-81</code> (docs only, planning already captured)</li>
+    </ul>
+  </div>
+
+  <h3>Step 4: Triage orphaned branches with unique commits</h3>
+  <div class="reco" style="background:#2d1a0d; border-color:#4a2e1a;">
+    <div class="reco-title" style="color:var(--orange)">Review these before deleting — they have unique work</div>
+    <ul>
+      <li><strong>claude/waveform-visualization-OC2LB</strong> (6 commits) — SessionStart hook scripts for CC web setup. Useful DX tooling, consider cherry-picking.</li>
+      <li><strong>claude/optimize-division-pr131-wLqie</strong> (3 commits) — Waveform RMS division optimization. Small perf win.</li>
+      <li><strong>claude/review-issue-154-1aYjP</strong> (1 commit) — GPU-accelerated scaleY transform. Relates to closed issue #138.</li>
+      <li><strong>feat/166-two-panel-design</strong> (1 commit) — Planning doc for issue #166 two-panel HUD.</li>
+      <li><strong>feat/167-word-count-metric</strong> (1 commit) — Planning doc for issue #167 word count.</li>
+      <li><strong>sprint-7a-80</strong> (2 commits) — Sprint planning docs (likely captured elsewhere).</li>
+      <li><strong>master-windows</strong> (1 commit) — Windows README. Historical.</li>
+    </ul>
+  </div>
+
+  <h3>Step 5: Delete duplicate/overlap branches (safe after review)</h3>
+  <div class="reco">
+    <div class="reco-title">These branches duplicate work that exists elsewhere</div>
+    <ul>
+      <li><code>claude/review-issues-prs-eSYd4</code> — exact duplicate of feat/ui-overhaul commits</li>
+      <li><code>claude/issue-115-tailwind-shadcn-OC2LB</code> — tailwind setup, merged differently via #141</li>
+      <li><code>claude/review-issues-171-172-8mpGN</code> — overlaps with PR #187 branch</li>
+      <li><code>feat/ui-overhaul-merge-v2</code> — merge attempt, #186 did this differently</li>
+    </ul>
+  </div>
+
+  <h3>Step 6: Keep and review active PRs</h3>
+  <div class="reco success">
+    <div class="reco-title">These PRs represent genuine, useful work</div>
+    <ul>
+      <li><strong>#194</strong> — hide TranscriptPanel (new, active)</li>
+      <li><strong>#192</strong> — feat/cc-world tooling (review for overlap with #188)</li>
+      <li><strong>#187</strong> — Error UI + Appearance persistence (may need rebase)</li>
+      <li><strong>#162</strong> — Sprint 7B post-processing (may need rebase)</li>
+      <li><strong>#164</strong> — E2E testing research docs (easy merge)</li>
+      <li><strong>#189</strong> — develop → master release (when ready)</li>
+    </ul>
+  </div>
+
+  <h3>Step 7: Verify develop builds</h3>
+  <div class="reco danger">
+    <div class="reco-title">Critical: Test that develop actually compiles</div>
+    <ul>
+      <li>On your host machine, check out develop and run <code>pnpm install && pnpm tauri build</code></li>
+      <li>If it builds: you're in great shape, just need cleanup</li>
+      <li>If it doesn't: identify which of the 3 new commits (#185, #186, #188) broke it and revert</li>
+      <li>Worst case: reset develop to master (v0.2.0-beta) as a known-good baseline</li>
+    </ul>
+  </div>
+
+  <h3>Estimated Result After Cleanup</h3>
+  <div class="reco success">
+    <div class="reco-title">After completing steps 1-6</div>
+    <ul>
+      <li>Remote branches: 29 → ~10 (master, develop, + 6 active PR branches + 2-3 kept orphans)</li>
+      <li>Open PRs: 11 → 6 (all genuine, active work)</li>
+      <li>Open issues: 44 → ~40 (close completed Sprint 7A/UI overhaul epics)</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+function showTab(name) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  document.getElementById(name).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+
+</body>
+</html>
