@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui'
 import { Input } from '@/components/ui/input'
@@ -35,7 +35,7 @@ export function AdminKeyInput() {
     }
   }
 
-  const validateKey = async (key: string) => {
+  const validateKey = useCallback(async (key: string) => {
     if (!key || key.length < 10) {
       setValidationState('idle')
       return
@@ -54,7 +54,7 @@ export function AdminKeyInput() {
       setValidationState('invalid')
       setError(String(e))
     }
-  }
+  }, [])
 
   const saveKey = async () => {
     if (validationState !== 'valid') {
@@ -96,13 +96,15 @@ export function AdminKeyInput() {
     setInputValue(value)
     setValidationState('idle')
     setError(null)
+  }
 
-    // Debounce validation
-    if (value.length >= 10) {
-      const timer = setTimeout(() => validateKey(value), 500)
+  // Debounced validation effect
+  useEffect(() => {
+    if (inputValue.length >= 10) {
+      const timer = setTimeout(() => validateKey(inputValue), 500)
       return () => clearTimeout(timer)
     }
-  }
+  }, [inputValue, validateKey])
 
   return (
     <Card>
