@@ -18,6 +18,7 @@ use rustls::crypto::{ring, CryptoProvider};
 use serde::Serialize;
 use std::sync::Arc;
 use tauri::{
+    image::Image,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager, WindowEvent,
@@ -694,11 +695,9 @@ pub fn run() {
                 ],
             )?;
 
-            // Create tray icon
-            let tray_icon = app
-                .default_window_icon()
-                .ok_or("No default window icon configured")?
-                .clone();
+            // Create tray icon (separate from window/taskbar icon)
+            let tray_icon = Image::from_bytes(include_bytes!("../icons/tray-icon.png"))
+                .map_err(|e| format!("Failed to load tray icon: {e}"))?;
             let _tray = TrayIconBuilder::with_id("main")
                 .icon(tray_icon)
                 .menu(&menu)

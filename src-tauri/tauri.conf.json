@@ -55,7 +55,7 @@
     ],
     "trayIcon": {
       "id": "main",
-      "iconPath": "icons/tray-test.png",
+      "iconPath": "icons/tray-icon.png",
       "iconAsTemplate": false
     },
     "security": {
