@@ -104,6 +104,10 @@ pub enum Event {
         id: Uuid,
         err: String,
     },
+    AudioStreamError {
+        id: Uuid,
+        err: String,
+    },
 
     // No-speech detection events
     NoSpeechDetected {
@@ -358,6 +362,30 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
             )
         }
 
+        // AudioStreamError during recording - transition to Error
+        (
+            Recording {
+                recording_id,
+                wav_path,
+                partial_text,
+                ..
+            },
+            AudioStreamError { id, err },
+        ) if *recording_id == id => (
+            Error {
+                message: format!("Audio stream failed: {}", err),
+                last_good_text: partial_text.clone(),
+            },
+            vec![
+                StopAudio { id: *recording_id },
+                Cleanup {
+                    id: *recording_id,
+                    wav_path: Some(wav_path.clone()),
+                },
+                EmitUi,
+            ],
+        ),
+
         // -----------------
         // Stopping
         // -----------------
@@ -588,6 +616,9 @@ pub fn reduce(state: &State, event: Event) -> (State, Vec<Effect>) {
         (_, TranscribeOk { id, .. }) if is_stale(id) => (state.clone(), vec![]),
         (_, TranscribeFail { id, .. }) if is_stale(id) => (state.clone(), vec![]),
         (_, PartialDelta { id, .. }) if is_stale(id) => (state.clone(), vec![]),
+        (_, AudioStreamError { id, .. }) if is_stale(id) => (state.clone(), vec![]),
+        // Non-recording states: ignore stream errors silently
+        (_, AudioStreamError { .. }) => (state.clone(), vec![]),
 
         // -----------------
         // Unhandled: no transition

@@ -341,9 +341,13 @@ impl EffectRunner for AudioEffectRunner {
                         run_waveform_emitter(app_for_waveform, waveform_rx, waveform_stop_rx).await;
                     });
 
-                    // Start recording with the streaming and waveform channels
+                    // Create error channel for propagating ALSA stream errors
+                    let (stream_error_tx, mut stream_error_rx) =
+                        tokio::sync::mpsc::unbounded_channel::<String>();
+
+                    // Start recording with the streaming, waveform, and error channels
                     let start_result = recorder
-                        .start(id, streaming_tx, Some(waveform_tx))
+                        .start(id, streaming_tx, Some(waveform_tx), Some(stream_error_tx))
                         .map_err(|e| e.to_string());
 
                     log::info!("StartAudio: total effect time for {}: {:?}", id, effect_start.elapsed());
@@ -372,6 +376,20 @@ impl EffectRunner for AudioEffectRunner {
                             drop(active_guard); // Explicitly drop before await
 
                             let _ = tx.send(Event::AudioStartOk { id, wav_path }).await;
+
+                            // Spawn error monitor to propagate ALSA stream errors to state machine
+                            let error_event_tx = tx.clone();
+                            let error_recording_id = id;
+                            tokio::spawn(async move {
+                                if let Some(err) = stream_error_rx.recv().await {
+                                    let _ = error_event_tx
+                                        .send(Event::AudioStreamError {
+                                            id: error_recording_id,
+                                            err,
+                                        })
+                                        .await;
+                                }
+                            });
                         }
                         Err(err) => {
                             log::error!("Failed to start audio recording: {}", err);

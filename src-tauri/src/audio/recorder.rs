@@ -65,6 +65,8 @@ enum AudioCommand {
         streaming_tx: Option<StreamingSender>,
         /// Optional channel for waveform visualization samples
         waveform_tx: Option<WaveformSender>,
+        /// Optional channel for propagating ALSA stream errors to the state machine
+        error_tx: Option<tokio::sync::mpsc::UnboundedSender<String>>,
     },
     Stop {
         response: mpsc::Sender<Result<PathBuf, AudioError>>,
@@ -204,6 +206,7 @@ impl AudioRecorder {
         recording_id: Uuid,
         streaming_tx: Option<StreamingSender>,
         waveform_tx: Option<WaveformSender>,
+        error_tx: Option<tokio::sync::mpsc::UnboundedSender<String>>,
     ) -> Result<(RecordingHandle, PathBuf), AudioError> {
         let start_time = std::time::Instant::now();
         let (response_tx, response_rx) = mpsc::channel();
@@ -214,6 +217,7 @@ impl AudioRecorder {
                 response: response_tx,
                 streaming_tx,
                 waveform_tx,
+                error_tx,
             })
             .map_err(|_| AudioError::ThreadError("Failed to send start command".to_string()))?;
 
@@ -255,6 +259,7 @@ fn audio_thread_main(
                 response,
                 streaming_tx,
                 waveform_tx,
+                error_tx,
             }) => {
                 // Stop any existing recording first
                 if let Some(stream) = active_stream.take() {
@@ -272,6 +277,7 @@ fn audio_thread_main(
                     recording_id,
                     streaming_tx,
                     waveform_tx,
+                    error_tx,
                 );
                 match result {
                     Ok((stream, path)) => {
@@ -329,6 +335,7 @@ fn start_recording(
     recording_id: Uuid,
     streaming_tx: Option<StreamingSender>,
     waveform_tx: Option<WaveformSender>,
+    error_tx: Option<tokio::sync::mpsc::UnboundedSender<String>>,
 ) -> Result<(ActiveStream, PathBuf), AudioError> {
     let wav_path = generate_wav_path(recording_id)
         .map_err(|e| AudioError::FileCreationFailed(e.to_string()))?;
@@ -354,6 +361,7 @@ fn start_recording(
         is_recording.clone(),
         streaming_tx,
         waveform_tx,
+        error_tx,
     )?;
 
     stream
@@ -406,8 +414,18 @@ fn build_stream(
     is_recording: Arc<AtomicBool>,
     streaming_tx: Option<StreamingSender>,
     waveform_tx: Option<WaveformSender>,
+    error_tx: Option<tokio::sync::mpsc::UnboundedSender<String>>,
 ) -> Result<Stream, AudioError> {
-    let err_fn = |err| log::error!("Audio stream error: {}", err);
+    let mut error_sent = false;
+    let err_fn = move |err: cpal::StreamError| {
+        log::error!("Audio stream error: {}", err);
+        if !error_sent {
+            if let Some(ref tx) = error_tx {
+                let _ = tx.send(err.to_string());
+                error_sent = true;
+            }
+        }
+    };
 
     match sample_format {
         SampleFormat::I16 => build_stream_typed::<i16>(
