@@ -367,7 +367,15 @@ fn audio_thread_main(
                     log::warn!("Stream error detected: {}", err_msg);
 
                     if let Some(stream) = active_stream.take() {
-                        let recovery = stream.into_recovery_state();
+                        let mut recovery = stream.into_recovery_state();
+
+                        // Create fresh internal error channel so the rebuilt stream's
+                        // callback uses a clean sender. This prevents stale errors from
+                        // the dead stream's callback leaking through.
+                        let (new_err_tx, new_err_rx) = mpsc::channel::<String>();
+                        recovery.internal_err_tx = new_err_tx;
+                        stream_err_rx = Some(new_err_rx);
+
                         match attempt_stream_recovery(recovery, &device, &config, sample_format) {
                             Some(new_stream) => {
                                 log::info!("Stream recovery succeeded");
@@ -573,7 +581,26 @@ fn attempt_stream_recovery(
         }
     }
 
-    // All retries exhausted — escalate to state machine
+    // All retries exhausted — finalize WAV with whatever audio was captured
+    recovery.is_recording.store(false, Ordering::SeqCst);
+    match recovery.writer.lock() {
+        Ok(mut guard) => {
+            if let Some(writer) = guard.take() {
+                match writer.finalize() {
+                    Ok(_) => log::info!("WAV finalized with partial audio: {:?}", recovery.wav_path),
+                    Err(e) => log::error!("Failed to finalize WAV after recovery failure: {}", e),
+                }
+            }
+        }
+        Err(poisoned) => {
+            // Recover poisoned mutex and still try to finalize
+            if let Some(writer) = poisoned.into_inner().take() {
+                let _ = writer.finalize();
+            }
+        }
+    }
+
+    // Escalate to state machine
     let final_msg = format!(
         "Audio stream recovery failed after {} attempts",
         MAX_STREAM_RETRIES
