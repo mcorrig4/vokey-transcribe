@@ -53,19 +53,7 @@
   }
 
   body {
-    @apply text-foreground;
+    @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
-  }
-
-  /* Only apply background to non-HUD windows (Settings, Debug) */
-  /* HUD window needs transparent background for floating pill effect */
-  html[data-window-type="settings"] body,
-  html[data-window-type="debug"] body {
-    @apply bg-background;
-  }
-
-  /* HUD window stays transparent */
-  html[data-window-type="hud"] body {
-    background: transparent;
   }
 }
