@@ -828,4 +828,36 @@ mod tests {
         // Ensure RETRY_DELAYS_MS has exactly MAX_STREAM_RETRIES entries
         assert_eq!(RETRY_DELAYS_MS.len(), MAX_STREAM_RETRIES as usize);
     }
+
+    #[test]
+    fn test_retry_delays_are_ascending() {
+        // Each delay must be strictly greater than the previous one
+        for i in 1..RETRY_DELAYS_MS.len() {
+            assert!(
+                RETRY_DELAYS_MS[i] > RETRY_DELAYS_MS[i - 1],
+                "RETRY_DELAYS_MS[{}] ({}) should be > RETRY_DELAYS_MS[{}] ({})",
+                i,
+                RETRY_DELAYS_MS[i],
+                i - 1,
+                RETRY_DELAYS_MS[i - 1]
+            );
+        }
+    }
+
+    #[test]
+    fn test_retry_delays_specific_values() {
+        // Pin exact delay values to prevent accidental changes
+        assert_eq!(RETRY_DELAYS_MS, [200, 500, 1000]);
+    }
+
+    #[test]
+    fn test_error_channels_are_send() {
+        // Verify that the channel types used for error propagation implement Send.
+        // The tokio UnboundedSender is used across async tasks and must be Send.
+        // The std mpsc::Sender is used in the CPAL error callback and must be Send.
+        fn assert_send<T: Send>() {}
+
+        assert_send::<tokio::sync::mpsc::UnboundedSender<String>>();
+        assert_send::<std::sync::mpsc::Sender<String>>();
+    }
 }

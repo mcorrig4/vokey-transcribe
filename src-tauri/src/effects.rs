@@ -1009,4 +1009,95 @@ mod tests {
         let stats = vad_stats_for_test(10, 10, 2000.0, 10_000); // crest=5
         assert!(short_clip_vad_allows_transcription(&stats));
     }
+
+    // =========================================================================
+    // Error monitor tests (stream error propagation)
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_error_monitor_forwards_stream_error() {
+        // Simulate the error monitor pattern from the StartAudio effect handler:
+        // An UnboundedSender<String> is used by the audio thread to signal errors,
+        // and the monitor task converts them into AudioStreamError events.
+        let recording_id = uuid::Uuid::new_v4();
+        let (error_tx, mut error_rx) =
+            tokio::sync::mpsc::unbounded_channel::<String>();
+        let (event_tx, mut event_rx) = tokio::sync::mpsc::channel::<Event>(10);
+
+        // Spawn the error monitor (mirrors the pattern in StartAudio effect)
+        let error_event_tx = event_tx.clone();
+        let error_recording_id = recording_id;
+        tokio::spawn(async move {
+            if let Some(err) = error_rx.recv().await {
+                let _ = error_event_tx
+                    .send(Event::AudioStreamError {
+                        id: error_recording_id,
+                        err,
+                    })
+                    .await;
+            }
+        });
+
+        // Simulate sending an error from the audio thread
+        error_tx
+            .send("ALSA buffer overrun".to_string())
+            .expect("send should succeed");
+
+        // Verify the monitor converts it to an AudioStreamError event
+        let event = tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            event_rx.recv(),
+        )
+        .await
+        .expect("should receive event within timeout")
+        .expect("channel should not be closed");
+
+        assert!(matches!(
+            event,
+            Event::AudioStreamError { id, ref err }
+                if id == recording_id && err == "ALSA buffer overrun"
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_error_monitor_closes_when_sender_dropped() {
+        // When the UnboundedSender is dropped (e.g., recording ends normally),
+        // the monitor should exit cleanly without sending any event.
+        let recording_id = uuid::Uuid::new_v4();
+        let (error_tx, mut error_rx) =
+            tokio::sync::mpsc::unbounded_channel::<String>();
+        let (event_tx, mut event_rx) = tokio::sync::mpsc::channel::<Event>(10);
+
+        // Spawn the error monitor
+        let monitor_handle = tokio::spawn(async move {
+            if let Some(err) = error_rx.recv().await {
+                let _ = event_tx
+                    .send(Event::AudioStreamError {
+                        id: recording_id,
+                        err,
+                    })
+                    .await;
+            }
+            // If recv() returns None (sender dropped), task exits cleanly
+        });
+
+        // Drop the sender — simulates normal recording shutdown
+        drop(error_tx);
+
+        // Monitor should exit cleanly
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            monitor_handle,
+        )
+        .await
+        .expect("monitor should complete within timeout");
+        assert!(result.is_ok(), "monitor task should complete without panic");
+
+        // No event should have been sent
+        let maybe_event = event_rx.try_recv();
+        assert!(
+            maybe_event.is_err(),
+            "no event should be sent when sender is dropped cleanly"
+        );
+    }
 }
