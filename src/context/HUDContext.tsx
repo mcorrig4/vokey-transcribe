@@ -5,6 +5,7 @@ import type { UiState } from '../types'
 
 interface HUDContextValue {
   state: UiState
+  streamingEnabled: boolean
   openSettings: () => Promise<void>
 }
 
@@ -12,6 +13,7 @@ const HUDContext = createContext<HUDContextValue | null>(null)
 
 export function HUDProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<UiState>({ status: 'idle' })
+  const [streamingEnabled, setStreamingEnabled] = useState(true)
 
   useEffect(() => {
     const unlisten = listen<UiState>('state-update', (event) => {
@@ -23,6 +25,15 @@ export function HUDProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // Read streaming_enabled setting when a recording cycle begins
+  useEffect(() => {
+    if (state.status === 'arming') {
+      invoke<{ streaming_enabled: boolean }>('get_settings')
+        .then((s) => setStreamingEnabled(s.streaming_enabled))
+        .catch((e) => console.warn('Failed to read streaming setting:', e))
+    }
+  }, [state.status])
+
   const openSettings = useCallback(async () => {
     try {
       await invoke('open_settings_window')
@@ -32,7 +43,7 @@ export function HUDProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <HUDContext.Provider value={{ state, openSettings }}>
+    <HUDContext.Provider value={{ state, streamingEnabled, openSettings }}>
       {children}
     </HUDContext.Provider>
   )
