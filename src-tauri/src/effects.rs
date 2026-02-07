@@ -160,8 +160,12 @@ pub trait EffectRunner: Send + Sync + 'static {
 
 /// Active recording handle storage.
 /// RecordingHandle is now Send+Sync safe (uses channel to dedicated audio thread).
+/// The AudioRecorder is stored here so it gets dropped after each recording cycle,
+/// ensuring clean ALSA state for subsequent recordings.
 struct ActiveRecording {
     handle: Option<crate::audio::recorder::RecordingHandle>,
+    /// The AudioRecorder instance for this recording (dropped on cleanup)
+    recorder: Option<AudioRecorder>,
     /// Sender to stop the waveform emitter task
     waveform_stop_tx: Option<tokio::sync::oneshot::Sender<()>>,
 }
@@ -172,7 +176,6 @@ struct ActiveRecording {
 /// Sprint 7: Waveform visualization support.
 pub struct AudioEffectRunner {
     app: tauri::AppHandle,
-    recorder: Arc<Mutex<Option<AudioRecorder>>>,
     active_recordings: Arc<Mutex<HashMap<Uuid, ActiveRecording>>>,
     metrics: Arc<Mutex<MetricsCollector>>,
     settings: Arc<Mutex<AppSettings>>,
@@ -180,27 +183,14 @@ pub struct AudioEffectRunner {
 
 impl AudioEffectRunner {
     /// Create a new AudioEffectRunner with metrics collection.
-    /// Returns Ok even if audio device isn't available - errors happen at record time.
+    /// AudioRecorder is created fresh for each recording cycle to ensure clean ALSA state.
     pub fn new(
         app: tauri::AppHandle,
         metrics: Arc<Mutex<MetricsCollector>>,
         settings: Arc<Mutex<AppSettings>>,
     ) -> Arc<Self> {
-        // Try to create the recorder now, but don't fail if we can't
-        let recorder = match AudioRecorder::new() {
-            Ok(r) => {
-                log::info!("AudioRecorder initialized successfully");
-                Some(r)
-            }
-            Err(e) => {
-                log::warn!("AudioRecorder init failed (will retry on record): {}", e);
-                None
-            }
-        };
-
         Arc::new(Self {
             app,
-            recorder: Arc::new(Mutex::new(recorder)),
             active_recordings: Arc::new(Mutex::new(HashMap::new())),
             metrics,
             settings,
@@ -226,7 +216,6 @@ impl EffectRunner for AudioEffectRunner {
             // 3. Spawns the transcript receiver task (sends PartialDelta events)
             // 4. Starts the audio recorder with the streaming channel
             Effect::StartAudio { id } => {
-                let recorder = self.recorder.clone();
                 let active = self.active_recordings.clone();
                 let metrics = self.metrics.clone();
                 let settings = self.settings.clone();
@@ -246,48 +235,26 @@ impl EffectRunner for AudioEffectRunner {
                         (settings_guard.streaming_enabled, get_api_key())
                     };
 
-                    // Try to get or create recorder first, so we have the correct sample rate
-                    // We capture the result and drop the lock before any awaits to avoid
-                    // holding the mutex across await points (can cause contention/deadlocks)
-                    let recorder_init_result: Result<u32, String> = {
-                        let mut recorder_guard = recorder.lock().await;
-                        if recorder_guard.is_none() {
-                            // Retry creating recorder
-                            match AudioRecorder::new() {
-                                Ok(r) => {
-                                    *recorder_guard = Some(r);
-                                }
-                                Err(e) => {
-                                    log::error!("Failed to initialize audio recorder: {}", e);
-                                    // Send AudioStartFail event so state machine can transition properly
-                                    let err_msg = e.to_string();
-                                    drop(recorder_guard); // Release lock before async operations
-                                    let mut m = metrics.lock().await;
-                                    m.cycle_failed(err_msg.clone());
-                                    drop(m);
-                                    let _ =
-                                        tx.send(Event::AudioStartFail { id, err: err_msg }).await;
-                                    return;
-                                }
-                            }
+                    // Create a fresh AudioRecorder for this recording cycle.
+                    // This ensures clean ALSA state and avoids issues with stale resources
+                    // from previous recordings (especially in VM environments).
+                    let recorder = match AudioRecorder::new() {
+                        Ok(r) => {
+                            log::info!("AudioRecorder created for recording {}", id);
+                            r
                         }
-                        // Recorder is guaranteed to exist now
-                        match recorder_guard.as_ref() {
-                            Some(rec) => Ok(rec.sample_rate()),
-                            None => Err("Audio recorder unavailable".to_string()),
-                        }
-                    };
-
-                    let source_sample_rate = match recorder_init_result {
-                        Ok(rate) => rate,
                         Err(e) => {
-                            log::error!("Failed to get sample rate: {}", e);
+                            log::error!("Failed to initialize audio recorder: {}", e);
+                            let err_msg = e.to_string();
                             let mut m = metrics.lock().await;
-                            m.cycle_failed(e.clone());
-                            let _ = tx.send(Event::AudioStartFail { id, err: e }).await;
+                            m.cycle_failed(err_msg.clone());
+                            drop(m);
+                            let _ = tx.send(Event::AudioStartFail { id, err: err_msg }).await;
                             return;
                         }
                     };
+
+                    let source_sample_rate = recorder.sample_rate();
 
                     // Now create streaming channel with correct sample rate
                     let streaming_tx = if streaming_enabled {
@@ -372,18 +339,9 @@ impl EffectRunner for AudioEffectRunner {
                     });
 
                     // Start recording with the streaming and waveform channels
-                    let start_result = {
-                        let recorder_guard = recorder.lock().await;
-                        match recorder_guard.as_ref() {
-                            Some(rec) => rec
-                                .start(id, streaming_tx, Some(waveform_tx))
-                                .map_err(|e| e.to_string()),
-                            None => {
-                                log::error!("Audio recorder is unavailable");
-                                Err("Audio recorder unavailable".to_string())
-                            }
-                        }
-                    }; // recorder_guard dropped here
+                    let start_result = recorder
+                        .start(id, streaming_tx, Some(waveform_tx))
+                        .map_err(|e| e.to_string());
 
                     // Now handle results without holding the mutex
                     match start_result {
@@ -396,12 +354,13 @@ impl EffectRunner for AudioEffectRunner {
                                 m.recording_started();
                             }
 
-                            // Store handle for later stop
+                            // Store handle and recorder for later stop/cleanup
                             let mut active_guard = active.lock().await;
                             active_guard.insert(
                                 id,
                                 ActiveRecording {
                                     handle: Some(handle),
+                                    recorder: Some(recorder),
                                     waveform_stop_tx: Some(waveform_stop_tx),
                                 },
                             );
@@ -428,13 +387,17 @@ impl EffectRunner for AudioEffectRunner {
                 let settings = self.settings.clone();
 
                 tokio::spawn(async move {
-                    let (handle, waveform_stop_tx) = {
+                    // Extract handle, recorder, and waveform stop sender from active recordings.
+                    // The recorder will be dropped at the end of this block, ensuring clean ALSA state.
+                    let (handle, _recorder, waveform_stop_tx) = {
                         let mut active_guard = active.lock().await;
                         match active_guard.remove(&id) {
-                            Some(mut recording) => {
-                                (recording.handle.take(), recording.waveform_stop_tx.take())
-                            }
-                            None => (None, None),
+                            Some(mut recording) => (
+                                recording.handle.take(),
+                                recording.recorder.take(),
+                                recording.waveform_stop_tx.take(),
+                            ),
+                            None => (None, None, None),
                         }
                     };
 
