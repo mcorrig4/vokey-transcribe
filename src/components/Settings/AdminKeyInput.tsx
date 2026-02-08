@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
+import { openUrl } from '@tauri-apps/plugin-opener'
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
@@ -230,15 +231,13 @@ export function AdminKeyInput() {
 
         {/* Help link */}
         <div className="pt-2 border-t border-border">
-          <a
-            href="https://platform.openai.com/settings/organization/admin-keys"
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            onClick={() => openUrl('https://platform.openai.com/settings/organization/admin-keys')}
             className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
           >
             Get Admin API Key from OpenAI Dashboard
             <ExternalLink className="h-3 w-3" />
-          </a>
+          </button>
           <p className="mt-1 text-xs text-muted-foreground">
             Create an Admin API key with "Usage: Read" permission.
           </p>

@@ -699,6 +699,7 @@ pub fn run() {
     install_rustls_provider();
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             // Set up logging in debug mode
             if cfg!(debug_assertions) {

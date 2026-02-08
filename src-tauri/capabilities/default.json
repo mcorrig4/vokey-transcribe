@@ -18,6 +18,7 @@
     "core:window:allow-close",
     "core:window:allow-is-maximized",
     "process:allow-restart",
-    "process:allow-exit"
+    "process:allow-exit",
+    "opener:default"
   ]
 }
