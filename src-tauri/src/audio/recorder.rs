@@ -155,7 +155,15 @@ impl AudioRecorder {
 
         // Try to use cached config, falling back to full enumeration
         let (config, sample_format) = {
-            let cache = DEVICE_CONFIG_CACHE.lock().unwrap();
+            let mut cache = match DEVICE_CONFIG_CACHE.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => {
+                    log::warn!("Device config cache mutex was poisoned, clearing");
+                    let mut guard = poisoned.into_inner();
+                    *guard = None;
+                    guard
+                }
+            };
             if let Some(ref cached) = *cache {
                 log::debug!("AudioRecorder::new() using cached device config");
                 let config = StreamConfig {
@@ -170,13 +178,18 @@ impl AudioRecorder {
                 log::debug!("AudioRecorder::new() config query: {:?}", init_start.elapsed());
 
                 // Cache the result for future recordings
-                let mut cache = DEVICE_CONFIG_CACHE.lock().unwrap();
-                *cache = Some(CachedDeviceConfig {
-                    sample_rate: config.sample_rate.0,
-                    sample_format,
-                    channels: config.channels,
+                let mut cache = DEVICE_CONFIG_CACHE.lock().unwrap_or_else(|e| {
+                    log::warn!("Device config cache mutex poisoned during enumeration");
+                    e.into_inner()
                 });
-                log::info!("Device config cached for future recordings");
+                if cache.is_none() {
+                    *cache = Some(CachedDeviceConfig {
+                        sample_rate: config.sample_rate.0,
+                        sample_format,
+                        channels: config.channels,
+                    });
+                    log::info!("Device config cached for future recordings");
+                }
 
                 (config, sample_format)
             }
@@ -250,10 +263,12 @@ impl AudioRecorder {
     /// re-enumerate device capabilities. This handles cases where the cached config
     /// becomes stale (e.g., after a device change or ALSA state corruption).
     pub fn invalidate_config_cache() {
-        if let Ok(mut cache) = DEVICE_CONFIG_CACHE.lock() {
-            *cache = None;
-            log::info!("Device config cache invalidated");
-        }
+        let mut cache = DEVICE_CONFIG_CACHE.lock().unwrap_or_else(|e| {
+            log::warn!("Device config cache mutex was poisoned, recovering");
+            e.into_inner()
+        });
+        *cache = None;
+        log::info!("Device config cache invalidated");
     }
 
     /// Get the sample rate being used for recording.
