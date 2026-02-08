@@ -29,4 +29,10 @@ async function init() {
   )
 }
 
-init()
+init().catch(err => {
+  console.error('Failed to initialize app:', err)
+  const root = document.getElementById('root')
+  if (root) {
+    root.innerHTML = `<pre style="color:red;padding:1em;font-family:monospace">${err}</pre>`
+  }
+})

@@ -117,6 +117,7 @@ fn is_recording_active(state: &State) -> bool {
 
 /// Update the tray icon to reflect recording status
 fn update_tray_icon(app: &AppHandle, recording_active: bool) {
+    log::info!("Updating tray icon: recording_active={}", recording_active);
     let icon_bytes: &[u8] = if recording_active {
         include_bytes!("../icons/tray-icon-recording.png")
     } else {
@@ -130,9 +131,12 @@ fn update_tray_icon(app: &AppHandle, recording_active: bool) {
         }
     };
     if let Some(tray) = app.tray_by_id("main") {
-        if let Err(e) = tray.set_icon(Some(image)) {
-            log::warn!("Failed to set tray icon: {e}");
+        match tray.set_icon(Some(image)) {
+            Ok(()) => log::info!("Tray icon updated successfully"),
+            Err(e) => log::warn!("Failed to set tray icon: {e}"),
         }
+    } else {
+        log::warn!("Tray icon 'main' not found");
     }
 }
 
@@ -571,9 +575,8 @@ async fn open_recordings_folder() -> Result<(), String> {
 
 /// Internal implementation for opening the settings window
 ///
-/// Note: On Linux/KDE, we remove the GTK custom titlebar at startup (in setup)
-/// so KDE provides native window decorations. This avoids the maximize/unmaximize
-/// hack previously needed for tao#1046.
+/// The settings window uses decorations: false with a custom React titlebar,
+/// so no GTK/KDE titlebar workarounds are needed.
 async fn open_settings_window_impl(app: &AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("settings") {
         window.show().map_err(|e| e.to_string())?;
@@ -886,22 +889,6 @@ pub fn run() {
             app.manage(AudioStatusHolder {
                 status: audio_status,
             });
-
-            // Workaround for tao#1046: On KDE Plasma/Wayland, GTK's client-side decorations
-            // cause window control buttons to not work. Remove GTK's custom titlebar so
-            // KDE can provide native server-side decorations instead.
-            #[cfg(target_os = "linux")]
-            {
-                use gtk::prelude::GtkWindowExt;
-                if let Some(window) = app.get_webview_window("settings") {
-                    if let Ok(gtk_window) = window.gtk_window() {
-                        gtk_window.set_titlebar(Option::<&gtk::Widget>::None);
-                        log::info!(
-                            "Removed GTK titlebar from settings window (tao#1046 workaround)"
-                        );
-                    }
-                }
-            }
 
             log::info!("VoKey Transcribe started");
             Ok(())

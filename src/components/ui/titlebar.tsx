@@ -1,5 +1,4 @@
-import { WindowTitlebar, WindowControls } from "tauri-controls"
-import "tauri-controls/style.css"
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import { cn } from "@/lib/utils"
 
 interface TitleBarProps {
@@ -9,17 +8,14 @@ interface TitleBarProps {
 }
 
 export function TitleBar({ title = "VoKey Settings", className, children }: TitleBarProps) {
+  const appWindow = getCurrentWindow()
+
   return (
-    <WindowTitlebar
+    <div
       className={cn(
-        "h-10 bg-background border-b border-border select-none",
+        "h-10 bg-background border-b border-border select-none flex items-center",
         className
       )}
-      controlsOrder="right"
-      windowControlsProps={{
-        platform: "gnome",
-        className: "ml-auto"
-      }}
     >
       <div
         className="flex items-center gap-2 px-3 flex-1"
@@ -31,8 +27,22 @@ export function TitleBar({ title = "VoKey Settings", className, children }: Titl
           </span>
         )}
       </div>
-    </WindowTitlebar>
+      <div className="flex items-center h-full">
+        <button
+          onClick={() => appWindow.minimize()}
+          className="h-full px-3 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+          aria-label="Minimize"
+        >
+          ─
+        </button>
+        <button
+          onClick={() => appWindow.close()}
+          className="h-full px-3 text-muted-foreground hover:bg-destructive hover:text-destructive-foreground transition-colors"
+          aria-label="Close"
+        >
+          ✕
+        </button>
+      </div>
+    </div>
   )
 }
-
-export { WindowControls }
