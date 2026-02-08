@@ -48,6 +48,10 @@ vi.mock('@tauri-apps/api/app', () => ({
   getVersion: vi.fn(() => Promise.resolve('0.2.0-dev')),
 }))
 
+vi.mock('@tauri-apps/plugin-opener', () => ({
+  openUrl: vi.fn(() => Promise.resolve()),
+}))
+
 // Mock clipboard API
 Object.assign(navigator, {
   clipboard: {
