@@ -1,6 +1,5 @@
 {
   "env": {
-    "PATH": "$CLAUDE_PROJECT_DIR/.claude/bin:$PATH",
     "addintolocalGH_TOKEN": "ghp_xABCD",
     "GH_USERNAME": "CodespaceAgent:Claude-Do",
     "GH_EMAIL": "claude@claude.do",
