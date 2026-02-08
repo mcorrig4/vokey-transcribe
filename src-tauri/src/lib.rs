@@ -107,6 +107,35 @@ fn state_to_ui(state: &State) -> UiState {
     }
 }
 
+/// Check if the current state represents active recording (mic is hot)
+fn is_recording_active(state: &State) -> bool {
+    matches!(
+        state,
+        State::Arming { .. } | State::Recording { .. } | State::Stopping { .. }
+    )
+}
+
+/// Update the tray icon to reflect recording status
+fn update_tray_icon(app: &AppHandle, recording_active: bool) {
+    let icon_bytes: &[u8] = if recording_active {
+        include_bytes!("../icons/tray-icon-recording.png")
+    } else {
+        include_bytes!("../icons/tray-icon.png")
+    };
+    let image = match Image::from_bytes(icon_bytes) {
+        Ok(img) => img,
+        Err(e) => {
+            log::warn!("Failed to load tray icon: {e}");
+            return;
+        }
+    };
+    if let Some(tray) = app.tray_by_id("main") {
+        if let Err(e) = tray.set_icon(Some(image)) {
+            log::warn!("Failed to set tray icon: {e}");
+        }
+    }
+}
+
 /// Emit a UI state update to the frontend
 fn emit_ui_state(app: &AppHandle, state: &State) {
     let ui_state = state_to_ui(state);
@@ -184,6 +213,13 @@ async fn run_state_loop(
                 duration
             );
             state_entered_at = std::time::Instant::now();
+
+            // Update tray icon when recording-active status changes
+            let was_recording = is_recording_active(&state);
+            let now_recording = is_recording_active(&next);
+            if was_recording != now_recording {
+                update_tray_icon(&app, now_recording);
+            }
         }
 
         state = next;
@@ -539,7 +575,7 @@ async fn open_recordings_folder() -> Result<(), String> {
 /// so KDE provides native window decorations. This avoids the maximize/unmaximize
 /// hack previously needed for tao#1046.
 async fn open_settings_window_impl(app: &AppHandle) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window("debug") {
+    if let Some(window) = app.get_webview_window("settings") {
         window.show().map_err(|e| e.to_string())?;
         window.set_focus().map_err(|e| e.to_string())?;
         Ok(())
@@ -857,7 +893,7 @@ pub fn run() {
             #[cfg(target_os = "linux")]
             {
                 use gtk::prelude::GtkWindowExt;
-                if let Some(window) = app.get_webview_window("debug") {
+                if let Some(window) = app.get_webview_window("settings") {
                     if let Ok(gtk_window) = window.gtk_window() {
                         gtk_window.set_titlebar(Option::<&gtk::Widget>::None);
                         log::info!(
@@ -902,7 +938,7 @@ pub fn run() {
             // Hide windows instead of closing them (except for quit)
             if let WindowEvent::CloseRequested { api, .. } = event {
                 let label = window.label();
-                if label == "debug" || label == "hud" {
+                if label == "settings" || label == "hud" {
                     log::info!("Hiding window: {}", label);
                     api.prevent_close();
                     let _ = window.hide();

@@ -40,17 +40,6 @@
         "decorations": false,
         "alwaysOnTop": false,
         "visible": false
-      },
-      {
-        "label": "debug",
-        "title": "VoKey Debug",
-        "url": "index.html?window=debug",
-        "width": 450,
-        "height": 700,
-        "resizable": true,
-        "decorations": true,
-        "alwaysOnTop": false,
-        "visible": false
       }
     ],
     "trayIcon": {
