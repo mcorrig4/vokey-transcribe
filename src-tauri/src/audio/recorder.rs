@@ -29,7 +29,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
 // Import WaveformSender from waveform module to avoid duplicate type definition
 use super::waveform::WaveformSender;
-use cpal::{Device, SampleFormat, Stream, StreamConfig};
+use cpal::{Device, SampleFormat, SampleRate, Stream, StreamConfig};
 use hound::{WavSpec, WavWriter};
 use uuid::Uuid;
 
@@ -37,6 +37,19 @@ use super::paths::generate_wav_path;
 
 /// Maximum number of stream recovery attempts before escalating to state machine
 const MAX_STREAM_RETRIES: u32 = 3;
+
+/// Cached device configuration to avoid repeated `supported_input_configs()` calls.
+/// The ALSA/CPAL device enumeration can take 10-600ms per call; caching the result
+/// reduces subsequent `AudioRecorder::new()` from ~250ms+ to ~20ms.
+struct CachedDeviceConfig {
+    sample_rate: u32,
+    sample_format: SampleFormat,
+    channels: u16,
+}
+
+/// Global cache for device configuration. Uses `Mutex<Option<...>>` instead of `OnceLock`
+/// to allow invalidation when stream creation fails (e.g., after device change).
+static DEVICE_CONFIG_CACHE: Mutex<Option<CachedDeviceConfig>> = Mutex::new(None);
 
 /// Backoff delays (in milliseconds) for each retry attempt
 const RETRY_DELAYS_MS: [u64; 3] = [200, 500, 1000];
@@ -122,10 +135,14 @@ pub struct AudioRecorder {
 impl AudioRecorder {
     /// Create a new AudioRecorder using the default input device.
     /// Spawns a dedicated audio thread for stream management.
+    ///
+    /// Uses a cached device configuration when available to skip the slow
+    /// `supported_input_configs()` ALSA enumeration (~10-600ms). The cache
+    /// is populated on first call and reused for subsequent recordings.
     pub fn new() -> Result<Self, AudioError> {
         let init_start = std::time::Instant::now();
 
-        // Verify we can access an audio device before spawning thread
+        // Always get a fresh device handle — this is fast (<1ms) and handles hotplug
         let host = cpal::default_host();
         log::debug!("AudioRecorder::new() host init: {:?}", init_start.elapsed());
 
@@ -136,45 +153,54 @@ impl AudioRecorder {
 
         log::info!("Using audio input device: {:?}", device.name());
 
-        // Find a supported sample format (F32, I16, or U16)
-        let supported_config_range = device
-            .supported_input_configs()
-            .map_err(|_| AudioError::NoSupportedConfig)?
-            .find(|c| {
-                matches!(
-                    c.sample_format(),
-                    SampleFormat::F32 | SampleFormat::I16 | SampleFormat::U16
-                )
-            })
-            .ok_or(AudioError::NoSupportedConfig)?;
-        log::debug!("AudioRecorder::new() config query: {:?}", init_start.elapsed());
+        // Try to use cached config, falling back to full enumeration
+        let (config, sample_format) = {
+            let mut cache = match DEVICE_CONFIG_CACHE.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => {
+                    log::warn!("Device config cache mutex was poisoned, clearing");
+                    let mut guard = poisoned.into_inner();
+                    *guard = None;
+                    guard
+                }
+            };
+            if let Some(ref cached) = *cache {
+                log::debug!("AudioRecorder::new() using cached device config");
+                let config = StreamConfig {
+                    channels: cached.channels,
+                    sample_rate: SampleRate(cached.sample_rate),
+                    buffer_size: cpal::BufferSize::Default,
+                };
+                (config, cached.sample_format)
+            } else {
+                drop(cache); // Release lock before slow enumeration
+                let (config, sample_format) = Self::enumerate_device_config(&device)?;
+                log::debug!("AudioRecorder::new() config query: {:?}", init_start.elapsed());
 
-        // Use a reasonable sample rate - prefer 48kHz or 44.1kHz, clamped to device range
-        // Some devices report unbounded max (u32::MAX) which causes overflow in WAV writing
-        let preferred_rate = cpal::SampleRate(48000);
-        let min_rate = supported_config_range.min_sample_rate();
-        let max_rate = supported_config_range.max_sample_rate();
+                // Cache the result for future recordings
+                let mut cache = DEVICE_CONFIG_CACHE.lock().unwrap_or_else(|e| {
+                    log::warn!("Device config cache mutex poisoned during enumeration");
+                    e.into_inner()
+                });
+                if cache.is_none() {
+                    *cache = Some(CachedDeviceConfig {
+                        sample_rate: config.sample_rate.0,
+                        sample_format,
+                        channels: config.channels,
+                    });
+                    log::info!("Device config cached for future recordings");
+                }
 
-        let target_rate = if preferred_rate >= min_rate && preferred_rate <= max_rate {
-            preferred_rate
-        } else if cpal::SampleRate(44100) >= min_rate && cpal::SampleRate(44100) <= max_rate {
-            cpal::SampleRate(44100)
-        } else {
-            // Fall back to min rate if preferred rates not supported
-            min_rate
+                (config, sample_format)
+            }
         };
-
-        let supported_config = supported_config_range.with_sample_rate(target_rate);
 
         log::info!(
             "Audio config: {} Hz, {} channels, {:?}",
-            supported_config.sample_rate().0,
-            supported_config.channels(),
-            supported_config.sample_format()
+            config.sample_rate.0,
+            config.channels,
+            sample_format
         );
-
-        let sample_format = supported_config.sample_format();
-        let config: StreamConfig = supported_config.into();
 
         // Create command channel
         let (command_tx, command_rx) = mpsc::channel::<AudioCommand>();
@@ -194,6 +220,55 @@ impl AudioRecorder {
             _thread_handle: thread_handle,
             sample_rate,
         })
+    }
+
+    /// Enumerate the device's supported input configurations and select the best one.
+    /// This is the slow path (~10-600ms) that queries ALSA for supported formats.
+    fn enumerate_device_config(device: &Device) -> Result<(StreamConfig, SampleFormat), AudioError> {
+        let supported_config_range = device
+            .supported_input_configs()
+            .map_err(|_| AudioError::NoSupportedConfig)?
+            .find(|c| {
+                matches!(
+                    c.sample_format(),
+                    SampleFormat::F32 | SampleFormat::I16 | SampleFormat::U16
+                )
+            })
+            .ok_or(AudioError::NoSupportedConfig)?;
+
+        // Use a reasonable sample rate - prefer 48kHz or 44.1kHz, clamped to device range
+        // Some devices report unbounded max (u32::MAX) which causes overflow in WAV writing
+        let preferred_rate = SampleRate(48000);
+        let min_rate = supported_config_range.min_sample_rate();
+        let max_rate = supported_config_range.max_sample_rate();
+
+        let target_rate = if preferred_rate >= min_rate && preferred_rate <= max_rate {
+            preferred_rate
+        } else if SampleRate(44100) >= min_rate && SampleRate(44100) <= max_rate {
+            SampleRate(44100)
+        } else {
+            min_rate
+        };
+
+        let supported_config = supported_config_range.with_sample_rate(target_rate);
+        let sample_format = supported_config.sample_format();
+        let config: StreamConfig = supported_config.into();
+
+        Ok((config, sample_format))
+    }
+
+    /// Clear the cached device configuration.
+    ///
+    /// Called when stream creation fails so the next `AudioRecorder::new()` will
+    /// re-enumerate device capabilities. This handles cases where the cached config
+    /// becomes stale (e.g., after a device change or ALSA state corruption).
+    pub fn invalidate_config_cache() {
+        let mut cache = DEVICE_CONFIG_CACHE.lock().unwrap_or_else(|e| {
+            log::warn!("Device config cache mutex was poisoned, recovering");
+            e.into_inner()
+        });
+        *cache = None;
+        log::info!("Device config cache invalidated");
     }
 
     /// Get the sample rate being used for recording.
