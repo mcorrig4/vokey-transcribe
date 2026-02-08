@@ -42,11 +42,6 @@
         "visible": false
       }
     ],
-    "trayIcon": {
-      "id": "main",
-      "iconPath": "icons/tray-icon.png",
-      "iconAsTemplate": false
-    },
     "security": {
       "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.openai.com wss://api.openai.com; img-src 'self' data:"
     }
