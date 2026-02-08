@@ -13,7 +13,7 @@ export function TitleBar({ title = "VoKey Settings", className, children }: Titl
   return (
     <div
       className={cn(
-        "h-10 bg-background border-b border-border select-none flex items-center",
+        "h-10 bg-[var(--color-sidebar-background)] border-b border-border select-none flex items-center",
         className
       )}
     >
