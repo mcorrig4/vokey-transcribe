@@ -461,13 +461,15 @@ struct ActiveStream {
 }
 
 impl ActiveStream {
-    /// Consume this ActiveStream, dropping the dead CPAL stream, and return
+    /// Consume this ActiveStream, leaking the dead CPAL stream, and return
     /// a RecoveryState containing everything needed to rebuild a new stream.
     fn into_recovery_state(self) -> RecoveryState {
-        log::debug!("Dropping dead stream for recovery...");
-        // Explicitly drop the CPAL stream (the dead one)
-        drop(self._stream);
-        log::debug!("Dead stream dropped");
+        log::debug!("Leaking dead stream to avoid blocking drop...");
+        // CPAL Stream::drop() blocks indefinitely when ALSA is in POLLERR state,
+        // freezing the audio thread and preventing Stop commands from being processed.
+        // Leak the dead stream instead — its ALSA resources are already broken.
+        std::mem::forget(self._stream);
+        log::debug!("Dead stream leaked, proceeding to recovery");
 
         RecoveryState {
             writer: self.writer,
