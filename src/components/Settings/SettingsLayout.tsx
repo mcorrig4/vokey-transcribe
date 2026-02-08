@@ -46,7 +46,7 @@ function NavItemButton({ item, isActive, isCollapsed, onClick }: NavItemProps) {
       onClick={onClick}
       className={cn(
         "flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm transition-colors text-[var(--color-sidebar-foreground)]",
-        "hover:bg-[var(--color-sidebar-accent)] hover:text-accent-foreground",
+        "hover:bg-[var(--color-sidebar-accent)] hover:text-[var(--color-sidebar-accent-foreground)]",
         isActive && "bg-[var(--color-sidebar-accent)] text-[var(--color-sidebar-accent-foreground)] font-medium",
         isCollapsed && "justify-center px-2"
       )}

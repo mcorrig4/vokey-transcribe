@@ -7,7 +7,7 @@ const windowType = params.get('window')
 
 // Initialize app with conditional loading
 // HUD and Settings load separate CSS to avoid cascade layer conflicts:
-// - index.css (HUD): unlayered reset for transparent frameless window
+// - index.css (HUD): unlayered global styles for transparent frameless window
 // - globals.css (Settings): Tailwind v4 with @layer-based utilities
 async function init() {
   let RootComponent: React.ComponentType
