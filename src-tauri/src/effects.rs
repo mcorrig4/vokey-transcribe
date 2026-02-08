@@ -248,6 +248,7 @@ impl EffectRunner for AudioEffectRunner {
                         }
                         Err(e) => {
                             log::error!("Failed to initialize audio recorder: {}", e);
+                            AudioRecorder::invalidate_config_cache();
                             let err_msg = e.to_string();
                             let mut m = metrics.lock().await;
                             m.cycle_failed(err_msg.clone());
@@ -393,6 +394,7 @@ impl EffectRunner for AudioEffectRunner {
                         }
                         Err(err) => {
                             log::error!("Failed to start audio recording: {}", err);
+                            AudioRecorder::invalidate_config_cache();
                             // Record error in metrics
                             {
                                 let mut m = metrics.lock().await;
