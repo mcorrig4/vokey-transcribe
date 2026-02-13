@@ -10,8 +10,12 @@ import {
   Progress,
   Skeleton,
 } from '@/components/ui'
-import { RefreshCw, AlertCircle, Key } from 'lucide-react'
+import { RefreshCw, AlertCircle, Key, Activity } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+// ============================================================================
+// Types
+// ============================================================================
 
 interface UsageMetrics {
   cost_30d_cents: number
@@ -31,9 +35,41 @@ interface AdminKeyStatus {
   masked_key: string | null
 }
 
+interface MetricsSummary {
+  total_cycles: number
+  successful_cycles: number
+  failed_cycles: number
+  avg_recording_duration_ms: number
+  avg_transcription_duration_ms: number
+  avg_total_cycle_ms: number
+  last_error: ErrorRecord | null
+}
+
+interface CycleMetrics {
+  cycle_id: string
+  started_at: number
+  recording_duration_ms: number
+  audio_file_size_bytes: number
+  transcription_duration_ms: number
+  transcript_length_chars: number
+  total_cycle_ms: number
+  success: boolean
+  error_message: string | null
+}
+
+interface ErrorRecord {
+  timestamp: number
+  error_type: string
+  message: string
+  cycle_id: string | null
+}
+
 type LoadingState = 'idle' | 'loading' | 'success' | 'error'
 
+// ============================================================================
 // Formatting utilities
+// ============================================================================
+
 function formatCurrency(cents: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -72,11 +108,31 @@ function formatRelativeTime(isoDate: string): string {
   return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`
 }
 
+function formatMs(ms: number): string {
+  if (ms < 1000) return `${ms}ms`
+  return `${(ms / 1000).toFixed(1)}s`
+}
+
+function formatTimestamp(unixSeconds: number): string {
+  const date = new Date(unixSeconds * 1000)
+  return date.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+}
+
+// ============================================================================
+// Main component
+// ============================================================================
+
 export function UsagePage() {
   const [metrics, setMetrics] = useState<UsageMetrics | null>(null)
   const [keyStatus, setKeyStatus] = useState<AdminKeyStatus | null>(null)
   const [loadingState, setLoadingState] = useState<LoadingState>('idle')
   const [error, setError] = useState<string | null>(null)
+  const [localSummary, setLocalSummary] = useState<MetricsSummary | null>(null)
+  const [cycleHistory, setCycleHistory] = useState<CycleMetrics[]>([])
 
   // Load admin key status on mount
   useEffect(() => {
@@ -86,6 +142,11 @@ export function UsagePage() {
   // Load cached metrics on mount
   useEffect(() => {
     loadCachedMetrics()
+  }, [])
+
+  // Load local metrics on mount
+  useEffect(() => {
+    loadLocalMetrics()
   }, [])
 
   const loadKeyStatus = async () => {
@@ -109,6 +170,19 @@ export function UsagePage() {
     }
   }
 
+  const loadLocalMetrics = async () => {
+    try {
+      const [summary, history] = await Promise.all([
+        invoke<MetricsSummary>('get_metrics_summary'),
+        invoke<CycleMetrics[]>('get_metrics_history'),
+      ])
+      setLocalSummary(summary)
+      setCycleHistory(history)
+    } catch (e) {
+      console.error('Failed to load local metrics:', e)
+    }
+  }
+
   const fetchMetrics = async (forceRefresh = false) => {
     setLoadingState('loading')
     setError(null)
@@ -125,112 +199,301 @@ export function UsagePage() {
     }
   }
 
-  // Not configured state
-  if (keyStatus && !keyStatus.configured) {
-    return (
-      <div className="space-y-4">
-        <h2 className="text-2xl font-bold">API Usage</h2>
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <Key className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Admin API Key Required</h3>
-            <p className="text-muted-foreground max-w-md">
-              To view your OpenAI API usage metrics, you need to configure an Admin API key
-              with usage read permissions.
-            </p>
-            <p className="text-sm text-muted-foreground mt-4">
-              Go to <strong>Settings</strong> to add your Admin API key.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">API Usage</h2>
-          <p className="text-muted-foreground">
-            View your OpenAI API usage metrics and spending.
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => fetchMetrics(true)}
-          disabled={loadingState === 'loading'}
-        >
-          <RefreshCw
-            className={cn("h-4 w-4 mr-2", loadingState === 'loading' && "animate-spin")}
-          />
-          Refresh
-        </Button>
+      {/* Page header */}
+      <div>
+        <h2 className="text-2xl font-bold">Usage & Performance</h2>
+        <p className="text-muted-foreground">
+          Session performance metrics and OpenAI API usage.
+        </p>
       </div>
 
-      {/* Error state */}
-      {loadingState === 'error' && error && (
-        <Card className="border-destructive">
-          <CardContent className="flex items-center gap-3 py-4">
-            <AlertCircle className="h-5 w-5 text-destructive" />
-            <div>
-              <p className="font-medium text-destructive">Failed to load metrics</p>
-              <p className="text-sm text-muted-foreground">{error}</p>
-            </div>
+      {/* Session Performance — always shown */}
+      <SessionPerformanceCard summary={localSummary} onRefresh={loadLocalMetrics} />
+
+      {/* Recent Cycles — always shown */}
+      <CycleHistoryCard cycles={cycleHistory} />
+
+      {/* OpenAI Billing — conditional on admin key */}
+      {keyStatus?.configured ? (
+        <>
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold">OpenAI Billing</h3>
             <Button
               variant="outline"
               size="sm"
-              className="ml-auto"
               onClick={() => fetchMetrics(true)}
+              disabled={loadingState === 'loading'}
             >
-              Retry
+              <RefreshCw
+                className={cn("h-4 w-4 mr-2", loadingState === 'loading' && "animate-spin")}
+              />
+              Refresh
             </Button>
-          </CardContent>
-        </Card>
-      )}
+          </div>
 
-      {/* Metrics grid */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Usage Statistics</CardTitle>
-          <CardDescription>
-            Transcription costs and usage across different time periods.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loadingState === 'loading' && !metrics ? (
-            <MetricsSkeleton />
-          ) : metrics ? (
-            <MetricsGrid metrics={metrics} />
-          ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              <p>No usage data available.</p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-4"
-                onClick={() => fetchMetrics(false)}
-              >
-                Load Metrics
-              </Button>
-            </div>
+          {/* Error state */}
+          {loadingState === 'error' && error && (
+            <Card className="border-destructive">
+              <CardContent className="flex items-center gap-3 py-4">
+                <AlertCircle className="h-5 w-5 text-destructive" />
+                <div>
+                  <p className="font-medium text-destructive">Failed to load metrics</p>
+                  <p className="text-sm text-muted-foreground">{error}</p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="ml-auto"
+                  onClick={() => fetchMetrics(true)}
+                >
+                  Retry
+                </Button>
+              </CardContent>
+            </Card>
           )}
-        </CardContent>
-      </Card>
 
-      {/* Budget progress */}
-      {metrics && <BudgetCard metrics={metrics} />}
+          {/* Metrics grid */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Usage Statistics</CardTitle>
+              <CardDescription>
+                Transcription costs and usage across different time periods.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingState === 'loading' && !metrics ? (
+                <MetricsSkeleton />
+              ) : metrics ? (
+                <MetricsGrid metrics={metrics} />
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p>No usage data available.</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-4"
+                    onClick={() => fetchMetrics(false)}
+                  >
+                    Load Metrics
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-      {/* Last updated */}
-      {metrics && (
-        <p className="text-sm text-muted-foreground text-center">
-          Last updated: {formatRelativeTime(metrics.last_updated)}
-        </p>
+          {/* Budget progress */}
+          {metrics && <BudgetCard metrics={metrics} />}
+
+          {/* Last updated */}
+          {metrics && (
+            <p className="text-sm text-muted-foreground text-center">
+              Last updated: {formatRelativeTime(metrics.last_updated)}
+            </p>
+          )}
+        </>
+      ) : keyStatus && (
+        <AdminKeyPromptCard />
       )}
     </div>
   )
 }
+
+// ============================================================================
+// Session Performance (local metrics — no admin key needed)
+// ============================================================================
+
+function SessionPerformanceCard({
+  summary,
+  onRefresh,
+}: {
+  summary: MetricsSummary | null
+  onRefresh: () => void
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="h-5 w-5" />
+            Session Performance
+          </CardTitle>
+          <Button variant="ghost" size="sm" onClick={onRefresh} aria-label="Refresh session metrics">
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        </div>
+        <CardDescription>
+          Local recording and transcription metrics for this session.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {!summary ? (
+          <p className="text-muted-foreground text-center py-4">Loading metrics...</p>
+        ) : summary.total_cycles === 0 ? (
+          <p className="text-muted-foreground text-center py-4">
+            No transcription cycles recorded yet. Use the hotkey to start recording.
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <MetricTile label="Total Cycles" value={String(summary.total_cycles)} />
+            <MetricTile
+              label="Success Rate"
+              value={`${Math.round((summary.successful_cycles / summary.total_cycles) * 100)}%`}
+              variant={
+                summary.successful_cycles / summary.total_cycles >= 0.9
+                  ? 'success'
+                  : summary.successful_cycles / summary.total_cycles >= 0.7
+                    ? 'warn'
+                    : 'error'
+              }
+            />
+            <MetricTile
+              label="Failed"
+              value={String(summary.failed_cycles)}
+              variant={summary.failed_cycles > 0 ? 'error' : 'default'}
+            />
+            <MetricTile label="Avg Recording" value={formatMs(summary.avg_recording_duration_ms)} />
+            <MetricTile label="Avg Transcription" value={formatMs(summary.avg_transcription_duration_ms)} />
+            <MetricTile label="Avg Total Cycle" value={formatMs(summary.avg_total_cycle_ms)} />
+          </div>
+        )}
+        {summary?.last_error && (
+          <div className="mt-4 p-3 rounded-md bg-destructive/10 border border-destructive/20">
+            <p className="text-sm font-medium text-destructive">Last Error</p>
+            <p className="text-sm text-muted-foreground">{summary.last_error.message}</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function MetricTile({
+  label,
+  value,
+  variant = 'default',
+}: {
+  label: string
+  value: string
+  variant?: 'default' | 'success' | 'warn' | 'error'
+}) {
+  return (
+    <div>
+      <p className="text-sm text-muted-foreground">{label}</p>
+      <p
+        className={cn(
+          'text-lg font-semibold',
+          variant === 'success' && 'text-green-500',
+          variant === 'warn' && 'text-yellow-500',
+          variant === 'error' && 'text-destructive',
+        )}
+      >
+        {value}
+      </p>
+    </div>
+  )
+}
+
+// ============================================================================
+// Recent Cycles (local metrics — no admin key needed)
+// ============================================================================
+
+function CycleHistoryCard({ cycles }: { cycles: CycleMetrics[] }) {
+  const recentCycles = cycles.slice(0, 10)
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Recent Cycles</CardTitle>
+        <CardDescription>
+          {recentCycles.length > 0
+            ? `Last ${recentCycles.length} recording/transcription cycle${recentCycles.length === 1 ? '' : 's'}.`
+            : 'Recording and transcription cycle history.'}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {recentCycles.length === 0 ? (
+          <p className="text-muted-foreground text-center py-4">No cycles recorded yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left py-2 pr-3 font-medium text-muted-foreground">Time</th>
+                  <th className="text-right py-2 px-3 font-medium text-muted-foreground">Record</th>
+                  <th className="text-right py-2 px-3 font-medium text-muted-foreground">Transcribe</th>
+                  <th className="text-right py-2 px-3 font-medium text-muted-foreground">Total</th>
+                  <th className="text-right py-2 px-3 font-medium text-muted-foreground">Chars</th>
+                  <th className="text-center py-2 pl-3 font-medium text-muted-foreground">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentCycles.map((cycle) => (
+                  <tr key={cycle.cycle_id} className="border-b border-border last:border-0">
+                    <td className="py-2 pr-3 text-muted-foreground">
+                      {formatTimestamp(cycle.started_at)}
+                    </td>
+                    <td className="py-2 px-3 text-right font-mono">
+                      {formatMs(cycle.recording_duration_ms)}
+                    </td>
+                    <td className="py-2 px-3 text-right font-mono">
+                      {formatMs(cycle.transcription_duration_ms)}
+                    </td>
+                    <td className="py-2 px-3 text-right font-mono">
+                      {formatMs(cycle.total_cycle_ms)}
+                    </td>
+                    <td className="py-2 px-3 text-right font-mono">
+                      {cycle.transcript_length_chars}
+                    </td>
+                    <td className="py-2 pl-3 text-center">
+                      {cycle.success ? (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-green-500/20 text-green-500">
+                          OK
+                        </span>
+                      ) : (
+                        <span
+                          className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-destructive/20 text-destructive"
+                          title={cycle.error_message ?? ''}
+                        >
+                          Fail
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ============================================================================
+// Admin Key Prompt (inline — not a full-page blocker)
+// ============================================================================
+
+function AdminKeyPromptCard() {
+  return (
+    <Card className="border-dashed">
+      <CardContent className="flex items-center gap-4 py-6">
+        <Key className="h-8 w-8 text-muted-foreground shrink-0" />
+        <div className="flex-1">
+          <h3 className="font-medium">OpenAI Billing Metrics</h3>
+          <p className="text-sm text-muted-foreground">
+            Configure an Admin API key in Settings to view cost and API usage data from OpenAI.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ============================================================================
+// OpenAI Billing components (unchanged)
+// ============================================================================
 
 function MetricsGrid({ metrics }: { metrics: UsageMetrics }) {
   return (

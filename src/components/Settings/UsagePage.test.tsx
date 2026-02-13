@@ -17,36 +17,203 @@ const mockMetrics = {
   last_updated: new Date().toISOString(),
 }
 
+const mockLocalSummary = {
+  total_cycles: 10,
+  successful_cycles: 8,
+  failed_cycles: 2,
+  avg_recording_duration_ms: 2500,
+  avg_transcription_duration_ms: 850,
+  avg_total_cycle_ms: 3350,
+  last_error: null,
+}
+
+const mockCycleHistory = [
+  {
+    cycle_id: 'test-cycle-1',
+    started_at: 1700000000,
+    recording_duration_ms: 2000,
+    audio_file_size_bytes: 48000,
+    transcription_duration_ms: 800,
+    transcript_length_chars: 120,
+    total_cycle_ms: 2800,
+    success: true,
+    error_message: null,
+  },
+  {
+    cycle_id: 'test-cycle-2',
+    started_at: 1700000100,
+    recording_duration_ms: 3000,
+    audio_file_size_bytes: 72000,
+    transcription_duration_ms: 900,
+    transcript_length_chars: 0,
+    total_cycle_ms: 3900,
+    success: false,
+    error_message: 'Network timeout',
+  },
+]
+
+function setupLocalMetricsMocks() {
+  mockInvoke('get_metrics_summary', mockLocalSummary)
+  mockInvoke('get_metrics_history', mockCycleHistory)
+}
+
 describe('UsagePage', () => {
   beforeEach(() => {
     resetTauriMocks()
+    setupLocalMetricsMocks()
   })
 
-  it('shows admin key required message when key is not configured', async () => {
+  // ========================================================================
+  // Session Performance (always shown)
+  // ========================================================================
+
+  it('shows session performance card regardless of admin key', async () => {
     mockInvoke('get_admin_key_status', { configured: false, masked_key: null })
     mockInvoke('get_cached_usage_metrics', null)
 
     render(<UsagePage />)
 
     await waitFor(() => {
-      expect(screen.getByText('Admin API Key Required')).toBeInTheDocument()
+      expect(screen.getByText('Session Performance')).toBeInTheDocument()
     })
-
-    expect(screen.getByText(/To view your OpenAI API usage metrics/)).toBeInTheDocument()
-    expect(screen.getByText(/Go to/)).toBeInTheDocument()
   })
 
-  it('shows usage page with refresh button when key is configured', async () => {
+  it('shows session performance metrics with data', async () => {
+    mockInvoke('get_admin_key_status', { configured: false, masked_key: null })
+    mockInvoke('get_cached_usage_metrics', null)
+
+    render(<UsagePage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Total Cycles')).toBeInTheDocument()
+    })
+
+    expect(screen.getByText('10')).toBeInTheDocument()
+    expect(screen.getByText('80%')).toBeInTheDocument() // 8/10 success
+    expect(screen.getByText('2')).toBeInTheDocument() // failed
+    expect(screen.getByText('2.5s')).toBeInTheDocument() // avg recording
+    expect(screen.getByText('850ms')).toBeInTheDocument() // avg transcription
+    expect(screen.getByText('3.4s')).toBeInTheDocument() // avg total
+  })
+
+  it('shows empty state when no cycles recorded', async () => {
+    mockInvoke('get_admin_key_status', { configured: false, masked_key: null })
+    mockInvoke('get_cached_usage_metrics', null)
+    mockInvoke('get_metrics_summary', {
+      ...mockLocalSummary,
+      total_cycles: 0,
+      successful_cycles: 0,
+      failed_cycles: 0,
+    })
+
+    render(<UsagePage />)
+
+    await waitFor(() => {
+      expect(screen.getByText(/No transcription cycles recorded yet/)).toBeInTheDocument()
+    })
+  })
+
+  it('shows last error in session performance card', async () => {
+    mockInvoke('get_admin_key_status', { configured: false, masked_key: null })
+    mockInvoke('get_cached_usage_metrics', null)
+    mockInvoke('get_metrics_summary', {
+      ...mockLocalSummary,
+      last_error: {
+        timestamp: 1700000200,
+        error_type: 'transcription',
+        message: 'API key expired',
+        cycle_id: 'test-cycle-3',
+      },
+    })
+
+    render(<UsagePage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Last Error')).toBeInTheDocument()
+    })
+
+    expect(screen.getByText('API key expired')).toBeInTheDocument()
+  })
+
+  // ========================================================================
+  // Recent Cycles (always shown)
+  // ========================================================================
+
+  it('shows recent cycles card regardless of admin key', async () => {
+    mockInvoke('get_admin_key_status', { configured: false, masked_key: null })
+    mockInvoke('get_cached_usage_metrics', null)
+
+    render(<UsagePage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Recent Cycles')).toBeInTheDocument()
+    })
+  })
+
+  it('displays cycle history with correct data', async () => {
+    mockInvoke('get_admin_key_status', { configured: false, masked_key: null })
+    mockInvoke('get_cached_usage_metrics', null)
+
+    render(<UsagePage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('120')).toBeInTheDocument() // transcript chars
+    })
+
+    expect(screen.getByText('OK')).toBeInTheDocument()
+    expect(screen.getByText('Fail')).toBeInTheDocument()
+  })
+
+  it('shows empty cycles message when no history', async () => {
+    mockInvoke('get_admin_key_status', { configured: false, masked_key: null })
+    mockInvoke('get_cached_usage_metrics', null)
+    mockInvoke('get_metrics_history', [])
+
+    render(<UsagePage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('No cycles recorded yet.')).toBeInTheDocument()
+    })
+  })
+
+  // ========================================================================
+  // Admin Key Prompt (inline, not full-page blocker)
+  // ========================================================================
+
+  it('shows inline admin key prompt when key is not configured', async () => {
+    mockInvoke('get_admin_key_status', { configured: false, masked_key: null })
+    mockInvoke('get_cached_usage_metrics', null)
+
+    render(<UsagePage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('OpenAI Billing Metrics')).toBeInTheDocument()
+    })
+
+    expect(
+      screen.getByText(/Configure an Admin API key in Settings/)
+    ).toBeInTheDocument()
+
+    // Should NOT show the full-page blocker
+    expect(screen.queryByText('Admin API Key Required')).not.toBeInTheDocument()
+  })
+
+  // ========================================================================
+  // OpenAI Billing (requires admin key)
+  // ========================================================================
+
+  it('shows OpenAI billing section with refresh button when key is configured', async () => {
     mockInvoke('get_admin_key_status', { configured: true, masked_key: 'sk-...abc' })
     mockInvoke('get_cached_usage_metrics', null)
 
     render(<UsagePage />)
 
     await waitFor(() => {
-      expect(screen.getByText('API Usage')).toBeInTheDocument()
+      expect(screen.getByText('OpenAI Billing')).toBeInTheDocument()
     })
 
-    expect(screen.getByRole('button', { name: /Refresh/i })).toBeInTheDocument()
+    // The billing section's refresh button has visible "Refresh" text
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeInTheDocument()
   })
 
   it('displays metrics when cached data is available', async () => {
@@ -132,10 +299,10 @@ describe('UsagePage', () => {
     render(<UsagePage />)
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Refresh/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Refresh' })).toBeInTheDocument()
     })
 
-    await user.click(screen.getByRole('button', { name: /Refresh/i }))
+    await user.click(screen.getByRole('button', { name: 'Refresh' }))
 
     await waitFor(() => {
       expect(fetchCalledWithForce).toBe(true)
@@ -204,5 +371,16 @@ describe('UsagePage', () => {
 
     // 3600 seconds * 2.5 = 9000 words
     expect(screen.getByText('~9,000')).toBeInTheDocument()
+  })
+
+  it('shows page title as Usage & Performance', async () => {
+    mockInvoke('get_admin_key_status', { configured: false, masked_key: null })
+    mockInvoke('get_cached_usage_metrics', null)
+
+    render(<UsagePage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Usage & Performance')).toBeInTheDocument()
+    })
   })
 })

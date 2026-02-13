@@ -81,15 +81,15 @@ pub async fn validate_admin_api_key(key: &str) -> Result<bool, String> {
     }
 
     // Make a minimal request to the usage API to check permissions
-    // We use /v1/organization/costs with a 1-day window to minimize data
+    // We use /v1/organization/costs with a 1-minute window to minimize data
     let client = reqwest::Client::new();
 
-    // Get date range for validation (just today)
-    let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+    let now = chrono::Utc::now().timestamp();
+    let one_minute_ago = now - 60;
 
     let url = format!(
-        "https://api.openai.com/v1/organization/costs?start_date={}&end_date={}",
-        today, today
+        "https://api.openai.com/v1/organization/costs?start_time={}&end_time={}",
+        one_minute_ago, now
     );
 
     let response = client
