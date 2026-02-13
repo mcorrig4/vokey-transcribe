@@ -892,7 +892,15 @@ where
                 // 3. Send to waveform visualization channel (non-blocking)
                 if let Some(ref tx) = waveform_tx {
                     // try_send is non-blocking - visualization is best-effort
-                    let _ = tx.try_send(samples);
+                    match tx.try_send(samples) {
+                        Ok(_) => {}
+                        Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                            log::trace!("Waveform channel full, dropping samples");
+                        }
+                        Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                            log::warn!("Waveform channel closed unexpectedly");
+                        }
+                    }
                 }
             },
             err_fn,

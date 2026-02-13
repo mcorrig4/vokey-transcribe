@@ -88,7 +88,7 @@ function truncate(text: string, maxLength: number): string {
   if (maxLength <= 0) return ''
   if (text.length <= maxLength) return text
   // Use unicode ellipsis (…) which is a single character
-  const ellipsis = '\u2026'
+  const ellipsis = '…'
   if (maxLength <= 1) return ellipsis
   return text.slice(0, maxLength - 1) + ellipsis
 }
