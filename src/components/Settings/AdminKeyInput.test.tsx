@@ -144,12 +144,12 @@ describe('AdminKeyInput', () => {
   it('calls remove key and reloads status', async () => {
     const user = userEvent.setup()
     let removeKeyCalled = false
-    mockInvoke('get_admin_key_status', (args: unknown) => {
+    mockInvoke('get_admin_key_status', (_args: unknown) => {
       // After removal, return unconfigured
       if (removeKeyCalled) return { configured: false, masked_key: null }
       return { configured: true, masked_key: 'sk-admin-...abc' }
     })
-    mockInvoke('set_admin_api_key', (args: unknown) => {
+    mockInvoke('set_admin_api_key', (_args: unknown) => {
       removeKeyCalled = true
       return undefined
     })
