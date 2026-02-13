@@ -48,10 +48,8 @@ vi.mock('@tauri-apps/api/app', () => ({
   getVersion: vi.fn(() => Promise.resolve('0.2.0-dev')),
 }))
 
-// Mock tauri-controls
-vi.mock('tauri-controls', () => ({
-  WindowControls: () => null,
-  WindowTitlebar: ({ children }: { children: React.ReactNode }) => children,
+vi.mock('@tauri-apps/plugin-opener', () => ({
+  openUrl: vi.fn(() => Promise.resolve()),
 }))
 
 // Mock clipboard API

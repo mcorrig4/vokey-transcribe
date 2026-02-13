@@ -26,6 +26,9 @@ importers:
       '@tauri-apps/api':
         specifier: ^2.9.1
         version: 2.9.1
+      '@tauri-apps/plugin-opener':
+        specifier: ^2.5.3
+        version: 2.5.3
       '@tauri-apps/plugin-process':
         specifier: ^2.3.1
         version: 2.3.1
@@ -50,9 +53,6 @@ importers:
       tailwind-merge:
         specifier: ^3.4.0
         version: 3.4.0
-      tauri-controls:
-        specifier: ^0.4.0
-        version: 0.4.0(clsx@2.1.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(tailwind-merge@3.4.0)
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.1.18
@@ -886,6 +886,9 @@ packages:
     engines: {node: '>= 10'}
     hasBin: true
 
+  '@tauri-apps/plugin-opener@2.5.3':
+    resolution: {integrity: sha512-CCcUltXMOfUEArbf3db3kCE7Ggy1ExBEBl51Ko2ODJ6GDYHRp1nSNlQm5uNCFY5k7/ufaK5Ib3Du/Zir19IYQQ==}
+
   '@tauri-apps/plugin-process@2.3.1':
     resolution: {integrity: sha512-nCa4fGVaDL/B9ai03VyPOjfAHRHSBz5v6F/ObsB73r/dA3MHHhZtldaDMIc0V/pnUw9ehzr2iEG+XkSEyC0JJA==}
 
@@ -1437,14 +1440,6 @@ packages:
   tapable@2.3.0:
     resolution: {integrity: sha512-g9ljZiwki/LfxmQADO3dEY1CbpmXT5Hm2fJ+QaGKwSXUylMybePR7/67YW7jOrrvjEgL1Fmz5kzyAjWVWLlucg==}
     engines: {node: '>=6'}
-
-  tauri-controls@0.4.0:
-    resolution: {integrity: sha512-M+by1V9wO6GPHL7/MXb2weAaUc0T6JzDhcuTvQF92x3kGsmfkj37F/HXHeslgQwLVLOaIBxwzTFmwsVWVH8o0g==}
-    peerDependencies:
-      clsx: ^2.0.0
-      react: ^18.2.0
-      react-dom: ^18.2.0
-      tailwind-merge: ^1.14.0
 
   tinybench@2.9.0:
     resolution: {integrity: sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg==}
@@ -2197,6 +2192,10 @@ snapshots:
       '@tauri-apps/cli-win32-ia32-msvc': 2.9.6
       '@tauri-apps/cli-win32-x64-msvc': 2.9.6
 
+  '@tauri-apps/plugin-opener@2.5.3':
+    dependencies:
+      '@tauri-apps/api': 2.9.1
+
   '@tauri-apps/plugin-process@2.3.1':
     dependencies:
       '@tauri-apps/api': 2.9.1
@@ -2760,13 +2759,6 @@ snapshots:
   tailwindcss@4.1.18: {}
 
   tapable@2.3.0: {}
-
-  tauri-controls@0.4.0(clsx@2.1.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(tailwind-merge@3.4.0):
-    dependencies:
-      clsx: 2.1.1
-      react: 19.2.3
-      react-dom: 19.2.3(react@19.2.3)
-      tailwind-merge: 3.4.0
 
   tinybench@2.9.0: {}
 

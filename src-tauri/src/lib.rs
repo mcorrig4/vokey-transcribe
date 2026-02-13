@@ -18,6 +18,7 @@ use rustls::crypto::{ring, CryptoProvider};
 use serde::Serialize;
 use std::sync::Arc;
 use tauri::{
+    image::Image,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager, WindowEvent,
@@ -106,6 +107,39 @@ fn state_to_ui(state: &State) -> UiState {
     }
 }
 
+/// Check if the current state represents active recording (mic is hot)
+fn is_recording_active(state: &State) -> bool {
+    matches!(
+        state,
+        State::Arming { .. } | State::Recording { .. } | State::Stopping { .. }
+    )
+}
+
+/// Update the tray icon to reflect recording status
+fn update_tray_icon(app: &AppHandle, recording_active: bool) {
+    log::info!("Updating tray icon: recording_active={}", recording_active);
+    let icon_bytes: &[u8] = if recording_active {
+        include_bytes!("../icons/tray-icon-recording.png")
+    } else {
+        include_bytes!("../icons/tray-icon.png")
+    };
+    let image = match Image::from_bytes(icon_bytes) {
+        Ok(img) => img,
+        Err(e) => {
+            log::warn!("Failed to load tray icon: {e}");
+            return;
+        }
+    };
+    if let Some(tray) = app.tray_by_id("main") {
+        match tray.set_icon(Some(image)) {
+            Ok(()) => log::info!("Tray icon updated successfully"),
+            Err(e) => log::warn!("Failed to set tray icon: {e}"),
+        }
+    } else {
+        log::warn!("Tray icon 'main' not found");
+    }
+}
+
 /// Emit a UI state update to the frontend
 fn emit_ui_state(app: &AppHandle, state: &State) {
     let ui_state = state_to_ui(state);
@@ -183,6 +217,13 @@ async fn run_state_loop(
                 duration
             );
             state_entered_at = std::time::Instant::now();
+
+            // Update tray icon when recording-active status changes
+            let was_recording = is_recording_active(&state);
+            let now_recording = is_recording_active(&next);
+            if was_recording != now_recording {
+                update_tray_icon(&app, now_recording);
+            }
         }
 
         state = next;
@@ -534,11 +575,10 @@ async fn open_recordings_folder() -> Result<(), String> {
 
 /// Internal implementation for opening the settings window
 ///
-/// Note: On Linux/KDE, we remove the GTK custom titlebar at startup (in setup)
-/// so KDE provides native window decorations. This avoids the maximize/unmaximize
-/// hack previously needed for tao#1046.
+/// The settings window uses decorations: false with a custom React titlebar,
+/// so no GTK/KDE titlebar workarounds are needed.
 async fn open_settings_window_impl(app: &AppHandle) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window("debug") {
+    if let Some(window) = app.get_webview_window("settings") {
         window.show().map_err(|e| e.to_string())?;
         window.set_focus().map_err(|e| e.to_string())?;
         Ok(())
@@ -659,6 +699,7 @@ pub fn run() {
     install_rustls_provider();
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             // Set up logging in debug mode
             if cfg!(debug_assertions) {
@@ -694,11 +735,9 @@ pub fn run() {
                 ],
             )?;
 
-            // Create tray icon
-            let tray_icon = app
-                .default_window_icon()
-                .ok_or("No default window icon configured")?
-                .clone();
+            // Create tray icon (separate from window/taskbar icon)
+            let tray_icon = Image::from_bytes(include_bytes!("../icons/tray-icon.png"))
+                .map_err(|e| format!("Failed to load tray icon: {e}"))?;
             let _tray = TrayIconBuilder::with_id("main")
                 .icon(tray_icon)
                 .menu(&menu)
@@ -852,22 +891,6 @@ pub fn run() {
                 status: audio_status,
             });
 
-            // Workaround for tao#1046: On KDE Plasma/Wayland, GTK's client-side decorations
-            // cause window control buttons to not work. Remove GTK's custom titlebar so
-            // KDE can provide native server-side decorations instead.
-            #[cfg(target_os = "linux")]
-            {
-                use gtk::prelude::GtkWindowExt;
-                if let Some(window) = app.get_webview_window("debug") {
-                    if let Ok(gtk_window) = window.gtk_window() {
-                        gtk_window.set_titlebar(Option::<&gtk::Widget>::None);
-                        log::info!(
-                            "Removed GTK titlebar from settings window (tao#1046 workaround)"
-                        );
-                    }
-                }
-            }
-
             log::info!("VoKey Transcribe started");
             Ok(())
         })
@@ -903,7 +926,7 @@ pub fn run() {
             // Hide windows instead of closing them (except for quit)
             if let WindowEvent::CloseRequested { api, .. } = event {
                 let label = window.label();
-                if label == "debug" || label == "hud" {
+                if label == "settings" || label == "hud" {
                     log::info!("Hiding window: {}", label);
                     api.prevent_close();
                     let _ = window.hide();

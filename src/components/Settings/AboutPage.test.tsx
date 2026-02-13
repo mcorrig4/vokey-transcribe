@@ -2,17 +2,13 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { AboutPage } from './AboutPage'
+import { openUrl } from '@tauri-apps/plugin-opener'
 
-// Mock window.open
-const mockOpen = vi.fn()
-Object.defineProperty(window, 'open', {
-  writable: true,
-  value: mockOpen,
-})
+vi.mocked(openUrl).mockClear()
 
 describe('AboutPage', () => {
   beforeEach(() => {
-    mockOpen.mockClear()
+    vi.mocked(openUrl).mockClear()
   })
 
   it('renders the about page with title', () => {
@@ -59,10 +55,8 @@ describe('AboutPage', () => {
 
     await user.click(screen.getByText('GitHub Repository'))
 
-    expect(mockOpen).toHaveBeenCalledWith(
-      'https://github.com/mcorrig4/vokey-transcribe',
-      '_blank',
-      'noopener,noreferrer'
+    expect(openUrl).toHaveBeenCalledWith(
+      'https://github.com/mcorrig4/vokey-transcribe'
     )
   })
 
@@ -72,10 +66,8 @@ describe('AboutPage', () => {
 
     await user.click(screen.getByText('Report an Issue'))
 
-    expect(mockOpen).toHaveBeenCalledWith(
-      'https://github.com/mcorrig4/vokey-transcribe/issues',
-      '_blank',
-      'noopener,noreferrer'
+    expect(openUrl).toHaveBeenCalledWith(
+      'https://github.com/mcorrig4/vokey-transcribe/issues'
     )
   })
 
@@ -85,10 +77,8 @@ describe('AboutPage', () => {
 
     await user.click(screen.getByText('Documentation'))
 
-    expect(mockOpen).toHaveBeenCalledWith(
-      'https://github.com/mcorrig4/vokey-transcribe/blob/main/README.md',
-      '_blank',
-      'noopener,noreferrer'
+    expect(openUrl).toHaveBeenCalledWith(
+      'https://github.com/mcorrig4/vokey-transcribe/blob/main/README.md'
     )
   })
 

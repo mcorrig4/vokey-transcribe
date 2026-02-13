@@ -1,34 +1,42 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import App from './App'
-import Settings from './Settings'
-import './styles/index.css'
-import './styles/globals.css'
 
 // Determine which window to render based on URL parameter
 const params = new URLSearchParams(window.location.search)
 const windowType = params.get('window')
 
-// Component map - explicit relationship between window type and component
-const componentMap: Record<string, React.ComponentType> = {
-  settings: Settings,
-  debug: Settings, // Legacy debug window now uses Settings UI
+// Initialize app with conditional loading
+// HUD and Settings load separate CSS to avoid cascade layer conflicts:
+// - index.css (HUD): unlayered global styles for transparent frameless window
+// - globals.css (Settings): Tailwind v4 with @layer-based utilities
+async function init() {
+  let RootComponent: React.ComponentType
+
+  if (windowType === 'settings' || windowType === 'debug') {
+    const [{ default: Settings }] = await Promise.all([
+      import('./Settings'),
+      import('./styles/globals.css'),
+    ])
+    RootComponent = Settings
+  } else {
+    const [{ default: App }] = await Promise.all([
+      import('./App'),
+      import('./styles/index.css'),
+    ])
+    RootComponent = App
+  }
+
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <RootComponent />
+    </StrictMode>,
+  )
 }
 
-const RootComponent = (windowType && componentMap[windowType]) || App
-
-// Set window type data attribute on html element for conditional CSS
-// HUD window (no window type) needs transparent background
-// Settings window needs opaque background
-const htmlElement = document.documentElement
-if (windowType) {
-  htmlElement.setAttribute('data-window-type', windowType)
-} else {
-  htmlElement.setAttribute('data-window-type', 'hud')
-}
-
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <RootComponent />
-  </StrictMode>,
-)
+init().catch(err => {
+  console.error('Failed to initialize app:', err)
+  const root = document.getElementById('root')
+  if (root) {
+    root.innerHTML = `<pre style="color:red;padding:1em;font-family:monospace">${err}</pre>`
+  }
+})

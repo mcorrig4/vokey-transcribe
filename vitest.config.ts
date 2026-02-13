@@ -26,8 +26,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      // Mock tauri-controls CSS for tests
-      'tauri-controls/style.css': path.resolve(__dirname, './src/test/empty.css'),
     },
   },
 })

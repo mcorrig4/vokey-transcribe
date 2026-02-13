@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getVersion } from '@tauri-apps/api/app'
+import { openUrl } from '@tauri-apps/plugin-opener'
 import {
   Card,
   CardContent,
@@ -22,7 +23,7 @@ export function AboutPage() {
     }
   }, [])
   const openExternal = (url: string) => {
-    window.open(url, '_blank', 'noopener,noreferrer')
+    openUrl(url)
   }
 
   return (

@@ -18,10 +18,11 @@ const EXIT_ANIMATION_MS = 200
  * Manages window sizing and component arrangement.
  */
 export function HUD() {
-  const { state } = useHUD()
+  const { state, streamingEnabled } = useHUD()
 
-  // Determine if transcript should be visible based on app state
-  const shouldShowTranscript = state.status === 'recording' || state.status === 'transcribing'
+  // Determine if transcript should be visible based on app state and streaming setting
+  const shouldShowTranscript = streamingEnabled &&
+    (state.status === 'recording' || state.status === 'transcribing')
 
   // Track panel visibility with exit animation support
   const [panelState, setPanelState] = useState<'hidden' | 'visible' | 'exiting'>('hidden')

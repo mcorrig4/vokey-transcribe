@@ -40,24 +40,8 @@
         "decorations": false,
         "alwaysOnTop": false,
         "visible": false
-      },
-      {
-        "label": "debug",
-        "title": "VoKey Debug",
-        "url": "index.html?window=debug",
-        "width": 450,
-        "height": 700,
-        "resizable": true,
-        "decorations": true,
-        "alwaysOnTop": false,
-        "visible": false
       }
     ],
-    "trayIcon": {
-      "id": "main",
-      "iconPath": "icons/tray-test.png",
-      "iconAsTemplate": false
-    },
     "security": {
       "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.openai.com wss://api.openai.com; img-src 'self' data:"
     }

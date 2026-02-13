@@ -45,9 +45,9 @@ function NavItemButton({ item, isActive, isCollapsed, onClick }: NavItemProps) {
     <button
       onClick={onClick}
       className={cn(
-        "flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm transition-colors",
-        "hover:bg-accent hover:text-accent-foreground",
-        isActive && "bg-accent text-accent-foreground font-medium",
+        "flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm transition-colors text-[var(--color-sidebar-foreground)]",
+        "hover:bg-[var(--color-sidebar-accent)] hover:text-[var(--color-sidebar-accent-foreground)]",
+        isActive && "bg-[var(--color-sidebar-accent)] text-[var(--color-sidebar-accent-foreground)] font-medium",
         isCollapsed && "justify-center px-2"
       )}
       title={isCollapsed ? item.label : undefined}
@@ -72,7 +72,7 @@ export function SettingsLayout({ children }: SettingsLayoutProps) {
         {/* Sidebar */}
         <aside
           className={cn(
-            "flex flex-col border-r border-border transition-all duration-200",
+            "flex flex-col border-r border-[var(--color-sidebar-border)] bg-[var(--color-sidebar-background)] transition-all duration-200",
             isCollapsed ? "w-14" : "w-48"
           )}
           data-testid="settings-sidebar"
@@ -95,7 +95,7 @@ export function SettingsLayout({ children }: SettingsLayoutProps) {
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
             className={cn(
-              "flex items-center gap-2 p-2 text-muted-foreground hover:text-foreground transition-colors",
+              "flex items-center gap-2 p-2 text-[var(--color-sidebar-foreground)] hover:text-[var(--color-sidebar-accent-foreground)] transition-colors",
               isCollapsed && "justify-center"
             )}
             title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
@@ -113,7 +113,7 @@ export function SettingsLayout({ children }: SettingsLayoutProps) {
         </aside>
 
         {/* Main content area */}
-        <main className="flex-1 overflow-auto p-6" data-testid="settings-content">
+        <main className="flex-1 overflow-auto p-6 [&>*]:max-w-4xl" data-testid="settings-content">
           <SettingsContent page={activePage} />
           {children}
         </main>
