@@ -243,7 +243,11 @@ impl EffectRunner for AudioEffectRunner {
                     let recorder = match AudioRecorder::new() {
                         Ok(r) => {
                             log::info!("AudioRecorder created for recording {}", id);
-                            log::info!("StartAudio: recorder creation for {} took {:?}", id, effect_start.elapsed());
+                            log::info!(
+                                "StartAudio: recorder creation for {} took {:?}",
+                                id,
+                                effect_start.elapsed()
+                            );
                             r
                         }
                         Err(e) => {
@@ -352,7 +356,11 @@ impl EffectRunner for AudioEffectRunner {
                         .start(id, streaming_tx, Some(waveform_tx), Some(stream_error_tx))
                         .map_err(|e| e.to_string());
 
-                    log::info!("StartAudio: total effect time for {}: {:?}", id, effect_start.elapsed());
+                    log::info!(
+                        "StartAudio: total effect time for {}: {:?}",
+                        id,
+                        effect_start.elapsed()
+                    );
 
                     // Now handle results without holding the mutex
                     match start_result {
@@ -1023,8 +1031,7 @@ mod tests {
         // An UnboundedSender<String> is used by the audio thread to signal errors,
         // and the monitor task converts them into AudioStreamError events.
         let recording_id = uuid::Uuid::new_v4();
-        let (error_tx, mut error_rx) =
-            tokio::sync::mpsc::unbounded_channel::<String>();
+        let (error_tx, mut error_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
         let (event_tx, mut event_rx) = tokio::sync::mpsc::channel::<Event>(10);
 
         // Spawn the error monitor (mirrors the pattern in StartAudio effect)
@@ -1047,13 +1054,10 @@ mod tests {
             .expect("send should succeed");
 
         // Verify the monitor converts it to an AudioStreamError event
-        let event = tokio::time::timeout(
-            std::time::Duration::from_secs(1),
-            event_rx.recv(),
-        )
-        .await
-        .expect("should receive event within timeout")
-        .expect("channel should not be closed");
+        let event = tokio::time::timeout(std::time::Duration::from_secs(1), event_rx.recv())
+            .await
+            .expect("should receive event within timeout")
+            .expect("channel should not be closed");
 
         assert!(matches!(
             event,
@@ -1067,8 +1071,7 @@ mod tests {
         // When the UnboundedSender is dropped (e.g., recording ends normally),
         // the monitor should exit cleanly without sending any event.
         let recording_id = uuid::Uuid::new_v4();
-        let (error_tx, mut error_rx) =
-            tokio::sync::mpsc::unbounded_channel::<String>();
+        let (error_tx, mut error_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
         let (event_tx, mut event_rx) = tokio::sync::mpsc::channel::<Event>(10);
 
         // Spawn the error monitor
@@ -1088,12 +1091,9 @@ mod tests {
         drop(error_tx);
 
         // Monitor should exit cleanly
-        let result = tokio::time::timeout(
-            std::time::Duration::from_secs(1),
-            monitor_handle,
-        )
-        .await
-        .expect("monitor should complete within timeout");
+        let result = tokio::time::timeout(std::time::Duration::from_secs(1), monitor_handle)
+            .await
+            .expect("monitor should complete within timeout");
         assert!(result.is_ok(), "monitor task should complete without panic");
 
         // No event should have been sent

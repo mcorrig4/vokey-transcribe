@@ -65,7 +65,7 @@ function renderContent(state: UiState) {
       return (
         <div className={styles.error} data-testid="hud-error-message">
           <span className={styles.label}>Error</span>
-          <span className={styles.detail} data-testid="hud-error-message" title={state.message}>
+          <span className={styles.detail} data-testid="hud-error-detail" title={state.message}>
             {truncate(state.message, 30)}
           </span>
         </div>

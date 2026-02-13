@@ -149,7 +149,10 @@ impl AudioRecorder {
         let device = host
             .default_input_device()
             .ok_or(AudioError::NoInputDevice)?;
-        log::debug!("AudioRecorder::new() device selection: {:?}", init_start.elapsed());
+        log::debug!(
+            "AudioRecorder::new() device selection: {:?}",
+            init_start.elapsed()
+        );
 
         log::info!("Using audio input device: {:?}", device.name());
 
@@ -175,7 +178,10 @@ impl AudioRecorder {
             } else {
                 drop(cache); // Release lock before slow enumeration
                 let (config, sample_format) = Self::enumerate_device_config(&device)?;
-                log::debug!("AudioRecorder::new() config query: {:?}", init_start.elapsed());
+                log::debug!(
+                    "AudioRecorder::new() config query: {:?}",
+                    init_start.elapsed()
+                );
 
                 // Cache the result for future recordings
                 let mut cache = DEVICE_CONFIG_CACHE.lock().unwrap_or_else(|e| {
@@ -224,7 +230,9 @@ impl AudioRecorder {
 
     /// Enumerate the device's supported input configurations and select the best one.
     /// This is the slow path (~10-600ms) that queries ALSA for supported formats.
-    fn enumerate_device_config(device: &Device) -> Result<(StreamConfig, SampleFormat), AudioError> {
+    fn enumerate_device_config(
+        device: &Device,
+    ) -> Result<(StreamConfig, SampleFormat), AudioError> {
         let supported_config_range = device
             .supported_input_configs()
             .map_err(|_| AudioError::NoSupportedConfig)?
@@ -457,7 +465,10 @@ fn audio_thread_main(
                                 active_stream = Some(new_stream);
                             }
                             None => {
-                                log::error!("Stream recovery failed after {} attempts", MAX_STREAM_RETRIES);
+                                log::error!(
+                                    "Stream recovery failed after {} attempts",
+                                    MAX_STREAM_RETRIES
+                                );
                                 // Error already escalated via error_tx inside attempt_stream_recovery
                                 stream_err_rx = None;
                             }
@@ -578,7 +589,11 @@ impl RecoveryState {
     ///
     /// On success, returns the reconstituted `ActiveStream`.
     /// On failure, returns the error message and `self` so the caller can retry.
-    fn rebuild(self, device: &Device, config: &StreamConfig) -> Result<ActiveStream, (String, Self)> {
+    fn rebuild(
+        self,
+        device: &Device,
+        config: &StreamConfig,
+    ) -> Result<ActiveStream, (String, Self)> {
         let stream_result = build_stream(
             device,
             config,
@@ -664,7 +679,9 @@ fn attempt_stream_recovery(
         Ok(mut guard) => {
             if let Some(writer) = guard.take() {
                 match writer.finalize() {
-                    Ok(_) => log::info!("WAV finalized with partial audio: {:?}", recovery.wav_path),
+                    Ok(_) => {
+                        log::info!("WAV finalized with partial audio: {:?}", recovery.wav_path)
+                    }
                     Err(e) => log::error!("Failed to finalize WAV after recovery failure: {}", e),
                 }
             }
