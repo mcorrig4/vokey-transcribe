@@ -160,8 +160,12 @@ pub trait EffectRunner: Send + Sync + 'static {
 
 /// Active recording handle storage.
 /// RecordingHandle is now Send+Sync safe (uses channel to dedicated audio thread).
+/// The AudioRecorder is stored here so it gets dropped after each recording cycle,
+/// ensuring clean ALSA state for subsequent recordings.
 struct ActiveRecording {
     handle: Option<crate::audio::recorder::RecordingHandle>,
+    /// The AudioRecorder instance for this recording (dropped on cleanup)
+    recorder: Option<AudioRecorder>,
     /// Sender to stop the waveform emitter task
     waveform_stop_tx: Option<tokio::sync::oneshot::Sender<()>>,
 }
@@ -172,7 +176,6 @@ struct ActiveRecording {
 /// Sprint 7: Waveform visualization support.
 pub struct AudioEffectRunner {
     app: tauri::AppHandle,
-    recorder: Arc<Mutex<Option<AudioRecorder>>>,
     active_recordings: Arc<Mutex<HashMap<Uuid, ActiveRecording>>>,
     metrics: Arc<Mutex<MetricsCollector>>,
     settings: Arc<Mutex<AppSettings>>,
@@ -180,27 +183,14 @@ pub struct AudioEffectRunner {
 
 impl AudioEffectRunner {
     /// Create a new AudioEffectRunner with metrics collection.
-    /// Returns Ok even if audio device isn't available - errors happen at record time.
+    /// AudioRecorder is created fresh for each recording cycle to ensure clean ALSA state.
     pub fn new(
         app: tauri::AppHandle,
         metrics: Arc<Mutex<MetricsCollector>>,
         settings: Arc<Mutex<AppSettings>>,
     ) -> Arc<Self> {
-        // Try to create the recorder now, but don't fail if we can't
-        let recorder = match AudioRecorder::new() {
-            Ok(r) => {
-                log::info!("AudioRecorder initialized successfully");
-                Some(r)
-            }
-            Err(e) => {
-                log::warn!("AudioRecorder init failed (will retry on record): {}", e);
-                None
-            }
-        };
-
         Arc::new(Self {
             app,
-            recorder: Arc::new(Mutex::new(recorder)),
             active_recordings: Arc::new(Mutex::new(HashMap::new())),
             metrics,
             settings,
@@ -226,13 +216,14 @@ impl EffectRunner for AudioEffectRunner {
             // 3. Spawns the transcript receiver task (sends PartialDelta events)
             // 4. Starts the audio recorder with the streaming channel
             Effect::StartAudio { id } => {
-                let recorder = self.recorder.clone();
                 let active = self.active_recordings.clone();
                 let metrics = self.metrics.clone();
                 let settings = self.settings.clone();
                 let app = self.app.clone();
 
                 tokio::spawn(async move {
+                    let effect_start = std::time::Instant::now();
+
                     // Start metrics tracking for this cycle
                     {
                         let mut m = metrics.lock().await;
@@ -246,48 +237,32 @@ impl EffectRunner for AudioEffectRunner {
                         (settings_guard.streaming_enabled, get_api_key())
                     };
 
-                    // Try to get or create recorder first, so we have the correct sample rate
-                    // We capture the result and drop the lock before any awaits to avoid
-                    // holding the mutex across await points (can cause contention/deadlocks)
-                    let recorder_init_result: Result<u32, String> = {
-                        let mut recorder_guard = recorder.lock().await;
-                        if recorder_guard.is_none() {
-                            // Retry creating recorder
-                            match AudioRecorder::new() {
-                                Ok(r) => {
-                                    *recorder_guard = Some(r);
-                                }
-                                Err(e) => {
-                                    log::error!("Failed to initialize audio recorder: {}", e);
-                                    // Send AudioStartFail event so state machine can transition properly
-                                    let err_msg = e.to_string();
-                                    drop(recorder_guard); // Release lock before async operations
-                                    let mut m = metrics.lock().await;
-                                    m.cycle_failed(err_msg.clone());
-                                    drop(m);
-                                    let _ =
-                                        tx.send(Event::AudioStartFail { id, err: err_msg }).await;
-                                    return;
-                                }
-                            }
+                    // Create a fresh AudioRecorder for this recording cycle.
+                    // This ensures clean ALSA state and avoids issues with stale resources
+                    // from previous recordings (especially in VM environments).
+                    let recorder = match AudioRecorder::new() {
+                        Ok(r) => {
+                            log::info!("AudioRecorder created for recording {}", id);
+                            log::info!(
+                                "StartAudio: recorder creation for {} took {:?}",
+                                id,
+                                effect_start.elapsed()
+                            );
+                            r
                         }
-                        // Recorder is guaranteed to exist now
-                        match recorder_guard.as_ref() {
-                            Some(rec) => Ok(rec.sample_rate()),
-                            None => Err("Audio recorder unavailable".to_string()),
-                        }
-                    };
-
-                    let source_sample_rate = match recorder_init_result {
-                        Ok(rate) => rate,
                         Err(e) => {
-                            log::error!("Failed to get sample rate: {}", e);
+                            log::error!("Failed to initialize audio recorder: {}", e);
+                            AudioRecorder::invalidate_config_cache();
+                            let err_msg = e.to_string();
                             let mut m = metrics.lock().await;
-                            m.cycle_failed(e.clone());
-                            let _ = tx.send(Event::AudioStartFail { id, err: e }).await;
+                            m.cycle_failed(err_msg.clone());
+                            drop(m);
+                            let _ = tx.send(Event::AudioStartFail { id, err: err_msg }).await;
                             return;
                         }
                     };
+
+                    let source_sample_rate = recorder.sample_rate();
 
                     // Now create streaming channel with correct sample rate
                     let streaming_tx = if streaming_enabled {
@@ -372,19 +347,20 @@ impl EffectRunner for AudioEffectRunner {
                         run_waveform_emitter(app_for_waveform, waveform_rx, waveform_stop_rx).await;
                     });
 
-                    // Start recording with the streaming and waveform channels
-                    let start_result = {
-                        let recorder_guard = recorder.lock().await;
-                        match recorder_guard.as_ref() {
-                            Some(rec) => rec
-                                .start(id, streaming_tx, Some(waveform_tx))
-                                .map_err(|e| e.to_string()),
-                            None => {
-                                log::error!("Audio recorder is unavailable");
-                                Err("Audio recorder unavailable".to_string())
-                            }
-                        }
-                    }; // recorder_guard dropped here
+                    // Create error channel for propagating ALSA stream errors
+                    let (stream_error_tx, mut stream_error_rx) =
+                        tokio::sync::mpsc::unbounded_channel::<String>();
+
+                    // Start recording with the streaming, waveform, and error channels
+                    let start_result = recorder
+                        .start(id, streaming_tx, Some(waveform_tx), Some(stream_error_tx))
+                        .map_err(|e| e.to_string());
+
+                    log::info!(
+                        "StartAudio: total effect time for {}: {:?}",
+                        id,
+                        effect_start.elapsed()
+                    );
 
                     // Now handle results without holding the mutex
                     match start_result {
@@ -397,21 +373,37 @@ impl EffectRunner for AudioEffectRunner {
                                 m.recording_started();
                             }
 
-                            // Store handle for later stop
+                            // Store handle and recorder for later stop/cleanup
                             let mut active_guard = active.lock().await;
                             active_guard.insert(
                                 id,
                                 ActiveRecording {
                                     handle: Some(handle),
+                                    recorder: Some(recorder),
                                     waveform_stop_tx: Some(waveform_stop_tx),
                                 },
                             );
                             drop(active_guard); // Explicitly drop before await
 
                             let _ = tx.send(Event::AudioStartOk { id, wav_path }).await;
+
+                            // Spawn error monitor to propagate ALSA stream errors to state machine
+                            let error_event_tx = tx.clone();
+                            let error_recording_id = id;
+                            tokio::spawn(async move {
+                                if let Some(err) = stream_error_rx.recv().await {
+                                    let _ = error_event_tx
+                                        .send(Event::AudioStreamError {
+                                            id: error_recording_id,
+                                            err,
+                                        })
+                                        .await;
+                                }
+                            });
                         }
                         Err(err) => {
                             log::error!("Failed to start audio recording: {}", err);
+                            AudioRecorder::invalidate_config_cache();
                             // Record error in metrics
                             {
                                 let mut m = metrics.lock().await;
@@ -429,13 +421,17 @@ impl EffectRunner for AudioEffectRunner {
                 let settings = self.settings.clone();
 
                 tokio::spawn(async move {
-                    let (handle, waveform_stop_tx) = {
+                    // Extract handle, recorder, and waveform stop sender from active recordings.
+                    // The recorder will be dropped at the end of this block, ensuring clean ALSA state.
+                    let (handle, _recorder, waveform_stop_tx) = {
                         let mut active_guard = active.lock().await;
                         match active_guard.remove(&id) {
-                            Some(mut recording) => {
-                                (recording.handle.take(), recording.waveform_stop_tx.take())
-                            }
-                            None => (None, None),
+                            Some(mut recording) => (
+                                recording.handle.take(),
+                                recording.recorder.take(),
+                                recording.waveform_stop_tx.take(),
+                            ),
+                            None => (None, None, None),
                         }
                     };
 
@@ -1023,5 +1019,88 @@ mod tests {
     fn short_clip_vad_allows_speech_like_audio() {
         let stats = vad_stats_for_test(10, 10, 2000.0, 10_000); // crest=5
         assert!(short_clip_vad_allows_transcription(&stats));
+    }
+
+    // =========================================================================
+    // Error monitor tests (stream error propagation)
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_error_monitor_forwards_stream_error() {
+        // Simulate the error monitor pattern from the StartAudio effect handler:
+        // An UnboundedSender<String> is used by the audio thread to signal errors,
+        // and the monitor task converts them into AudioStreamError events.
+        let recording_id = uuid::Uuid::new_v4();
+        let (error_tx, mut error_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+        let (event_tx, mut event_rx) = tokio::sync::mpsc::channel::<Event>(10);
+
+        // Spawn the error monitor (mirrors the pattern in StartAudio effect)
+        let error_event_tx = event_tx.clone();
+        let error_recording_id = recording_id;
+        tokio::spawn(async move {
+            if let Some(err) = error_rx.recv().await {
+                let _ = error_event_tx
+                    .send(Event::AudioStreamError {
+                        id: error_recording_id,
+                        err,
+                    })
+                    .await;
+            }
+        });
+
+        // Simulate sending an error from the audio thread
+        error_tx
+            .send("ALSA buffer overrun".to_string())
+            .expect("send should succeed");
+
+        // Verify the monitor converts it to an AudioStreamError event
+        let event = tokio::time::timeout(std::time::Duration::from_secs(1), event_rx.recv())
+            .await
+            .expect("should receive event within timeout")
+            .expect("channel should not be closed");
+
+        assert!(matches!(
+            event,
+            Event::AudioStreamError { id, ref err }
+                if id == recording_id && err == "ALSA buffer overrun"
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_error_monitor_closes_when_sender_dropped() {
+        // When the UnboundedSender is dropped (e.g., recording ends normally),
+        // the monitor should exit cleanly without sending any event.
+        let recording_id = uuid::Uuid::new_v4();
+        let (error_tx, mut error_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+        let (event_tx, mut event_rx) = tokio::sync::mpsc::channel::<Event>(10);
+
+        // Spawn the error monitor
+        let monitor_handle = tokio::spawn(async move {
+            if let Some(err) = error_rx.recv().await {
+                let _ = event_tx
+                    .send(Event::AudioStreamError {
+                        id: recording_id,
+                        err,
+                    })
+                    .await;
+            }
+            // If recv() returns None (sender dropped), task exits cleanly
+        });
+
+        // Drop the sender — simulates normal recording shutdown
+        drop(error_tx);
+
+        // Monitor should exit cleanly
+        let result = tokio::time::timeout(std::time::Duration::from_secs(1), monitor_handle)
+            .await
+            .expect("monitor should complete within timeout");
+        assert!(result.is_ok(), "monitor task should complete without panic");
+
+        // No event should have been sent
+        let maybe_event = event_rx.try_recv();
+        assert!(
+            maybe_event.is_err(),
+            "no event should be sent when sender is dropped cleanly"
+        );
     }
 }

@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "VoKey Transcribe",
-  "version": "0.1.0",
+  "version": "0.2.0-dev",
   "identifier": "com.vokey.transcribe",
   "build": {
     "frontendDist": "../dist",
@@ -29,24 +29,21 @@
         "visible": true
       },
       {
-        "label": "debug",
+        "label": "settings",
         "title": "VoKey Settings",
-        "url": "index.html?window=debug",
-        "width": 450,
-        "height": 700,
+        "url": "index.html?window=settings",
+        "width": 800,
+        "height": 600,
+        "minWidth": 600,
+        "minHeight": 400,
         "resizable": true,
-        "decorations": true,
+        "decorations": false,
         "alwaysOnTop": false,
         "visible": false
       }
     ],
-    "trayIcon": {
-      "id": "main",
-      "iconPath": "icons/tray-test.png",
-      "iconAsTemplate": false
-    },
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.openai.com wss://api.openai.com; img-src 'self' data:"
     }
   },
   "bundle": {
