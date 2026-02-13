@@ -23,7 +23,7 @@ jobs:
   build-linux:
     name: Build Linux
     runs-on: ubuntu-22.04
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
@@ -70,7 +70,7 @@ jobs:
 
       - name: Build Tauri app
         id: tauri-build
-        uses: tauri-apps/tauri-action@v0.5.18
+        uses: tauri-apps/tauri-action@v0.5.17
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -100,12 +100,6 @@ jobs:
             See [CHANGELOG](https://github.com/mcorrig4/vokey-transcribe/blob/master/CHANGELOG.md) for details.
           releaseDraft: true
           prerelease: ${{ contains(inputs.tag || github.ref_name, 'alpha') || contains(inputs.tag || github.ref_name, 'beta') || contains(inputs.tag || github.ref_name, 'rc') }}
-
-      - name: Generate build provenance attestation
-        if: success() && steps.tauri-build.outcome == 'success'
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-path: "src-tauri/target/release/bundle/**"
 
       - name: Collect build diagnostics on failure
         if: failure() && steps.tauri-build.outcome == 'failure'
