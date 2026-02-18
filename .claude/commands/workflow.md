@@ -15,10 +15,10 @@ We follow:
 
 We got cut off. You had just explored the entire repo after I asked you what should we do next for sprint 7. You asked if option A or B and I wanted option A. Explore again, then we will continue
 
-PR 125 is in UAT and expeted to be merged shortly. While I finish testing please start planning for the next task: Issue #72
+PR 125 is in UAT and expected to be merged shortly. While I finish testing please start planning for the next task: Issue #72
 
 We should next think about the best way to architect this. Talk through the design and the decisions we should consider given we follow rust and tauri and Linux and OpenAI audio processing best practices.
-We should have a sub agent research the web and the proejct and return all the relevant information for us to plan. 
+We should have a sub agent research the web and the project and return all the relevant information for us to plan. 
 
 Give me a detailed discussion on Tauri and rust architecture design. The. Give me a plan for how to build the functionality. Then give me the UI enhancements plan. Then I will review and decide next steps
 

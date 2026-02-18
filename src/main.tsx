@@ -12,7 +12,7 @@ const windowType = params.get('window')
 async function init() {
   let RootComponent: React.ComponentType
 
-  if (windowType === 'settings' || windowType === 'debug') {
+  if (windowType === 'settings') {
     const [{ default: Settings }] = await Promise.all([
       import('./Settings'),
       import('./styles/globals.css'),
