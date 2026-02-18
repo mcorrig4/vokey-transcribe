@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Background rounded rectangle -->
+  <rect x="0" y="0" width="512" height="512" rx="80" ry="80" fill="#1E293B"/>
+  <!-- Microphone body (capsule) -->
+  <rect x="176" y="80" width="160" height="240" rx="80" ry="80" fill="white"/>
+  <!-- Holder arc -->
+  <path d="M128 256 C128 340 181 400 256 400 C331 400 384 340 384 256" fill="none" stroke="white" stroke-width="30" stroke-linecap="round"/>
+  <!-- Stand (vertical line) -->
+  <line x1="256" y1="400" x2="256" y2="448" stroke="white" stroke-width="30" stroke-linecap="round"/>
+  <!-- Base (horizontal line) -->
+  <line x1="186" y1="448" x2="326" y2="448" stroke="white" stroke-width="30" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,488 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+VERSION="1.0.0"
+DEFAULT_SERVER="https://ntfy.sh"
+DEFAULT_PRIORITY="4"
+
+# Variables (will be populated from config/env/args)
+CHANNEL=""
+MESSAGE=""
+TITLE=""
+PRIORITY=""
+TAGS=""
+CLICK=""
+ICON=""
+MARKDOWN="false"
+ATTACH=""
+FILENAME=""
+DELAY=""
+EMAIL=""
+TOKEN=""
+SERVER=""
+ACTIONS=()
+
+# Flags
+DRY_RUN=false
+VERBOSE=false
+QUIET=false
+INIT_MODE=false
+INIT_LOCAL=false
+INIT_FORCE=false
+CONFIG_FILE=""
+NO_CONFIG=false
+
+show_help() {
+    cat <<'EOF'
+ntfy-send - Send notifications via ntfy.sh
+
+USAGE
+    ntfy-send [OPTIONS] [MESSAGE]
+
+MESSAGE
+    Notification body. Can also use -m/--message flag.
+    Reads from stdin if not provided and stdin is a pipe.
+
+CHANNEL (required - from flag, config, or env)
+    -c, --channel TOPIC    Target channel/topic
+
+MESSAGE OPTIONS
+    -m, --message TEXT     Message body (alternative to positional)
+    -t, --title TITLE      Notification title
+    -p, --priority LEVEL   1-5 or min/low/default/high/max/urgent
+    -T, --tags TAGS        Comma-separated tags (e.g., "warning,skull")
+    -u, --click URL        URL to open when notification tapped
+    -i, --icon URL         Icon URL (JPEG/PNG)
+    -M, --markdown         Enable markdown formatting
+
+ATTACHMENTS
+    -a, --attach URL       Attachment URL
+    -f, --filename NAME    Attachment filename
+
+SCHEDULING
+    -d, --delay WHEN       Schedule delivery (e.g., "10m", "tomorrow 9am")
+
+EMAIL
+    -e, --email EMAIL      Also forward to email address
+
+ACTION BUTTONS (up to 3)
+    --action "TYPE,LABEL,URL[,key=val...]"
+        TYPE: view, http
+        Examples:
+          --action "view,Open PR,https://github.com/..."
+          --action "http,Approve,https://api.example.com,method=POST"
+
+SERVER & AUTH
+    -s, --server URL       ntfy server (default: https://ntfy.sh)
+    --token TOKEN          Access token for private servers
+
+CONFIG MANAGEMENT
+    --init                 Create ~/.ntfyrc with defaults
+    --init --local         Create ./.ntfyrc with defaults (repo-level)
+    --force                Overwrite existing config file
+    --config FILE          Use specific config file
+    --no-config            Ignore all config files
+
+DEBUG
+    -n, --dry-run          Show curl command without executing
+    -v, --verbose          Show full response
+    -q, --quiet            Suppress output on success
+    -h, --help             Show help
+    --version              Show version
+
+EXAMPLES
+    ntfy-send "Build complete"
+    ntfy-send -t "PR Ready" -u "https://github.com/org/repo/pull/123" "Review requested"
+    ntfy-send -p 5 -T "warning,rotating_light" "Tests failing!"
+    ntfy-send --action "view,Open PR,https://github.com/..." "New PR created"
+    echo "Deployment complete" | ntfy-send -t "Deploy"
+    ntfy-send --init              # Creates ~/.ntfyrc
+    ntfy-send --init --local      # Creates ./.ntfyrc
+EOF
+}
+
+show_version() {
+    echo "ntfy-send version $VERSION"
+}
+
+get_config_template() {
+    cat <<'EOF'
+# ntfy-send configuration
+# Global: ~/.ntfyrc | Repo: ./.ntfyrc
+
+# Required: channel/topic name
+channel=
+
+# Server (default: https://ntfy.sh)
+server=https://ntfy.sh
+
+# Access token for private servers (optional)
+token=
+
+# Default priority: 1=min, 2=low, 3=default, 4=high, 5=max
+priority=4
+
+# Default tags (comma-separated, e.g., robot,wrench)
+tags=
+
+# Default icon URL (optional)
+icon=
+
+# Enable markdown by default (true/false)
+markdown=false
+EOF
+}
+
+init_config() {
+    local config_path
+    if [[ "$INIT_LOCAL" == "true" ]]; then
+        config_path="./.ntfyrc"
+    else
+        config_path="$HOME/.ntfyrc"
+    fi
+
+    if [[ -f "$config_path" ]] && [[ "$INIT_FORCE" != "true" ]]; then
+        echo "Error: Config file already exists: $config_path" >&2
+        echo "Use --force to overwrite" >&2
+        exit 1
+    fi
+
+    get_config_template > "$config_path"
+    echo "Created config file: $config_path"
+    exit 0
+}
+
+# Load INI-style config file
+load_config() {
+    local file="$1"
+    [[ ! -f "$file" ]] && return
+
+    while IFS='=' read -r key value || [[ -n "$key" ]]; do
+        # Skip comments and empty lines
+        [[ "$key" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "$key" ]] && continue
+
+        # Trim whitespace
+        key=$(echo "$key" | xargs)
+        value=$(echo "$value" | xargs)
+
+        # Remove quotes if present
+        value="${value#\"}"
+        value="${value%\"}"
+        value="${value#\'}"
+        value="${value%\'}"
+
+        case "$key" in
+            channel) [[ -z "$CHANNEL" ]] && CHANNEL="$value" || true ;;
+            server) [[ -z "$SERVER" ]] && SERVER="$value" || true ;;
+            token) [[ -z "$TOKEN" ]] && TOKEN="$value" || true ;;
+            priority) [[ -z "$PRIORITY" ]] && PRIORITY="$value" || true ;;
+            tags) [[ -z "$TAGS" ]] && TAGS="$value" || true ;;
+            icon) [[ -z "$ICON" ]] && ICON="$value" || true ;;
+            markdown) [[ "$MARKDOWN" == "false" ]] && MARKDOWN="$value" || true ;;
+            click) [[ -z "$CLICK" ]] && CLICK="$value" || true ;;
+        esac
+    done < "$file"
+}
+
+# Load .env style file for NTFY_* variables
+load_env_file() {
+    local file="$1"
+    [[ ! -f "$file" ]] && return
+
+    while IFS='=' read -r key value || [[ -n "$key" ]]; do
+        # Skip comments and empty lines
+        [[ "$key" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "$key" ]] && continue
+
+        # Trim whitespace
+        key=$(echo "$key" | xargs)
+        value=$(echo "$value" | xargs)
+
+        # Remove quotes if present
+        value="${value#\"}"
+        value="${value%\"}"
+        value="${value#\'}"
+        value="${value%\'}"
+
+        case "$key" in
+            NTFY_CHANNEL|NTFY_SH_CHANNEL) [[ -z "$CHANNEL" ]] && CHANNEL="$value" || true ;;
+            NTFY_SERVER) [[ -z "$SERVER" ]] && SERVER="$value" || true ;;
+            NTFY_TOKEN) [[ -z "$TOKEN" ]] && TOKEN="$value" || true ;;
+            NTFY_PRIORITY) [[ -z "$PRIORITY" ]] && PRIORITY="$value" || true ;;
+            NTFY_TAGS) [[ -z "$TAGS" ]] && TAGS="$value" || true ;;
+        esac
+    done < "$file"
+}
+
+# Load from environment variables
+load_env_vars() {
+    if [[ -z "$CHANNEL" ]] && [[ -n "${NTFY_CHANNEL:-}" ]]; then
+        CHANNEL="$NTFY_CHANNEL"
+    fi
+    if [[ -z "$CHANNEL" ]] && [[ -n "${NTFY_SH_CHANNEL:-}" ]]; then
+        CHANNEL="$NTFY_SH_CHANNEL"
+    fi
+    if [[ -z "$SERVER" ]] && [[ -n "${NTFY_SERVER:-}" ]]; then
+        SERVER="$NTFY_SERVER"
+    fi
+    if [[ -z "$TOKEN" ]] && [[ -n "${NTFY_TOKEN:-}" ]]; then
+        TOKEN="$NTFY_TOKEN"
+    fi
+    if [[ -z "$PRIORITY" ]] && [[ -n "${NTFY_PRIORITY:-}" ]]; then
+        PRIORITY="$NTFY_PRIORITY"
+    fi
+    if [[ -z "$TAGS" ]] && [[ -n "${NTFY_TAGS:-}" ]]; then
+        TAGS="$NTFY_TAGS"
+    fi
+}
+
+parse_args() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -h|--help)
+                show_help
+                exit 0
+                ;;
+            --version)
+                show_version
+                exit 0
+                ;;
+            --init)
+                INIT_MODE=true
+                shift
+                ;;
+            --local)
+                INIT_LOCAL=true
+                shift
+                ;;
+            --force)
+                INIT_FORCE=true
+                shift
+                ;;
+            --config)
+                CONFIG_FILE="$2"
+                shift 2
+                ;;
+            --no-config)
+                NO_CONFIG=true
+                shift
+                ;;
+            -c|--channel)
+                CHANNEL="$2"
+                shift 2
+                ;;
+            -m|--message)
+                MESSAGE="$2"
+                shift 2
+                ;;
+            -t|--title)
+                TITLE="$2"
+                shift 2
+                ;;
+            -p|--priority)
+                PRIORITY="$2"
+                shift 2
+                ;;
+            -T|--tags)
+                TAGS="$2"
+                shift 2
+                ;;
+            -u|--click)
+                CLICK="$2"
+                shift 2
+                ;;
+            -i|--icon)
+                ICON="$2"
+                shift 2
+                ;;
+            -M|--markdown)
+                MARKDOWN="true"
+                shift
+                ;;
+            -a|--attach)
+                ATTACH="$2"
+                shift 2
+                ;;
+            -f|--filename)
+                FILENAME="$2"
+                shift 2
+                ;;
+            -d|--delay)
+                DELAY="$2"
+                shift 2
+                ;;
+            -e|--email)
+                EMAIL="$2"
+                shift 2
+                ;;
+            --action)
+                ACTIONS+=("$2")
+                shift 2
+                ;;
+            -s|--server)
+                SERVER="$2"
+                shift 2
+                ;;
+            --token)
+                TOKEN="$2"
+                shift 2
+                ;;
+            -n|--dry-run)
+                DRY_RUN=true
+                shift
+                ;;
+            -v|--verbose)
+                VERBOSE=true
+                shift
+                ;;
+            -q|--quiet)
+                QUIET=true
+                shift
+                ;;
+            -*)
+                echo "Error: Unknown option: $1" >&2
+                echo "Use --help for usage information" >&2
+                exit 1
+                ;;
+            *)
+                # Positional argument - treat as message
+                if [[ -z "$MESSAGE" ]]; then
+                    MESSAGE="$1"
+                else
+                    MESSAGE="$MESSAGE $1"
+                fi
+                shift
+                ;;
+        esac
+    done
+}
+
+build_and_execute() {
+    # Build curl arguments array
+    local curl_args=(-s)
+
+    [[ "$VERBOSE" == "true" ]] && curl_args=(-v)
+
+    [[ -n "$TITLE" ]] && curl_args+=(-H "Title: $TITLE")
+    [[ -n "$PRIORITY" ]] && curl_args+=(-H "Priority: $PRIORITY")
+    [[ -n "$TAGS" ]] && curl_args+=(-H "Tags: $TAGS")
+    [[ -n "$CLICK" ]] && curl_args+=(-H "Click: $CLICK")
+    [[ -n "$ICON" ]] && curl_args+=(-H "Icon: $ICON")
+    [[ "$MARKDOWN" == "true" ]] && curl_args+=(-H "Markdown: yes")
+    [[ -n "$ATTACH" ]] && curl_args+=(-H "Attach: $ATTACH")
+    [[ -n "$FILENAME" ]] && curl_args+=(-H "Filename: $FILENAME")
+    [[ -n "$DELAY" ]] && curl_args+=(-H "Delay: $DELAY")
+    [[ -n "$EMAIL" ]] && curl_args+=(-H "Email: $EMAIL")
+    [[ -n "$TOKEN" ]] && curl_args+=(-H "Authorization: Bearer $TOKEN")
+
+    # Add action buttons
+    if [[ ${#ACTIONS[@]} -gt 0 ]]; then
+        local actions_header=""
+        for action in "${ACTIONS[@]}"; do
+            [[ -n "$actions_header" ]] && actions_header+="; "
+            actions_header+="$action"
+        done
+        curl_args+=(-H "Actions: $actions_header")
+    fi
+
+    curl_args+=(-d "$MESSAGE")
+    curl_args+=("${SERVER}/${CHANNEL}")
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        # Show the command that would be executed
+        echo "curl \\"
+        for arg in "${curl_args[@]}"; do
+            if [[ "$arg" == -* ]]; then
+                echo "  $arg \\"
+            else
+                echo "  '$arg' \\"
+            fi
+        done | sed '$ s/ \\$//'
+        exit 0
+    fi
+
+    # Execute curl
+    local response
+    local exit_code=0
+    response=$(curl "${curl_args[@]}" 2>&1) || exit_code=$?
+
+    if [[ $exit_code -ne 0 ]]; then
+        echo "Error: Failed to send notification (curl exit code: $exit_code)" >&2
+        echo "$response" >&2
+        exit 1
+    fi
+
+    # Check for error in response
+    if echo "$response" | grep -q '"error"'; then
+        echo "Error: ntfy server returned an error:" >&2
+        echo "$response" >&2
+        exit 1
+    fi
+
+    if [[ "$QUIET" != "true" ]]; then
+        if [[ "$VERBOSE" == "true" ]]; then
+            echo "$response"
+        else
+            echo "Notification sent to ${SERVER}/${CHANNEL}"
+        fi
+    fi
+}
+
+main() {
+    # Parse arguments first to check for --init, --help, etc.
+    parse_args "$@"
+
+    # Handle --init mode
+    if [[ "$INIT_MODE" == "true" ]]; then
+        init_config
+    fi
+
+    # Load configuration (unless --no-config)
+    if [[ "$NO_CONFIG" != "true" ]]; then
+        if [[ -n "$CONFIG_FILE" ]]; then
+            # Use specific config file
+            if [[ ! -f "$CONFIG_FILE" ]]; then
+                echo "Error: Config file not found: $CONFIG_FILE" >&2
+                exit 1
+            fi
+            load_config "$CONFIG_FILE"
+        else
+            # Load order: ~/.ntfyrc, ./.ntfyrc, .env files, env vars
+            load_config "$HOME/.ntfyrc"
+            load_config "./.ntfyrc"
+            load_env_file "./.env.local"
+            load_env_file "./.env"
+        fi
+    fi
+
+    # Load environment variables (always, as they take precedence)
+    load_env_vars
+
+    # Apply defaults for unset values
+    [[ -z "$SERVER" ]] && SERVER="$DEFAULT_SERVER"
+    [[ -z "$PRIORITY" ]] && PRIORITY="$DEFAULT_PRIORITY"
+
+    # Read from stdin if no message and stdin is a pipe
+    if [[ -z "$MESSAGE" ]] && [[ ! -t 0 ]]; then
+        MESSAGE=$(cat)
+    fi
+
+    # Validate required fields
+    if [[ -z "$CHANNEL" ]]; then
+        echo "Error: No channel specified" >&2
+        echo "Set channel via -c/--channel, config file, or NTFY_CHANNEL env var" >&2
+        exit 1
+    fi
+
+    if [[ -z "$MESSAGE" ]]; then
+        echo "Error: No message specified" >&2
+        echo "Provide message as argument, via -m/--message, or pipe to stdin" >&2
+        exit 1
+    fi
+
+    # Build and execute the request
+    build_and_execute
+}
+
+main "$@"
