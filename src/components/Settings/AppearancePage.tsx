@@ -13,7 +13,7 @@ import { Palette, Monitor, Sun, Moon, Layout } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type Theme = 'system' | 'light' | 'dark'
-type HudPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+type HudPosition = 'top-left' | 'top-middle' | 'top-right' | 'bottom-left' | 'bottom-middle' | 'bottom-right'
 
 interface AppearanceSettings {
   theme: Theme
@@ -170,11 +170,16 @@ export function AppearancePage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 gap-4 max-w-[300px]">
+          <div className="grid grid-cols-3 gap-4 max-w-[450px]">
             <PositionOption
               selected={settings.hudPosition === 'top-left'}
               onClick={() => updateSetting('hudPosition', 'top-left')}
               label="Top Left"
+            />
+            <PositionOption
+              selected={settings.hudPosition === 'top-middle'}
+              onClick={() => updateSetting('hudPosition', 'top-middle')}
+              label="Top Middle"
             />
             <PositionOption
               selected={settings.hudPosition === 'top-right'}
@@ -185,6 +190,11 @@ export function AppearancePage() {
               selected={settings.hudPosition === 'bottom-left'}
               onClick={() => updateSetting('hudPosition', 'bottom-left')}
               label="Bottom Left"
+            />
+            <PositionOption
+              selected={settings.hudPosition === 'bottom-middle'}
+              onClick={() => updateSetting('hudPosition', 'bottom-middle')}
+              label="Bottom Middle"
             />
             <PositionOption
               selected={settings.hudPosition === 'bottom-right'}
